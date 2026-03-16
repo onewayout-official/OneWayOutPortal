@@ -17,9 +17,7 @@ export default function RegisterForm() {
   // Step 1: Account Information
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
+  const [password, setPassword] = useState("");
   
   // Steps 2-7: Onboarding Data
   const [formData, setFormData] = useState<Partial<UserProfile>>({
@@ -44,10 +42,10 @@ export default function RegisterForm() {
   // Step 6: Expenses (multiple)
   const [expenses, setExpenses] = useState<RegistrationExpense[]>([]);
 
-  const { sendOTP, verifyOTP } = useAuth();
+  const { register } = useAuth();
   const router = useRouter();
-  // Step 1: Personal details + phone, Step 2: OTP verification, Steps 3-8: Onboarding Data
-  const totalSteps = 8;
+  // Step 1: Personal details, Steps 2-7: Onboarding Data
+  const totalSteps = 7;
 
   const updateFormData = (field: keyof UserProfile, value: any) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -67,83 +65,39 @@ export default function RegisterForm() {
         setError("Please enter your email address.");
         return;
       }
-      if (!phone.trim()) {
-        setError("Please enter your phone number.");
-        return;
-      }
-      // Basic phone validation (should start with + and have digits)
-      const phoneRegex = /^\+?[1-9]\d{1,14}$/;
-      const cleanPhone = phone.replace(/\s|-/g, "");
-      if (!phoneRegex.test(cleanPhone)) {
-        setError("Please enter a valid phone number (e.g., +1234567890).");
-        return;
-      }
-
-      // Send OTP (pass name/email so new auth user gets them when created on verify)
-      setIsLoading(true);
-      const result = await sendOTP(cleanPhone, { name: name.trim(), email: email.trim() });
-      
-      if (!result.success) {
-        setError(result.error || "Failed to send OTP");
-        setIsLoading(false);
-        return;
-      }
-      
-      setOtpSent(true);
-      setIsLoading(false);
-      setCurrentStep(2); // Move to OTP verification step
-      return;
-    }
-
-    if (currentStep === 2) {
-      // Verify OTP
-      if (!otp.trim() || otp.length !== 6) {
-        setError("Please enter the 6-digit OTP code.");
+      if (password.length < 6) {
+        setError("Password must be at least 6 characters long.");
         return;
       }
 
       setIsLoading(true);
-      const cleanPhone = phone.replace(/\s|-/g, "");
-      const formattedPhone = cleanPhone.startsWith("+") ? cleanPhone : `+${cleanPhone}`;
-      
-      const result = await verifyOTP(formattedPhone, otp);
+      const result = await register(name.trim(), email.trim(), password);
       
       if (!result.success) {
-        setError(result.error || "Invalid OTP code");
+        setError(result.error || "Failed to create account");
         setIsLoading(false);
         return;
       }
-
-      // OTP verified - sync name, email, phone to Supabase auth and profile so user appears in dashboard
+      
+      // Save initial profile data locally
       try {
-        const { supabase } = await import("@/lib/supabase");
-        await supabase.auth.updateUser({
-          data: { name: name.trim(), email: email.trim() },
-        });
         const session = await storage.getSession();
         if (session) {
-          let profile = await storage.getProfile();
-          const baseProfile = profile ?? {
+          const profile = {
             id: session.userId,
             name: name.trim(),
             email: session.email || email.trim(),
             monthlyIncome: 0,
             createdAt: new Date().toISOString(),
           };
-          await storage.saveProfile({
-            ...baseProfile,
-            name: name.trim(),
-            email: email.trim(),
-            phone: formattedPhone,
-          });
+          await storage.saveProfile(profile);
         }
       } catch (err) {
-        console.error("Error syncing profile after OTP:", err);
+        console.error("Error saving initial profile:", err);
       }
 
       setIsLoading(false);
-      // OTP verified - proceed to onboarding steps (step 3)
-      setCurrentStep(3);
+      setCurrentStep(2);
       return;
     }
 
@@ -228,11 +182,10 @@ export default function RegisterForm() {
   };
 
   const canProceed = () => {
-    switch (currentStep) {
+    const stepToCheck = currentStep === 1 ? 1 : currentStep + 1;
+    switch (stepToCheck) {
       case 1:
-        return name.trim() !== "" && email.trim() !== "" && phone.trim() !== "";
-      case 2:
-        return otp.trim().length === 6;
+        return name.trim() !== "" && email.trim() !== "" && password.length >= 6;
       case 3:
         return formData.mood !== undefined;
       case 4:
@@ -285,7 +238,8 @@ export default function RegisterForm() {
   };
 
   const renderStep = () => {
-    switch (currentStep) {
+    const stepToRender = currentStep === 1 ? 1 : currentStep + 1;
+    switch (stepToRender) {
       case 1:
   return (
           <div className="space-y-6">
@@ -343,93 +297,27 @@ export default function RegisterForm() {
           </div>
 
           <div>
-            <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Phone Number
+            <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Password
             </label>
             <div className="relative">
-              <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
+              <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
               <input
-                id="phone"
-                type="tel"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value)}
+                id="password"
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                placeholder="+923001234567"
+                placeholder="••••••••"
                 required
-                autoComplete="tel"
+                autoComplete="new-password"
               />
             </div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Include country code (e.g., +1 for US, +92 for Pakistan, +264 for Namibia)</p>
           </div>
           </div>
         );
 
-      case 2:
-        return (
-          <div className="space-y-6">
-            <div className="text-center">
-              <div className="inline-flex items-center justify-center w-16 h-16 bg-green-100 dark:bg-green-900/30 rounded-full mb-4">
-                <Phone className="h-8 w-8 text-green-600 dark:text-green-400" />
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 dark:text-white mb-2">Verify Your Phone</h2>
-              <p className="text-gray-600 dark:text-gray-400">
-                {otpSent 
-                  ? `We've sent a 6-digit code to ${phone}. Please enter it below.`
-                  : "Enter the 6-digit code sent to your phone"}
-              </p>
-            </div>
 
-            {error && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2 text-red-800 dark:text-red-200">
-                <AlertCircle className="h-5 w-5 flex-shrink-0" />
-                <span className="text-sm">{error}</span>
-              </div>
-            )}
-
-            <div>
-              <label htmlFor="otp" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                OTP Code
-              </label>
-              <div className="relative">
-                <input
-                  id="otp"
-                  type="text"
-                  value={otp}
-                  onChange={(e) => {
-                    const value = e.target.value.replace(/\D/g, "").slice(0, 6);
-                    setOtp(value);
-                  }}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white text-center text-2xl tracking-widest"
-                  placeholder="000000"
-                  required
-                  maxLength={6}
-                  autoComplete="one-time-code"
-                />
-              </div>
-              <p className="mt-2 text-center">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    setError("");
-                    setIsLoading(true);
-                    const cleanPhone = phone.replace(/\s|-/g, "");
-                    const result = await sendOTP(cleanPhone);
-                    if (!result.success) {
-                      setError(result.error || "Failed to resend OTP");
-                    } else {
-                      setError("");
-                    }
-                    setIsLoading(false);
-                  }}
-                  className="text-sm text-blue-600 dark:text-blue-400 hover:underline"
-                  disabled={isLoading}
-                >
-                  Didn't receive the code? Resend
-                </button>
-              </p>
-            </div>
-          </div>
-        );
 
       case 3:
         return (
