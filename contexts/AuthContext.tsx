@@ -16,6 +16,8 @@ interface AuthContextType {
   verifyOTP: (phone: string, token: string) => Promise<{ success: boolean; error?: string; session?: any }>;
   loginWithPhone: (phone: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
+  resetPasswordForEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
+  updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   isAuthenticated: boolean;
 }
 
@@ -205,11 +207,53 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   // logout must be async so signOut() is awaited — otherwise the server token stays
-  // alive until it expires naturally if the network call hasn't completed (fix #16)
   const logout = async () => {
     await supabase.auth.signOut();
     setUser(null);
     router.push("/login");
+  };
+
+  const resetPasswordForEmail = async (email: string): Promise<{ success: boolean; error?: string }> => {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (same folder as package.json), then restart the dev server." };
+    }
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/reset-password`,
+      });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "An error occurred while attempting to send the reset password email.";
+      const isNetwork = msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
+      return {
+        success: false,
+        error: isNetwork
+          ? "Cannot reach Supabase. Check .env.local and that your Supabase project is not paused."
+          : msg,
+      };
+    }
+  };
+
+  const updatePassword = async (password: string): Promise<{ success: boolean; error?: string }> => {
+    if (!isSupabaseConfigured()) {
+      return { success: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (same folder as package.json), then restart the dev server." };
+    }
+    try {
+      if (password.length < 6) {
+        return { success: false, error: "Password must be at least 6 characters long." };
+      }
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) {
+        return { success: false, error: error.message };
+      }
+      return { success: true };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : "An error occurred while updating the password.";
+      return { success: false, error: msg };
+    }
   };
 
   return (
@@ -224,6 +268,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         verifyOTP,
         loginWithPhone,
         logout,
+        resetPasswordForEmail,
+        updatePassword,
         isAuthenticated: !!user,
       }}
     >
