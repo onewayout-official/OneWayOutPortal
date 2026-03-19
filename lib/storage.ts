@@ -39,9 +39,9 @@ export const storage = {
       .from("profiles")
       .select("*")
       .eq("id", userId)
-      .single();
+      .maybeSingle();
     // If no profile exists (e.g. trigger didn't run or user created before migration), create one
-    if (error && error.code === "PGRST116") {
+    if (!data) {
       const authUserPhone = (authUser as { phone?: string }).phone ?? null;
       await supabase.from("profiles").upsert({
         id: userId,
@@ -61,7 +61,7 @@ export const storage = {
         onboarding_completed: false,
         user_points: 0,
       });
-      const { data: inserted } = await supabase.from("profiles").select("*").eq("id", userId).single();
+      const { data: inserted } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
       return inserted ? mapRowToProfile(inserted) : null;
     }
     if (error || !data) return null;
@@ -499,7 +499,7 @@ export const storage = {
       .from("onboarding_data")
       .select("income, expenses, assets, liabilities")
       .eq("user_id", userId)
-      .single();
+      .maybeSingle();
     if (error || !data)
       return { income: [], expenses: [], assets: [], liabilities: [] };
     return {
@@ -537,14 +537,14 @@ export const storage = {
       liabilitiesData,
       onboardingData,
     ] = await Promise.all([
-      supabase.from("profiles").select("*").eq("id", userId).single(),
+      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
       supabase.from("expenses").select("*").eq("user_id", userId).order("date", { ascending: false }),
       supabase.from("debts").select("*").eq("user_id", userId).order("created_at", { ascending: false }),
       supabase.from("assets").select("*").eq("user_id", userId),
       supabase.from("income").select("*").eq("user_id", userId),
       supabase.from("budget_expenses").select("*").eq("user_id", userId),
       supabase.from("liabilities").select("*").eq("user_id", userId),
-      supabase.from("onboarding_data").select("income, expenses, assets, liabilities").eq("user_id", userId).single(),
+      supabase.from("onboarding_data").select("income, expenses, assets, liabilities").eq("user_id", userId).maybeSingle(),
     ]);
 
     const profile =
