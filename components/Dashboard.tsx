@@ -600,7 +600,7 @@ export default function Dashboard() {
             className="w-full flex items-center gap-3 p-4 rounded-xl bg-yellow-400 shadow-sm hover:bg-yellow-500 dark:bg-yellow-500 dark:hover:bg-yellow-600 transition-colors"
           >
             <div className="p-2 rounded-full bg-white/30">
-              <Smile className="h-6 w-6" />
+              <Smile className="h-10 w-10" />
             </div>
             <div className="flex flex-col items-start text-gray-900 dark:text-gray-900">
               <span className="text-sm font-semibold">Mood</span>
@@ -616,7 +616,7 @@ export default function Dashboard() {
             className="w-full flex items-center gap-3 p-4 rounded-xl bg-red-500 shadow-sm hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 transition-colors"
           >
             <div className="p-2 rounded-full bg-white/30">
-              <DollarSign className="h-6 w-6" />
+              <DollarSign className="h-10 w-10" />
             </div>
             <div className="flex flex-col items-start text-gray-900 dark:text-gray-900">
               <span className="text-sm font-semibold">Earn</span>
@@ -632,7 +632,7 @@ export default function Dashboard() {
             className="w-full flex items-center gap-3 p-4 rounded-xl bg-green-500 shadow-sm hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 transition-colors"
           >
             <div className="p-2 rounded-full bg-white/30">
-              <Wallet className="h-6 w-6" />
+              <Wallet className="h-10 w-10" />
             </div>
             <div className="flex flex-col items-start text-gray-900 dark:text-gray-900">
               <span className="text-sm font-semibold">Budget</span>
@@ -651,7 +651,7 @@ export default function Dashboard() {
             className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-amber-100 to-yellow-100 shadow-sm hover:from-amber-200 hover:to-yellow-200 dark:from-amber-200 dark:to-yellow-200 transition-colors"
           >
             <div className="p-2 rounded-full bg-amber-500 text-white">
-              <HelpCircle className="h-6 w-6" />
+              <HelpCircle className="h-10 w-10" />
             </div>
             <div className="flex flex-col items-start text-gray-900">
               <span className="text-sm font-semibold">Help me</span>
@@ -667,7 +667,7 @@ export default function Dashboard() {
             className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-rose-100 to-red-100 shadow-sm hover:from-rose-200 hover:to-red-200 dark:from-rose-200 dark:to-red-200 transition-colors"
           >
             <div className="p-2 rounded-full bg-rose-500 text-white">
-              <ShoppingCart className="h-6 w-6" />
+              <ShoppingCart className="h-10 w-10" />
             </div>
             <div className="flex flex-col items-start text-gray-900">
               <span className="text-sm font-semibold">Spend</span>
@@ -683,7 +683,7 @@ export default function Dashboard() {
             className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-emerald-100 to-green-100 shadow-sm hover:from-emerald-200 hover:to-green-200 dark:from-emerald-200 dark:to-green-200 transition-colors"
           >
             <div className="p-2 rounded-full bg-emerald-500 text-white">
-              <FileText className="h-6 w-6" />
+              <FileText className="h-10 w-10" />
             </div>
             <div className="flex flex-col items-start text-gray-900">
               <span className="text-sm font-semibold">Review debt</span>
