@@ -1,6 +1,6 @@
-# Financial Wellness App
+# One Way Out Portal
 
-A comprehensive Next.js application for managing your personal finances, tracking expenses, managing debts, and getting personalized financial wellness insights.
+A comprehensive Next.js application for managing your personal finances, tracking expenses, managing debts, and achieving financial freedom — built for the One Way Out Portal.
 
 ## Features
 

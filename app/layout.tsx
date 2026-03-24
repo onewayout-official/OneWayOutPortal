@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Financial Wellness App",
-  description: "Manage your expenses, debts, and achieve financial wellness",
+  title: "One Way Out Portal",
+  description: "Manage your expenses, debts, and achieve financial freedom with One Way Out Portal",
 };
 
 export default function RootLayout({
