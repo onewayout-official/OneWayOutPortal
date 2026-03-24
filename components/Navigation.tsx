@@ -40,10 +40,11 @@ function NavLink({ href, label, icon: Icon, isActive }: { href: string; label: s
   return (
     <Link
       href={href}
-      className={`flex flex-col items-center gap-1 px-4 py-3 transition-colors md:flex-row md:rounded-lg md:px-4 md:py-2.5 md:gap-3 ${isActive
-        ? "text-blue-600 dark:text-blue-400 md:bg-blue-50 dark:md:bg-blue-900/20"
-        : "text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100"
-        }`}
+      className={`flex flex-col items-center gap-1 px-4 py-3 transition-colors md:flex-row md:rounded-lg md:px-4 md:py-2.5 md:gap-3 ${
+        isActive
+          ? "md:bg-white/20 font-semibold"
+          : "opacity-80 hover:opacity-100 hover:md:bg-white/10"
+      } text-white`}
     >
       <Icon className="h-5 w-5 flex-shrink-0" />
       <span className="text-xs font-medium md:text-sm">{label}</span>
@@ -58,15 +59,26 @@ export default function Navigation() {
   const allNavItems = navSections.flatMap((s) => s.items);
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-gray-200 bg-white dark:bg-gray-900 md:relative md:border-t-0 md:border-r md:bg-transparent md:min-h-screen">
-      <div className="flex justify-around md:flex-col md:justify-start md:p-4 md:gap-6 md:h-full">
-        {/* Desktop: grouped sections */}
+    <nav
+      className="fixed bottom-0 left-0 right-0 z-50 border-t-2 bg-white dark:bg-gray-900 md:relative md:border-t-0 md:border-r-0 md:min-h-screen md:text-white"
+      style={{ borderColor: '#2f6064' }}
+    >
+      {/* Desktop sidebar */}
+      <div
+        className="hidden md:flex flex-col p-4 gap-6 h-full min-h-screen"
+        style={{ backgroundColor: '#2f6064' }}
+      >
+        {/* Brand mark at top */}
+        <div className="px-4 pt-2 pb-4 border-b border-white/20">
+          <span className="text-white text-lg font-bold tracking-wide">OneWayOut</span>
+        </div>
+
         {navSections.map((section) => (
-          <div key={section.label} className="hidden md:block">
-            <h3 className="px-4 py-2 text-xs font-semibold uppercase tracking-wider text-gray-500 dark:text-gray-400">
+          <div key={section.label}>
+            <h3 className="px-4 py-1 text-xs font-semibold uppercase tracking-wider" style={{ color: '#efc19e' }}>
               {section.label}
             </h3>
-            <div className="flex flex-col gap-0.5">
+            <div className="flex flex-col gap-0.5 mt-1">
               {section.items.map((item) => {
                 const isActive = pathname === item.href;
                 return (
@@ -83,39 +95,43 @@ export default function Navigation() {
           </div>
         ))}
 
-        {/* Mobile: flat list of all items */}
-        <div className="flex md:hidden justify-around w-full py-1">
-          {allNavItems.map((item) => {
-            const isActive = pathname === item.href;
-            return (
-              <NavLink
-                key={item.href}
-                href={item.href}
-                label={item.label}
-                icon={item.icon}
-                isActive={isActive}
-              />
-            );
-          })}
+        {/* Logout at bottom */}
+        <div className="mt-auto pt-4 border-t border-white/20">
           <button
             onClick={logout}
-            className="flex flex-col items-center gap-1 px-2 py-3 transition-colors text-red-600"
-          >
-            <LogOut className="h-5 w-5" />
-            <span className="text-xs font-medium">Logout</span>
-          </button>
-        </div>
-
-        {/* Desktop: logout at bottom */}
-        <div className="hidden md:block mt-auto pt-4 border-t border-gray-200 dark:border-gray-700">
-          <button
-            onClick={logout}
-            className="flex flex-row w-full items-center gap-3 px-4 py-2.5 rounded-lg transition-colors text-red-600 hover:text-red-700 dark:text-red-400 dark:hover:text-red-300"
+            className="flex flex-row w-full items-center gap-3 px-4 py-2.5 rounded-lg transition-colors text-white/70 hover:text-white hover:bg-white/10"
           >
             <LogOut className="h-5 w-5 flex-shrink-0" />
             <span className="text-sm font-medium">Logout</span>
           </button>
         </div>
+      </div>
+
+      {/* Mobile bottom bar */}
+      <div className="flex md:hidden justify-around w-full py-1">
+        {allNavItems.map((item) => {
+          const isActive = pathname === item.href;
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className={`flex flex-col items-center gap-1 px-4 py-3 transition-colors ${
+                isActive ? 'font-semibold' : 'text-gray-500 hover:text-gray-900 dark:text-gray-400'
+              }`}
+              style={isActive ? { color: '#2f6064' } : {}}
+            >
+              <item.icon className="h-5 w-5" />
+              <span className="text-xs font-medium">{item.label}</span>
+            </Link>
+          );
+        })}
+        <button
+          onClick={logout}
+          className="flex flex-col items-center gap-1 px-2 py-3 transition-colors text-red-600"
+        >
+          <LogOut className="h-5 w-5" />
+          <span className="text-xs font-medium">Logout</span>
+        </button>
       </div>
     </nav>
   );

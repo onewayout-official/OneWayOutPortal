@@ -17,6 +17,11 @@ import {
   Title,
 } from 'chart.js';
 import { Pie, Bar } from 'react-chartjs-2';
+import {
+  LineChart, Line, BarChart, Bar as ReBar, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
+  Legend as ReLegend, ResponsiveContainer,
+} from 'recharts';
 
 ChartJS.register(
   ArcElement,
@@ -46,6 +51,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
+  const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; Income: number; Expenses: number; Surplus: number }[]>([]);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const { logout } = useAuth();
@@ -143,6 +149,22 @@ export default function Dashboard() {
         })
         .reduce((sum, exp) => sum + exp.amount, 0);
       setTotalExpenses(monthlyExpenses);
+
+      // Build last-6-months data for the Income Statement line chart
+      const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const now = new Date();
+      const chartMonths = Array.from({ length: 6 }, (_, i) => {
+        const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+        return { year: d.getFullYear(), month: d.getMonth(), label: `${monthNames[d.getMonth()]} ${d.getFullYear()}` };
+      });
+      const monthlyInc = userProfile.monthlyIncome || userProfile.lastIncome || 0;
+      const chartData = chartMonths.map(({ year, month: m, label }) => {
+        const exp = expenses
+          .filter(e => { const d = new Date(e.date); return d.getMonth() === m && d.getFullYear() === year; })
+          .reduce((s, e) => s + e.amount, 0);
+        return { month: label, Income: monthlyInc, Expenses: exp, Surplus: monthlyInc - exp };
+      });
+      setMonthlyChartData(chartData);
 
       const totalDebtAmount = debts.reduce((sum, debt) => sum + debt.remainingAmount, 0);
       const totalMinPayments = debts.reduce((sum, debt) => sum + debt.minimumPayment, 0);
@@ -429,12 +451,12 @@ export default function Dashboard() {
                   setCurrentDate(date);
                 }}
                 className={`text-center py-2 rounded-lg cursor-pointer min-h-[60px] flex flex-col items-center justify-center gap-1 transition-all text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 ${isToday && isSelected
-                    ? "ring-2 ring-blue-500 bg-blue-100/60 dark:bg-blue-900/40 dark:ring-blue-400"
-                    : isToday
-                      ? "ring-2 ring-blue-400/70 bg-blue-50/50 dark:bg-blue-900/25 dark:ring-blue-500/60 font-medium"
-                      : isSelected
-                        ? "ring-2 ring-slate-400/60 bg-slate-100/80 dark:bg-slate-700/40 dark:ring-slate-500/60"
-                        : ""
+                  ? "ring-2 ring-blue-500 bg-blue-100/60 dark:bg-blue-900/40 dark:ring-blue-400"
+                  : isToday
+                    ? "ring-2 ring-blue-400/70 bg-blue-50/50 dark:bg-blue-900/25 dark:ring-blue-500/60 font-medium"
+                    : isSelected
+                      ? "ring-2 ring-slate-400/60 bg-slate-100/80 dark:bg-slate-700/40 dark:ring-slate-500/60"
+                      : ""
                   }`}
               >
                 <span className="text-sm font-medium">{date.getDate()}</span>
@@ -469,27 +491,44 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Dashboard Header - sticky */}
-      <div className="sticky top-0 z-20 -mx-4 px-4 -mt-4 pt-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-8 flex flex-col gap-4 pb-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <h1 className="text-2xl md:text-3xl font-bold text-gray-900 dark:text-white">
-            OneWayOut
-          </h1>
-          <div className="flex items-center gap-3">
-            <p className="hidden sm:block text-sm text-gray-500 dark:text-gray-400">{todayFormatted}</p>
-            <div className="relative flex-1 sm:flex-initial sm:min-w-[200px] md:min-w-[240px]">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <input
-                type="search"
-                placeholder="Search..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent text-sm"
-              />
+      <div className="sticky top-0 z-20 -mx-4 px-4 -mt-4 pt-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-8 pb-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+        <div className="grid grid-cols-3 items-center gap-4">
+
+          {/* Left — OneWayOut Investment */}
+          <div className="flex flex-col">
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">OneWayOut Investment</span>
+            <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
+              {totalPoints.toLocaleString()} Points
+            </span>
+            <span className="text-base font-bold text-green-600 dark:text-green-400">
+              N${(profile.savingsGoal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+          </div>
+
+          {/* Center — Logo */}
+          <div className="flex flex-col items-center justify-center">
+            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white text-center">OneWayOut</h1>
+            <p className="text-xs text-gray-400 dark:text-gray-500 hidden sm:block">{todayFormatted}</p>
+          </div>
+
+          {/* Right — Wallet + profile */}
+          <div className="flex items-center justify-end gap-3">
+            {/* Wallet info */}
+            <div className="flex flex-col items-end">
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">OneWayOut Wallet</span>
+              <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
+                Balance N${(profile.monthlyIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+              <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                Available N${Math.max(0, (profile.monthlyIncome || 0) - totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
             </div>
+
+            {/* Profile dropdown */}
             <div className="relative" ref={profileDropdownRef}>
               <button
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center gap-2 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center gap-1 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                 aria-expanded={profileDropdownOpen}
                 aria-haspopup="true"
               >
@@ -498,6 +537,7 @@ export default function Dashboard() {
                 </div>
                 <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} />
               </button>
+
               {profileDropdownOpen && (
                 <div className="absolute right-0 mt-2 w-48 py-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg z-50">
                   <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
@@ -512,6 +552,7 @@ export default function Dashboard() {
                     <User className="h-4 w-4" />
                     Profile
                   </Link>
+
                   <button
                     onClick={() => {
                       setProfileDropdownOpen(false);
@@ -526,9 +567,11 @@ export default function Dashboard() {
               )}
             </div>
           </div>
+
         </div>
-        <p className="sm:hidden text-sm text-gray-500 dark:text-gray-400">{todayFormatted}</p>
       </div>
+
+
 
       {/* Calendar */}
       <div className="flex justify-center">
@@ -693,9 +736,35 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      {/* Updates Heading */}
+
+
+
+
+
+      {/* Mood Display */}
+      {profile.onboardingCompleted && profile.mood && (
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your Current Mood</h3>
+          <div className="flex items-center gap-4">
+            <div className="text-6xl">{profile.mood}</div>
+            <div>
+              <p className="text-gray-600 dark:text-gray-400">
+                {profile.mood === "😊" && "You're feeling great! Keep up the positive mindset."}
+                {profile.mood === "😐" && "You're doing okay. Remember, progress takes time."}
+                {profile.mood === "😔" && "Hang in there! Every step forward counts, no matter how small."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+
+
+
+
+      {/* Cash is king Heading */}
       <div>
-        <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Updates</h2>
+        <h3 className="text font-bold text-gray-900 dark:text-white">Cash is king - total cash balances</h3>
       </div>
 
       {/* Financial Overview Cards */}
@@ -718,7 +787,6 @@ export default function Dashboard() {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Total Debts</p>
-                  {/* Always use live totalDebt; profile.debts is a stale onboarding snapshot (fix #14) */}
                   <p className="text-2xl font-bold text-orange-600">
                     ${totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
@@ -750,11 +818,9 @@ export default function Dashboard() {
                 <Wallet className="h-8 w-8 text-red-600" />
               </div>
             </div>
-
           </div>
 
           {/* Net Worth Card */}
-          {/* Net Worth: always use live totalDebt, not stale profile.debts snapshot (fix #14) */}
           <div className={`rounded-lg p-6 text-white ${((profile.capital || 0) - totalDebt) >= 0
             ? "bg-gradient-to-r from-green-500 to-emerald-600"
             : "bg-gradient-to-r from-red-500 to-rose-600"
@@ -775,342 +841,111 @@ export default function Dashboard() {
         </>
       )}
 
-
-
-      {/* Mood Display */}
-      {profile.onboardingCompleted && profile.mood && (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your Current Mood</h3>
-          <div className="flex items-center gap-4">
-            <div className="text-6xl">{profile.mood}</div>
-            <div>
-              <p className="text-gray-600 dark:text-gray-400">
-                {profile.mood === "😊" && "You're feeling great! Keep up the positive mindset."}
-                {profile.mood === "😐" && "You're doing okay. Remember, progress takes time."}
-                {profile.mood === "😔" && "Hang in there! Every step forward counts, no matter how small."}
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
-
-
-
-
-
       {/* Financial Profile Details */}
       {profile.onboardingCompleted && (
         <div className="space-y-6">
           <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Financial Profile Details</h2>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {/* Income Chart */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-green-600" />
-                Income Breakdown
-              </h3>
-              <div className="h-[300px] w-full flex items-center justify-center">
-                {(() => {
-                  const chartIncome = onboardingData.income.filter((i: any) => ((i.personal ?? 0) + (i.spouse ?? 0)) > 0);
-                  return chartIncome.length > 0 ? (
-                    <Pie
-                      key={`income-${chartIncome.length}-${chartIncome.map((i: any) => (i.personal ?? 0) + (i.spouse ?? 0)).join("-")}`}
-                      data={{
-                        labels: chartIncome.map((i: any) => i.incomeType || i.category || "Income"),
-                        datasets: [{
-                          data: chartIncome.map((i: any) => (i.personal ?? 0) + (i.spouse ?? 0)),
-                          backgroundColor: ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#06b6d4'],
-                          borderWidth: 0,
-                        }]
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { position: 'bottom' }
-                        }
-                      }}
-                    />
-                  ) : (
-                    <p className="text-gray-500">No income data available</p>
-                  );
-                })()}
-              </div>
-            </div>
 
-            {/* Expenses Chart */}
+            {/* 1 — Monthly Income Statement Summary (Line Chart) */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <Wallet className="h-5 w-5 text-orange-600" />
-                Expenses Breakdown
-              </h3>
-              <div className="h-[300px] w-full flex items-center justify-center">
-                {(() => {
-                  const chartExpenses = onboardingData.expenses.filter((e: any) => (e.total ?? (e.personal ?? 0) + (e.spouse ?? 0)) > 0);
-                  return chartExpenses.length > 0 ? (
-                    <Pie
-                      key={`expenses-${chartExpenses.length}-${chartExpenses.map((e: any) => e.total ?? (e.personal ?? 0) + (e.spouse ?? 0)).join("-")}`}
-                      data={{
-                        labels: chartExpenses.map((e: any) => e.expenseCategory || e.category || "Expense"),
-                        datasets: [{
-                          data: chartExpenses.map((e: any) => e.total ?? (e.personal ?? 0) + (e.spouse ?? 0)),
-                          backgroundColor: ['#ef4444', '#f97316', '#f59e0b', '#84cc16', '#10b981', '#06b6d4', '#3b82f6', '#8b5cf6'],
-                          borderWidth: 0,
-                        }]
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { position: 'bottom' }
-                        }
-                      }}
-                    />
-                  ) : (
-                    <p className="text-gray-500">No expense data available</p>
-                  );
-                })()}
-              </div>
-            </div>
-
-            {/* Assets Chart */}
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-green-600" />
-                Assets Distribution
+                Monthly Income Statement Summary
               </h3>
-              <div className="h-[300px] w-full flex items-center justify-center">
-                {(() => {
-                  const chartAssets = onboardingData.assets.filter((a: any) => (a.total ?? (a.personal ?? 0) + (a.spouse ?? 0)) > 0);
-                  return chartAssets.length > 0 ? (
-                    <Bar
-                      key={`assets-${chartAssets.length}-${chartAssets.map((a: any) => a.total ?? (a.personal ?? 0) + (a.spouse ?? 0)).join("-")}`}
-                      data={{
-                        labels: chartAssets.map((a: any) => a.expenses || a.category || "Asset"),
-                        datasets: [{
-                          label: 'Value',
-                          data: chartAssets.map((a: any) => a.total ?? (a.personal ?? 0) + (a.spouse ?? 0)),
-                          backgroundColor: '#10b981',
-                        }]
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { display: false }
-                        },
-                        scales: {
-                          y: { beginAtZero: true }
-                        }
-                      }}
+              {/*<p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Income · Expenses · Surplus — last 6 months</p>*/}
+              {monthlyChartData.length > 0 ? (
+                <ResponsiveContainer width="100%" height={300}>
+                  <LineChart data={monthlyChartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} padding={{ left: 20, right: 20 }} />
+                    <YAxis
+                      tick={{ fontSize: 11, fill: '#6b7280' }}
+                      tickFormatter={(v) => `N$${Math.abs(v).toLocaleString()}`}
+                      axisLine={false}
+                      tickLine={false}
+                      padding={{ top: 20, bottom: 10 }}
                     />
-                  ) : (
-                    <p className="text-gray-500">No asset data available</p>
-                  );
-                })()}
-              </div>
+                    <ReTooltip
+                      formatter={(value: number | undefined, name: string | undefined) => [
+                        `N$${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                        name ?? '',
+                      ]}
+                    />
+                    <ReLegend verticalAlign="bottom" />
+                    <Line type="monotone" dataKey="Income" stroke="#92d050" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="Expenses" stroke="#ff0000" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    <Line type="monotone" dataKey="Surplus" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} strokeDasharray="5 3" />
+                  </LineChart>
+                </ResponsiveContainer>
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-gray-400 dark:text-gray-500">
+                  No data available yet
+                </div>
+              )}
             </div>
 
-            {/* Liabilities Chart */}
+
+            {/* 2 — Financial Position (Summary Bar Chart) */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                <TrendingDown className="h-5 w-5 text-red-600" />
-                Liabilities Distribution
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-blue-600" />
+                Financial Position
               </h3>
-              <div className="h-[300px] w-full flex items-center justify-center">
-                {(() => {
-                  const chartLiabilities = onboardingData.liabilities.filter((l: any) => (l.total ?? (l.personal ?? 0) + (l.spouse ?? 0)) > 0);
-                  return chartLiabilities.length > 0 ? (
-                    <Bar
-                      key={`liabilities-${chartLiabilities.length}-${chartLiabilities.map((l: any) => l.total ?? (l.personal ?? 0) + (l.spouse ?? 0)).join("-")}`}
-                      data={{
-                        labels: chartLiabilities.map((l: any) => l.expenses || l.category || "Liability"),
-                        datasets: [{
-                          label: 'Amount',
-                          data: chartLiabilities.map((l: any) => l.total ?? (l.personal ?? 0) + (l.spouse ?? 0)),
-                          backgroundColor: '#ef4444',
-                        }]
-                      }}
-                      options={{
-                        responsive: true,
-                        maintainAspectRatio: false,
-                        plugins: {
-                          legend: { display: false }
-                        },
-                        scales: {
-                          y: { beginAtZero: true }
+              {/*<p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Total Assets · Total Liabilities · Net Worth</p>*/}
+              {(() => {
+                const totalAssets = onboardingData.assets.reduce(
+                  (sum: number, a: any) => sum + (a.personal ?? 0) + (a.spouse ?? 0), 0
+                );
+                const totalLiabilities = onboardingData.liabilities.reduce(
+                  (sum: number, l: any) => sum + (l.personal ?? 0) + (l.spouse ?? 0), 0
+                );
+                const netWorth = totalAssets - totalLiabilities;
+
+                const barData = [
+                  { name: 'Total Assets', value: totalAssets, fill: '#92d050' },
+                  { name: 'Total Liabilities', value: totalLiabilities, fill: '#ff0000' },
+                  { name: 'Net Worth', value: netWorth, fill: netWorth >= 0 ? '#3b82f6' : '#ffc000' },
+                ];
+
+                const hasData = totalAssets > 0 || totalLiabilities > 0;
+
+                return hasData ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={barData} margin={{ top: 24, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        tickFormatter={(v) => `N$${Math.abs(v).toLocaleString()}`}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <ReTooltip
+                        formatter={(value: number | undefined) =>
+                          [`N$${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, '']
                         }
-                      }}
-                    />
-                  ) : (
-                    <p className="text-gray-500">No liability data available</p>
-                  );
-                })()}
-              </div>
+                        cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                      />
+                      <ReBar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={80}>
+                        {barData.map((entry, index) => (
+                          <Cell key={index} fill={entry.fill} />
+                        ))}
+                      </ReBar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[300px] flex items-center justify-center text-gray-400 dark:text-gray-500">
+                    No asset or liability data available yet
+                  </div>
+                );
+              })()}
             </div>
-          </div>
 
-          {/* 
-           {/* Income Table */}
-          {/* <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-             <div className="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-               <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                 <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600">
-                    <DollarSign className="h-5 w-5" />
-                 </div>
-                 Income Sources
-               </h3>
-             </div>
-             <div className="overflow-x-auto">
-               <table className="w-full text-sm text-left">
-                 <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                   <tr>
-                     <th className="px-6 py-3">Type</th>
-                     <th className="px-6 py-3">Source</th>
-                     <th className="px-6 py-3">Name</th>
-                     <th className="px-6 py-3 text-right">Total</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {onboardingData.income.length > 0 ? (
-                     onboardingData.income.map((item, idx) => (
-                       <tr key={idx} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                         <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{item.incomeType}</td>
-                         <td className="px-6 py-4">{item.source}</td>
-                         <td className="px-6 py-4">{item.name || "-"}</td>
-                         <td className="px-6 py-4 text-right">N${((item.personal || 0) + (item.spouse || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                       </tr>
-                     ))
-                   ) : (
-                     <tr>
-                       <td colSpan={4} className="px-6 py-4 text-center text-gray-500">No income data recorded</td>
-                     </tr>
-                   )}
-                 </tbody>
-               </table>
-             </div>
-           </div> */}
 
-          {/* Expenses Table */}
-          {/* <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-             <div className="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-               <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                 <div className="w-8 h-8 rounded-full bg-orange-100 dark:bg-orange-900/30 flex items-center justify-center text-orange-600">
-                    <Wallet className="h-5 w-5" />
-                 </div>
-                 Expenses
-               </h3>
-             </div>
-             <div className="overflow-x-auto">
-               <table className="w-full text-sm text-left">
-                 <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                   <tr>
-                     <th className="px-6 py-3">Category</th>
-                     <th className="px-6 py-3">Type</th>
-                     <th className="px-6 py-3">Name</th>
-                     <th className="px-6 py-3 text-right">Total</th>
-                   </tr>
-                 </thead>
-                 <tbody>
-                   {onboardingData.expenses.length > 0 ? (
-                     onboardingData.expenses.map((item, idx) => (
-                       <tr key={idx} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                         <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">{item.expenseCategory}</td>
-                         <td className="px-6 py-4">{item.expenseType}</td>
-                         <td className="px-6 py-4">{item.name || "-"}</td>
-                         <td className="px-6 py-4 text-right">N${(item.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                       </tr>
-                     ))
-                   ) : (
-                     <tr>
-                       <td colSpan={4} className="px-6 py-4 text-center text-gray-500">No expense data recorded</td>
-                     </tr>
-                   )}
-                 </tbody>
-               </table>
-             </div>
-           </div> */}
+          </div>{/* end grid */}
 
-          {/* <div className="grid grid-cols-1 md:grid-cols-2 gap-6"> */}
-          {/* Assets Table */}
-          {/* <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-               <div className="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-                 <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                   <div className="w-8 h-8 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600">
-                      <TrendingUp className="h-5 w-5" />
-                   </div>
-                   Assets
-                 </h3>
-               </div>
-               <div className="overflow-x-auto">
-                 <table className="w-full text-sm text-left">
-                   <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                     <tr>
-                       <th className="px-6 py-3">Asset</th>
-                       <th className="px-6 py-3 text-right">Value</th>
-                     </tr>
-                   </thead>
-                   <tbody>
-                     {onboardingData.assets.length > 0 ? (
-                       onboardingData.assets.map((item, idx) => (
-                         <tr key={idx} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                           <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                              {item.expenses}
-                              {item.name && <span className="block text-xs text-gray-500">{item.name}</span>}
-                           </td>
-                           <td className="px-6 py-4 text-right">N${(item.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                         </tr>
-                       ))
-                     ) : (
-                       <tr>
-                         <td colSpan={2} className="px-6 py-4 text-center text-gray-500">No asset data recorded</td>
-                       </tr>
-                     )}
-                   </tbody>
-                 </table>
-               </div>
-             </div> */}
-
-          {/* Liabilities Table */}
-          {/* <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
-               <div className="p-4 bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600">
-                 <h3 className="font-semibold text-gray-900 dark:text-white flex items-center gap-2">
-                   <div className="w-8 h-8 rounded-full bg-red-100 dark:bg-red-900/30 flex items-center justify-center text-red-600">
-                      <TrendingDown className="h-5 w-5" />
-                   </div>
-                   Liabilities
-                 </h3>
-               </div>
-               <div className="overflow-x-auto">
-                 <table className="w-full text-sm text-left">
-                   <thead className="text-xs text-gray-700 uppercase bg-gray-50 dark:bg-gray-700 dark:text-gray-400">
-                     <tr>
-                       <th className="px-6 py-3">Liability</th>
-                       <th className="px-6 py-3 text-right">Amount</th>
-                     </tr>
-                   </thead>
-                   <tbody>
-                     {onboardingData.liabilities.length > 0 ? (
-                       onboardingData.liabilities.map((item, idx) => (
-                         <tr key={idx} className="bg-white dark:bg-gray-800 border-b dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                           <td className="px-6 py-4 font-medium text-gray-900 dark:text-white">
-                              {item.expenses}
-                              {item.name && <span className="block text-xs text-gray-500">{item.name}</span>}
-                           </td>
-                           <td className="px-6 py-4 text-right">N${(item.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
-                         </tr>
-                       ))
-                     ) : (
-                       <tr>
-                         <td colSpan={2} className="px-6 py-4 text-center text-gray-500">No liability data recorded</td>
-                       </tr>
-                     )}
-                   </tbody>
-                 </table>
-               </div>
-             </div> */}
-          {/* </div> */}
         </div>
       )}
 

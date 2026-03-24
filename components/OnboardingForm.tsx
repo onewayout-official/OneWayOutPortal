@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { UserProfile, Asset, AssetCategory, Income, IncomeCategory, RegistrationExpense, ExpenseCategory, Liability, LiabilityCategory } from "@/types";
 import { storage } from "@/lib/storage";
 import { useAuth } from "@/contexts/AuthContext";
-import { ChevronLeft, ChevronRight, Check, DollarSign, Plus } from "lucide-react";
+import { ChevronLeft, ChevronRight, Check, DollarSign, Plus, Loader2 } from "lucide-react";
 interface AssetEntry {
   expenses: string;
   expenseType: string;
@@ -212,6 +212,9 @@ export default function OnboardingForm() {
   });
   const { user } = useAuth();
   const router = useRouter();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submitSuccess, setSubmitSuccess] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   const totalSteps = 6;
 
@@ -444,120 +447,133 @@ export default function OnboardingForm() {
   };
 
   const handleSubmit = async () => {
-    if (!user) return;
+    if (!user || isSubmitting) return;
 
-    // Get existing profile or create new one (name comes from Supabase profile/trigger)
-    let profile = await storage.getProfile();
-    if (!profile) {
-      profile = {
-        id: user.userId,
-        name: "",
-        email: user.email || "",
-        monthlyIncome: 0,
-        createdAt: new Date().toISOString(),
-      };
-    }
+    setIsSubmitting(true);
+    setSubmitError(null);
 
-    // Update profile with onboarding data
-    const updatedProfile: UserProfile = {
-      ...profile,
-      ...formData,
-      onboardingCompleted: true,
-      monthlyIncome: formData.lastIncome || profile.monthlyIncome,
-      savingsGoal: formData.savingsGoal ?? formData.savingGoals ?? profile.savingsGoal,
-    };
-
-    await storage.saveProfile(updatedProfile);
-
-    // Sync onboarding income to the income table
-    const incomeToSave: Income[] = incomeEntries
-      .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
-      .map((e) => ({
-        id: crypto.randomUUID(), // fix #4: was Date.now() — collides when multiple items map in same ms
-        category: e.incomeType as IncomeCategory,
-        type: (e.source === "Fixed" || e.source === "Variable" ? e.source : "Variable") as Income["type"],
-        name: (e.name && e.name.trim()) || e.incomeType,
-        personal: e.personal,
-        spouse: e.spouse,
-        points: e.points,
-        editable: true,
-      }));
-    if (incomeToSave.length > 0) {
-      await storage.saveIncome(incomeToSave);
-    }
-
-    // Sync onboarding expense entries to the budget_expenses table
-    const budgetExpensesToSave: RegistrationExpense[] = expenseEntries
-      .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
-      .map((e) => ({
-        id: crypto.randomUUID(), // fix #4
-        category: e.expenseCategory as ExpenseCategory,
-        type: (e.expenseType === "Fixed" || e.expenseType === "Variable" ? e.expenseType : "Variable") as RegistrationExpense["type"],
-        name: (e.name && e.name.trim()) || e.expenseCategory,
-        personal: e.personal,
-        spouse: e.spouse,
-        points: e.points,
-        editable: true,
-      }));
-    if (budgetExpensesToSave.length > 0) {
-      await storage.saveBudgetExpenses(budgetExpensesToSave);
-    }
-
-    // Sync onboarding assets to the assets table (so they show on Dashboard and /assets)
-    const assetsToSave: Asset[] = assetEntries
-      .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
-      .map((e) => ({
-        id: crypto.randomUUID(), // fix #4
-        category: e.expenses as AssetCategory,
-        type: e.expenseType as "Fixed Assets" | "Current Assets",
-        name: (e.name && e.name.trim()) || e.expenses,
-        personal: e.personal,
-        spouse: e.spouse,
-        points: e.points,
-        interestRate: e.interestRate ?? 0,
-        editable: true,
-      }));
-    if (assetsToSave.length > 0) {
-      await storage.saveAssets(assetsToSave);
-    }
-
-    // Sync onboarding liabilities to the liabilities table (so they show on Dashboard and /liabilities)
-    const liabilitiesToSave: Liability[] = liabilityEntries
-      .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
-      .map((e) => ({
-        id: crypto.randomUUID(), // fix #4
-        category: e.expenses as LiabilityCategory,
-        type: e.expenseType as Liability["type"],
-        name: (e.name && e.name.trim()) || e.expenses,
-        personal: e.personal,
-        spouse: e.spouse,
-        points: e.points,
-        interestRate: e.interestRate ?? 0,
-        editable: true,
-      }));
-    if (liabilitiesToSave.length > 0) {
-      await storage.saveLiabilities(liabilitiesToSave);
-    }
-
-    // If there are debts, create debt entries
-    if (formData.debts && formData.debts > 0) {
-      const existingDebts = await storage.getDebts();
-      if (existingDebts.length === 0) {
-        await storage.addDebt({
-          id: `debt-${Date.now()}`,
-          name: "Initial Debt",
-          totalAmount: formData.debts,
-          remainingAmount: formData.debts,
-          interestRate: 0,
-          minimumPayment: formData.debts * 0.02, // 2% minimum
-          dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          type: "Other",
+    try {
+      // Get existing profile or create new one (name comes from Supabase profile/trigger)
+      let profile = await storage.getProfile();
+      if (!profile) {
+        profile = {
+          id: user.userId,
+          name: "",
+          email: user.email || "",
+          monthlyIncome: 0,
           createdAt: new Date().toISOString(),
-        });
+        };
       }
-    }
 
-    router.push("/");
+      // Update profile with onboarding data
+      const updatedProfile: UserProfile = {
+        ...profile,
+        ...formData,
+        onboardingCompleted: true,
+        monthlyIncome: formData.lastIncome || profile.monthlyIncome,
+        savingsGoal: formData.savingsGoal ?? formData.savingGoals ?? profile.savingsGoal,
+      };
+
+      await storage.saveProfile(updatedProfile);
+
+      // Sync onboarding income to the income table
+      const incomeToSave: Income[] = incomeEntries
+        .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
+        .map((e) => ({
+          id: crypto.randomUUID(),
+          category: e.incomeType as IncomeCategory,
+          type: (e.source === "Fixed" || e.source === "Variable" ? e.source : "Variable") as Income["type"],
+          name: (e.name && e.name.trim()) || e.incomeType,
+          personal: e.personal,
+          spouse: e.spouse,
+          points: e.points,
+          editable: true,
+        }));
+      if (incomeToSave.length > 0) {
+        await storage.saveIncome(incomeToSave);
+      }
+
+      // Sync onboarding expense entries to the budget_expenses table
+      const budgetExpensesToSave: RegistrationExpense[] = expenseEntries
+        .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
+        .map((e) => ({
+          id: crypto.randomUUID(),
+          category: e.expenseCategory as ExpenseCategory,
+          type: (e.expenseType === "Fixed" || e.expenseType === "Variable" ? e.expenseType : "Variable") as RegistrationExpense["type"],
+          name: (e.name && e.name.trim()) || e.expenseCategory,
+          personal: e.personal,
+          spouse: e.spouse,
+          points: e.points,
+          editable: true,
+        }));
+      if (budgetExpensesToSave.length > 0) {
+        await storage.saveBudgetExpenses(budgetExpensesToSave);
+      }
+
+      // Sync onboarding assets to the assets table
+      const assetsToSave: Asset[] = assetEntries
+        .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
+        .map((e) => ({
+          id: crypto.randomUUID(),
+          category: e.expenses as AssetCategory,
+          type: e.expenseType as "Fixed Assets" | "Current Assets",
+          name: (e.name && e.name.trim()) || e.expenses,
+          personal: e.personal,
+          spouse: e.spouse,
+          points: e.points,
+          interestRate: e.interestRate ?? 0,
+          editable: true,
+        }));
+      if (assetsToSave.length > 0) {
+        await storage.saveAssets(assetsToSave);
+      }
+
+      // Sync onboarding liabilities to the liabilities table
+      const liabilitiesToSave: Liability[] = liabilityEntries
+        .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
+        .map((e) => ({
+          id: crypto.randomUUID(),
+          category: e.expenses as LiabilityCategory,
+          type: e.expenseType as Liability["type"],
+          name: (e.name && e.name.trim()) || e.expenses,
+          personal: e.personal,
+          spouse: e.spouse,
+          points: e.points,
+          interestRate: e.interestRate ?? 0,
+          editable: true,
+        }));
+      if (liabilitiesToSave.length > 0) {
+        await storage.saveLiabilities(liabilitiesToSave);
+      }
+
+      // If there are debts, create debt entries
+      if (formData.debts && formData.debts > 0) {
+        const existingDebts = await storage.getDebts();
+        if (existingDebts.length === 0) {
+          await storage.addDebt({
+            id: `debt-${Date.now()}`,
+            name: "Initial Debt",
+            totalAmount: formData.debts,
+            remainingAmount: formData.debts,
+            interestRate: 0,
+            minimumPayment: formData.debts * 0.02,
+            dueDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            type: "Other",
+            createdAt: new Date().toISOString(),
+          });
+        }
+      }
+
+      // Show success state briefly before redirecting
+      setSubmitSuccess(true);
+      setTimeout(() => {
+        router.push("/");
+      }, 1500);
+    } catch (error) {
+      console.error("Onboarding submission error:", error);
+      setSubmitError("Something went wrong while saving your data. Please try again.");
+      setIsSubmitting(false);
+    }
   };
 
   const canProceed = () => {
@@ -1167,12 +1183,20 @@ export default function OnboardingForm() {
           {renderStep()}
         </div>
 
+        {/* Submit error message */}
+        {submitError && (
+          <div className="mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-300 dark:border-red-700 rounded-lg flex items-start gap-2">
+            <span className="text-red-500 text-lg leading-none mt-0.5">⚠️</span>
+            <p className="text-sm text-red-800 dark:text-red-200">{submitError}</p>
+          </div>
+        )}
+
         {/* Navigation Buttons */}
         <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
           <button
             type="button"
             onClick={handlePrevious}
-            disabled={currentStep === 1}
+            disabled={currentStep === 1 || isSubmitting}
             className="flex items-center gap-2 px-6 py-3 text-gray-700 dark:text-gray-300 bg-gray-100 dark:bg-gray-700 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ChevronLeft className="h-5 w-5" />
@@ -1193,11 +1217,31 @@ export default function OnboardingForm() {
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={!canProceed()}
-              className="flex items-center gap-2 px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={!canProceed() || isSubmitting}
+              className={`flex items-center gap-2 px-6 py-3 text-white rounded-lg transition-all duration-300 disabled:cursor-not-allowed ${
+                submitSuccess
+                  ? "bg-green-500 scale-105 shadow-lg shadow-green-500/30"
+                  : isSubmitting
+                  ? "bg-green-600 opacity-80 cursor-not-allowed"
+                  : "bg-green-600 hover:bg-green-700 disabled:opacity-50"
+              }`}
             >
-              <Check className="h-5 w-5" />
-              Complete Setup
+              {isSubmitting && !submitSuccess ? (
+                <>
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                  Saving your data...
+                </>
+              ) : submitSuccess ? (
+                <>
+                  <Check className="h-5 w-5" />
+                  All done! Redirecting...
+                </>
+              ) : (
+                <>
+                  <Check className="h-5 w-5" />
+                  Complete Setup
+                </>
+              )}
             </button>
           )}
         </div>
