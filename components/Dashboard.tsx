@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { UserProfile, Asset } from "@/types";
 import { storage } from "@/lib/storage";
 import { useAuth } from "@/contexts/AuthContext";
-import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, Search, User, ChevronDown, LogOut } from "lucide-react";
+import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, Search, User, ChevronDown, LogOut, Shield, Crown, Building2, Gem, Check } from "lucide-react";
 import Link from "next/link";
 import {
   Chart as ChartJS,
@@ -659,9 +659,9 @@ export default function Dashboard() {
             className="w-full flex items-center gap-3 p-4 rounded-xl bg-red-500 shadow-sm hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 transition-colors"
           >
             <div className="p-2 rounded-full bg-white/30">
-              <DollarSign className="h-10 w-10" />
+              <DollarSign className="h-10 w-10 text-white" />
             </div>
-            <div className="flex flex-col items-start text-gray-900 dark:text-gray-900">
+            <div className="flex flex-col items-start text-white">
               <span className="text-sm font-semibold">Earn</span>
               <span className="text-xs opacity-90">Grow your income</span>
             </div>
@@ -740,6 +740,70 @@ export default function Dashboard() {
 
 
 
+
+      {/* Membership Levels Timeline */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-sm">
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h2 className="text-2xl font-bold text-[#2f6064]">OneWayOut</h2>
+            <p className="text-sm text-gray-500 font-medium">Membership Levels</p>
+          </div>
+          <div className="hidden sm:block px-3 py-1 rounded-full bg-[#2f6064]/10 text-[#2f6064] text-xs font-bold uppercase tracking-wider">
+            Current Tier: Debt Crusher
+          </div>
+        </div>
+
+        <div className="relative">
+          {/* Timeline Connector Line */}
+          <div className="absolute top-10 left-0 w-full h-1 bg-gray-100 dark:bg-gray-700 -z-0" />
+          <div className="absolute top-10 left-0 w-1/4 h-1 bg-emerald-500 -z-0" />
+
+          <div className="grid grid-cols-4 gap-4 relative z-10">
+            {/* Tier 1: Debt Crusher */}
+            <div className="flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg ring-4 ring-white dark:ring-gray-800 mb-4">
+                <Shield className="h-10 w-10" />
+              </div>
+              <h3 className="text-sm font-bold text-gray-900 dark:text-white">1. Debt Crusher</h3>
+              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-2">In Arrears</p>
+              <div className="px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-900/30 text-[10px] text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-100 dark:border-emerald-800 flex items-center gap-1">
+                <Check className="h-2.5 w-2.5" />
+                Active Since Jan 2026
+              </div>
+            </div>
+
+            {/* Tier 2: Cash King */}
+            <div className="flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 shadow-md ring-4 ring-white dark:ring-gray-800 mb-4 transition-all hover:scale-105">
+                <Crown className="h-10 w-10" />
+              </div>
+              <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">2. Cash King</h3>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Cash Savings</p>
+              <div className="text-[10px] text-gray-400 font-medium italic">Anticipated: June 2026</div>
+            </div>
+
+            {/* Tier 3: Wealth Creator */}
+            <div className="flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 shadow-md ring-4 ring-white dark:ring-gray-800 mb-4 transition-all hover:scale-105">
+                <Building2 className="h-10 w-10" />
+              </div>
+              <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">3. Wealth Creator</h3>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Building</p>
+              <div className="text-[10px] text-gray-400 font-medium italic">Target: Dec 2027</div>
+            </div>
+
+            {/* Tier 4: Legacy Builder */}
+            <div className="flex flex-col items-center text-center">
+              <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 shadow-md ring-4 ring-white dark:ring-gray-800 mb-4 transition-all hover:scale-105">
+                <Gem className="h-10 w-10" />
+              </div>
+              <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">4. Legacy Builder</h3>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Freedom</p>
+              <div className="text-[10px] text-gray-400 font-medium italic">Vision: 2030+</div>
+            </div>
+          </div>
+        </div>
+      </div>
 
       {/* Mood Display */}
       {profile.onboardingCompleted && profile.mood && (
@@ -820,24 +884,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Net Worth Card */}
-          <div className={`rounded-lg p-6 text-white ${((profile.capital || 0) - totalDebt) >= 0
-            ? "bg-gradient-to-r from-green-500 to-emerald-600"
-            : "bg-gradient-to-r from-red-500 to-rose-600"
-            }`}>
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm opacity-90">Net Worth</p>
-                <p className="text-3xl font-bold">
-                  ${((profile.capital || 0) - totalDebt).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </p>
-                <p className="text-sm mt-2 opacity-80">
-                  Assets: ${(profile.capital || 0).toLocaleString()} - Debts: ${totalDebt.toLocaleString()}
-                </p>
-              </div>
-              <Wallet className="h-12 w-12 opacity-80" />
-            </div>
-          </div>
+
         </>
       )}
 

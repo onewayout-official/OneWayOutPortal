@@ -48,8 +48,14 @@ export default function BudgetManager() {
 
   // Draggable: Bank account (left) ↔ Income (right)
   const [accounts, setAccounts] = useState<IconItem[]>([
-    { id: "acc-bank", key: "bank", label: "Bank" },
-    { id: "acc-cash", key: "cash", label: "Cash" },
+    { id: "acc-bank1", key: "bank", label: "Bank 1" },
+    { id: "acc-bank2", key: "bank", label: "Bank 2" },
+    { id: "acc-savings1", key: "bank", label: "Savings 1" },
+    { id: "acc-savings2", key: "bank", label: "Savings 2" },
+    { id: "acc-invest1", key: "bank", label: "Investment 1" },
+    { id: "acc-invest2", key: "bank", label: "Investment 2" },
+    { id: "acc-cash1", key: "cash", label: "Cash 1" },
+    { id: "acc-cash2", key: "cash", label: "Cash 2" },
     { id: "acc-wallet", key: "wallet", label: "Wallet" },
   ]);
 
@@ -204,8 +210,8 @@ export default function BudgetManager() {
       <header className="mb-6">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-3 rounded-full bg-green-100 dark:bg-green-900/30">
-              <Wallet className="h-6 w-6 text-green-600 dark:text-green-400" />
+            <div className="p-3 rounded-full bg-[#2f6064]/10">
+              <Wallet className="h-6 w-6 text-[#2f6064]" />
             </div>
             <div>
               <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Budget</h1>
@@ -217,197 +223,197 @@ export default function BudgetManager() {
       </header>
 
       <div className="grid grid-cols-12 gap-6">
-      {/* Left vertical bar */}
-      <aside
-        className="col-span-2 flex flex-col items-center space-y-6 py-6"
-        onDrop={(e) => handleDrop(e as React.DragEvent, "accounts")}
-        onDragOver={handleDragOver}
-      >
-        <div className="text-sm font-semibold">Bank account</div>
-        <div className="flex flex-col items-center gap-4">
-          {accounts.map((acc) => {
-            const Icon = ICONS[acc.key] || Wallet;
-            const title = acc.amount != null ? `${acc.label}: $${acc.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : acc.label;
-            const showName = acc.name && acc.category && acc.name !== acc.category;
-            return (
-              <div
-                key={acc.id}
-                draggable
-                onDragStart={(e) => handleDragStart(e, acc, "accounts")}
-                className="flex flex-col items-center cursor-grab active:cursor-grabbing select-none min-w-[88px]"
-                title={title}
-              >
-                <div className="p-3 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:ring-2 hover:ring-blue-400 transition-shadow">
-                  <Icon className="h-6 w-6 text-blue-600" />
-                </div>
-                {acc.category && (
-                  <span className="text-[10px] mt-1 text-gray-500 dark:text-gray-400 text-center max-w-[88px] truncate" title={`Category: ${acc.category}`}>
-                    Category: {acc.category}
-                  </span>
-                )}
-                {showName && (
-                  <span className="text-[10px] text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={`Name: ${acc.name}`}>
-                    Name: {acc.name}
-                  </span>
-                )}
-                {!acc.category && (
-                  <span className="text-xs mt-1 text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={acc.label}>{acc.label}</span>
-                )}
-                {acc.amount != null && acc.amount > 0 && (
-                  <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">
-                    ${acc.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-          <div className="mt-2 w-full min-h-10 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-            <span className="text-[10px] text-gray-400 text-center px-1">Drop income here</span>
-          </div>
-        </div>
-      </aside>
-
-      {/* Right area: three rows */}
-      <main className="col-span-10 space-y-6">
-        {/* Row 1: Pooled overview (onboarding + this month) */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold">This month</h2>
-            {isOverBudget ? <AlertCircle className="h-6 w-6 text-red-500" /> : <CheckCircle className="h-6 w-6 text-green-500" />}
-          </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
-              <div className="text-sm text-gray-500">Income (onboarding)</div>
-              <div className="text-xl font-bold text-green-700 dark:text-green-400">${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
-              <div className="text-sm text-gray-500">Planned expenses (onboarding)</div>
-              <div className="text-xl font-bold">${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
-              <div className="text-sm text-gray-500">Spent this month</div>
-              <div className={`text-xl font-bold ${totalExpenses > pooledExpenses ? "text-red-600 dark:text-red-400" : ""}`}>${totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
-            </div>
-            <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
-              <div className="text-sm text-gray-500">Remaining (vs 80% budget)</div>
-              <div className={`text-xl font-bold ${remainingBudget < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                ${remainingBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Row 2: Income (pooled as icons, draggable to/from Accounts) */}
-        <div
-          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6"
-          onDrop={(e) => handleDrop(e as React.DragEvent, "income")}
+        {/* Left vertical bar */}
+        <aside
+          className="col-span-2 flex flex-col items-center space-y-6 py-6"
+          onDrop={(e) => handleDrop(e as React.DragEvent, "accounts")}
           onDragOver={handleDragOver}
         >
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-md font-semibold flex items-center gap-2">
-              <TrendingUp className="h-5 w-5 text-green-600" />
-              Income
-            </h3>
-            {pooledIncome > 0 && (
-              <span className="text-sm font-semibold text-green-700 dark:text-green-400">
-                Total: ${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            {incomeIcons.map((inc) => {
-              const Icon = ICONS[inc.key] || Wallet;
-              const title = inc.amount != null ? `${inc.label}: $${inc.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : inc.label;
-              const showName = inc.name && inc.category && inc.name !== inc.category;
+          <div className="text-sm font-semibold">Bank account</div>
+          <div className="flex flex-col items-center gap-4">
+            {accounts.map((acc) => {
+              const Icon = ICONS[acc.key] || Wallet;
+              const title = acc.amount != null ? `${acc.label}: $${acc.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : acc.label;
+              const showName = acc.name && acc.category && acc.name !== acc.category;
               return (
                 <div
-                  key={inc.id}
+                  key={acc.id}
                   draggable
-                  onDragStart={(e) => handleDragStart(e, inc, "income")}
+                  onDragStart={(e) => handleDragStart(e, acc, "accounts")}
                   className="flex flex-col items-center cursor-grab active:cursor-grabbing select-none min-w-[88px]"
                   title={title}
                 >
-                  <div className="p-3 rounded-full bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-800 hover:ring-2 hover:ring-green-400 transition-shadow">
-                    <Icon className="h-6 w-6 text-green-600" />
+                  <div className="p-3 rounded-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 hover:ring-2 hover:ring-blue-400 transition-shadow">
+                    <Icon className="h-6 w-6 text-blue-600" />
                   </div>
-                  {inc.category && (
-                    <span className="text-[10px] mt-1 text-gray-500 dark:text-gray-400 text-center max-w-[88px] truncate" title={`Category: ${inc.category}`}>
-                      Category: {inc.category}
+                  {acc.category && (
+                    <span className="text-[10px] mt-1 text-gray-500 dark:text-gray-400 text-center max-w-[88px] truncate" title={`Category: ${acc.category}`}>
+                      Category: {acc.category}
                     </span>
                   )}
                   {showName && (
-                    <span className="text-[10px] text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={`Name: ${inc.name}`}>
-                      Name: {inc.name}
+                    <span className="text-[10px] text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={`Name: ${acc.name}`}>
+                      Name: {acc.name}
                     </span>
                   )}
-                  {!inc.category && (
-                    <span className="text-xs mt-1 text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={inc.label}>{inc.label}</span>
+                  {!acc.category && (
+                    <span className="text-xs mt-1 text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={acc.label}>{acc.label}</span>
                   )}
-                  {inc.amount != null && inc.amount > 0 && (
-                    <span className="text-[10px] text-green-600 dark:text-green-400 font-medium mt-0.5">
-                      ${inc.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  {acc.amount != null && acc.amount > 0 && (
+                    <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">
+                      ${acc.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
                   )}
                 </div>
               );
             })}
-            <div className="flex-1 min-w-[100px] h-20 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-              <span className="text-xs text-gray-400 text-center px-2">Drop accounts here</span>
+            <div className="mt-2 w-full min-h-10 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+              <span className="text-[10px] text-gray-400 text-center px-1">Drop income here</span>
             </div>
           </div>
-        </div>
+        </aside>
 
-        {/* Row 3: Planned expenses (pooled as icons) */}
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-md font-semibold flex items-center gap-2">
-              <Receipt className="h-5 w-5 text-amber-600" />
-              Planned expenses
-            </h3>
-            {pooledExpenses > 0 && (
-              <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                Total: ${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-            )}
-          </div>
-          <div className="flex flex-wrap items-center gap-4">
-            {expenseIcons.map((exp) => {
-              const Icon = ICONS[exp.key] || CreditCard;
-              const title = exp.amount != null ? `${exp.label}: $${exp.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : exp.label;
-              const showName = exp.name && exp.category && exp.name !== exp.category;
-              return (
-                <div
-                  key={exp.id}
-                  className="flex flex-col items-center select-none min-w-[88px]"
-                  title={title}
-                >
-                  <div className="p-3 rounded-full bg-amber-50 dark:bg-amber-900/10 border border-amber-100 dark:border-amber-800">
-                    <Icon className="h-6 w-6 text-amber-600" />
-                  </div>
-                  {exp.category && (
-                    <span className="text-[10px] mt-1 text-gray-500 dark:text-gray-400 text-center max-w-[88px] truncate" title={`Category: ${exp.category}`}>
-                      Category: {exp.category}
-                    </span>
-                  )}
-                  {showName && (
-                    <span className="text-[10px] text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={`Name: ${exp.name}`}>
-                      Name: {exp.name}
-                    </span>
-                  )}
-                  {!exp.category && (
-                    <span className="text-xs mt-1 text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={exp.label}>{exp.label}</span>
-                  )}
-                  {exp.amount != null && exp.amount > 0 && (
-                    <span className="text-[10px] text-amber-600 dark:text-amber-400 font-medium mt-0.5">
-                      ${exp.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                    </span>
-                  )}
+        {/* Right area: three rows */}
+        <main className="col-span-10 space-y-6">
+          {/* Row 1: Pooled overview (onboarding + this month) */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold">This month</h2>
+              {isOverBudget ? <AlertCircle className="h-6 w-6 text-red-500" /> : <CheckCircle className="h-6 w-6 text-green-500" />}
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
+                <div className="text-sm text-gray-500">Income (onboarding)</div>
+                <div className="text-xl font-bold text-[#2f6064]">${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
+                <div className="text-sm text-gray-500">Planned expenses (onboarding)</div>
+                <div className="text-xl font-bold">${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
+                <div className="text-sm text-gray-500">Spent this month</div>
+                <div className={`text-xl font-bold ${totalExpenses > pooledExpenses ? "text-red-600 dark:text-red-400" : ""}`}>${totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+              </div>
+              <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
+                <div className="text-sm text-gray-500">Remaining (vs 80% budget)</div>
+                <div className={`text-xl font-bold ${remainingBudget < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
+                  ${remainingBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
-              );
-            })}
+              </div>
+            </div>
           </div>
-        </div>
-      </main>
+
+          {/* Row 2: Income (pooled as icons, draggable to/from Accounts) */}
+          <div
+            className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6"
+            onDrop={(e) => handleDrop(e as React.DragEvent, "income")}
+            onDragOver={handleDragOver}
+          >
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-md font-semibold flex items-center gap-2">
+                <TrendingUp className="h-5 w-5 text-[#2f6064]" />
+                Income
+              </h3>
+              {pooledIncome > 0 && (
+                <span className="text-sm font-semibold text-[#2f6064]">
+                  Total: ${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              {incomeIcons.map((inc) => {
+                const Icon = ICONS[inc.key] || Wallet;
+                const title = inc.amount != null ? `${inc.label}: $${inc.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : inc.label;
+                const showName = inc.name && inc.category && inc.name !== inc.category;
+                return (
+                  <div
+                    key={inc.id}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, inc, "income")}
+                    className="flex flex-col items-center cursor-grab active:cursor-grabbing select-none min-w-[88px]"
+                    title={title}
+                  >
+                    <div className="p-3 rounded-full bg-[#2f6064]/5 dark:bg-[#2f6064]/10 border border-[#2f6064]/20 hover:ring-2 hover:ring-[#2f6064]/40 transition-shadow">
+                      <Icon className="h-6 w-6 text-[#2f6064]" />
+                    </div>
+                    {inc.category && (
+                      <span className="text-[10px] mt-1 text-gray-500 dark:text-gray-400 text-center max-w-[88px] truncate" title={`Category: ${inc.category}`}>
+                        Category: {inc.category}
+                      </span>
+                    )}
+                    {showName && (
+                      <span className="text-[10px] text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={`Name: ${inc.name}`}>
+                        Name: {inc.name}
+                      </span>
+                    )}
+                    {!inc.category && (
+                      <span className="text-xs mt-1 text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={inc.label}>{inc.label}</span>
+                    )}
+                    {inc.amount != null && inc.amount > 0 && (
+                      <span className="text-[10px] text-[#2f6064] font-medium mt-0.5">
+                        ${inc.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              <div className="flex-1 min-w-[100px] h-20 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
+                <span className="text-xs text-gray-400 text-center px-2">Drop accounts here</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 3: Planned expenses (pooled as icons) */}
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-md font-semibold flex items-center gap-2">
+                <Receipt className="h-5 w-5 text-orange-600" />
+                Planned expenses
+              </h3>
+              {pooledExpenses > 0 && (
+                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  Total: ${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </span>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center gap-4">
+              {expenseIcons.map((exp) => {
+                const Icon = ICONS[exp.key] || CreditCard;
+                const title = exp.amount != null ? `${exp.label}: $${exp.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : exp.label;
+                const showName = exp.name && exp.category && exp.name !== exp.category;
+                return (
+                  <div
+                    key={exp.id}
+                    className="flex flex-col items-center select-none min-w-[88px]"
+                    title={title}
+                  >
+                    <div className="p-3 rounded-full bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-800">
+                      <Icon className="h-6 w-6 text-orange-600" />
+                    </div>
+                    {exp.category && (
+                      <span className="text-[10px] mt-1 text-gray-500 dark:text-gray-400 text-center max-w-[88px] truncate" title={`Category: ${exp.category}`}>
+                        Category: {exp.category}
+                      </span>
+                    )}
+                    {showName && (
+                      <span className="text-[10px] text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={`Name: ${exp.name}`}>
+                        Name: {exp.name}
+                      </span>
+                    )}
+                    {!exp.category && (
+                      <span className="text-xs mt-1 text-gray-600 dark:text-gray-300 text-center max-w-[88px] truncate" title={exp.label}>{exp.label}</span>
+                    )}
+                    {exp.amount != null && exp.amount > 0 && (
+                      <span className="text-[10px] text-orange-600 dark:text-orange-400 font-medium mt-0.5">
+                        ${exp.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </main>
       </div>
     </div>
   );
