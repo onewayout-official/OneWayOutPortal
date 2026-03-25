@@ -14,6 +14,7 @@ import {
   Plus,
   Settings2,
   Coins,
+  Send,
 } from "lucide-react";
 import Link from "next/link";
 
@@ -25,6 +26,7 @@ const SPEND_CATEGORIES: { id: SpendCategory; label: string; Icon: typeof Shoppin
   { id: "Water", label: "Water", Icon: Droplets },
   { id: "Rent", label: "Rent", Icon: Home },
   { id: "Transport", label: "Transport", Icon: Car },
+  { id: "Send to others", label: "Send to others", Icon: Send },
 ];
 
 export default function SpendTracker() {
@@ -38,6 +40,7 @@ export default function SpendTracker() {
     Water: 0,
     Rent: 0,
     Transport: 0,
+    "Send to others": 0,
   });
   const [showForm, setShowForm] = useState(false);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
@@ -49,6 +52,7 @@ export default function SpendTracker() {
     Water: 0,
     Rent: 0,
     Transport: 0,
+    "Send to others": 0,
   });
   const [formData, setFormData] = useState<{
     title: string;

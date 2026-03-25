@@ -396,23 +396,22 @@ export default function ReviewDebt() {
               return (
                 <div
                   key={debt.id}
-                  className={`p-4 rounded-lg border-2 ${
-                    isOverdue
-                      ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10"
-                      : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50"
-                  }`}
+                  className={`p-4 rounded-lg border-2 ${isOverdue
+                    ? "border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/10"
+                    : "border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/50"
+                    }`}
                 >
                   <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
                       <div className="flex items-center gap-2 mb-1">
-                        <h3 className="font-semibold text-gray-900 dark:text-white">{debt.name}</h3>
+                        <h3 className="font-semibold text-gray-900 dark:text-white">Debt Name: {debt.name}</h3>
                         {isOverdue && (
                           <span className="px-2 py-0.5 text-xs font-medium bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 rounded">
                             Overdue
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">{debt.type}</p>
+                      <p className="text-sm text-gray-600 dark:text-gray-400">Debt Type: {debt.type}</p>
                     </div>
                     <div className="flex items-center gap-2">
                       <button
@@ -492,9 +491,9 @@ export default function ReviewDebt() {
               >
                 <div className="flex items-start justify-between mb-2">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">{entry.name}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Debt Name: {entry.name}</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {entry.category} • {entry.type}
+                      Debt Type: {entry.category} • {entry.type}
                     </p>
                   </div>
                   <div className="text-right">
@@ -545,9 +544,9 @@ export default function ReviewDebt() {
               >
                 <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 dark:text-white">{entry.name || entry.category}</h3>
+                    <h3 className="font-semibold text-gray-900 dark:text-white">Debt Name: {entry.name || entry.category}</h3>
                     <p className="text-sm text-gray-600 dark:text-gray-400">
-                      {entry.category} • {entry.type}
+                      Debt Type: {entry.category} • {entry.type}
                     </p>
                   </div>
                   <div className="text-right">
@@ -669,7 +668,7 @@ export default function ReviewDebt() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Debt Type</label>
                   <select
                     value={addDebtForm.type}
                     onChange={(e) => setAddDebtForm({ ...addDebtForm, type: e.target.value as DebtType })}
@@ -808,7 +807,7 @@ export default function ReviewDebt() {
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Type</label>
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Debt Type</label>
                     <select
                       value={editForm.type}
                       onChange={(e) => setEditForm({ ...editForm, type: e.target.value as DebtType })}

@@ -432,8 +432,8 @@ export const storage = {
   /** Spend screen: budget amount per category (from budget_expenses where category is one of the 7). */
   getSpendBudgets: async (): Promise<Record<SpendCategory, number>> => {
     const all = await storage.getBudgetExpenses();
-    const budgets = { Grocery: 0, Fuel: 0, Electricity: 0, Airtime: 0, Water: 0, Rent: 0, Transport: 0 } as Record<SpendCategory, number>;
-    const spendCategories: SpendCategory[] = ["Grocery", "Fuel", "Electricity", "Airtime", "Water", "Rent", "Transport"];
+    const budgets = { Grocery: 0, Fuel: 0, Electricity: 0, Airtime: 0, Water: 0, Rent: 0, Transport: 0, "Send to others": 0 } as Record<SpendCategory, number>;
+    const spendCategories: SpendCategory[] = ["Grocery", "Fuel", "Electricity", "Airtime", "Water", "Rent", "Transport", "Send to others"];
     for (const row of all) {
       if (spendCategories.includes(row.category as SpendCategory)) {
         budgets[row.category as SpendCategory] = Number(row.personal) + Number(row.spouse);
@@ -447,7 +447,7 @@ export const storage = {
     const userId = await getCurrentUserId();
     if (!userId) return;
     const all = await storage.getBudgetExpenses();
-    const spendCategories: SpendCategory[] = ["Grocery", "Fuel", "Electricity", "Airtime", "Water", "Rent", "Transport"];
+    const spendCategories: SpendCategory[] = ["Grocery", "Fuel", "Electricity", "Airtime", "Water", "Rent", "Transport", "Send to others"];
     const other = all.filter((e) => !spendCategories.includes(e.category as SpendCategory));
     const spendRows: RegistrationExpense[] = spendCategories.map((cat, i) => ({
       id: `spend-${cat}-${userId}`,

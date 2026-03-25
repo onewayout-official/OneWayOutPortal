@@ -38,7 +38,7 @@ export default function HelpMeGuide() {
   const netWorth = capital - totalDebt;
 
   // Generate personalized recommendations
-  const recommendations = [];
+  /*const recommendations = [];
 
   if (!profile?.onboardingCompleted) {
     recommendations.push({
@@ -115,7 +115,7 @@ export default function HelpMeGuide() {
         priority: "medium",
       }
     );
-  }
+  }*/
 
   const quickActions = [
     {
@@ -143,9 +143,7 @@ export default function HelpMeGuide() {
 
   const motivationalMessages = [
     "Every step you take toward your goals counts. You're making progress.",
-    "Financial wellness is a journey, not a destination. You're on the right path.",
     "Small, consistent actions lead to big changes. Keep going.",
-    "Asking for help is a sign of strength. You've got this.",
     "Your future self will thank you for the choices you make today.",
   ];
 
@@ -198,7 +196,7 @@ export default function HelpMeGuide() {
       </div>
 
       {/* Personalized Recommendations */}
-      <div className="space-y-4">
+      {/*<div className="space-y-4">
         <div className="flex items-center gap-2">
           <Lightbulb className="h-5 w-5 text-amber-600" />
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Personalized Recommendations</h2>
@@ -206,13 +204,12 @@ export default function HelpMeGuide() {
         {recommendations.map((rec, idx) => (
           <div
             key={idx}
-            className={`bg-white dark:bg-gray-800 border-2 rounded-lg p-5 transition-all hover:shadow-md ${
-              rec.priority === "high"
-                ? "border-red-200 dark:border-red-800"
-                : rec.priority === "medium"
+            className={`bg-white dark:bg-gray-800 border-2 rounded-lg p-5 transition-all hover:shadow-md ${rec.priority === "high"
+              ? "border-red-200 dark:border-red-800"
+              : rec.priority === "medium"
                 ? "border-amber-200 dark:border-amber-800"
                 : "border-gray-200 dark:border-gray-700"
-            }`}
+              }`}
           >
             <div className="flex items-start justify-between gap-4">
               <div className="flex-1">
@@ -236,10 +233,10 @@ export default function HelpMeGuide() {
             </div>
           </div>
         ))}
-      </div>
+      </div>*/}
 
       {/* Financial Summary */}
-      <div className="bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
+      {/*<div className="bg-gradient-to-r from-amber-50 to-yellow-50 dark:from-amber-900/20 dark:to-yellow-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-6">
         <h3 className="font-semibold text-gray-900 dark:text-white mb-4">Your Financial Summary</h3>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div>
@@ -267,7 +264,7 @@ export default function HelpMeGuide() {
             </p>
           </div>
         </div>
-      </div>
+      </div>*/}
     </div>
   );
 }

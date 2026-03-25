@@ -41,7 +41,8 @@ export type SpendCategory =
   | "Airtime"
   | "Water"
   | "Rent"
-  | "Transport";
+  | "Transport"
+  | "Send to others";
 
 export type ExpenseCategoryOld =
   | "Food & Dining"
@@ -234,4 +235,5 @@ export type ExpenseCategory =
   | "Airtime"
   | "Water"
   | "Rent"
-  | "Transport";
+  | "Transport"
+  | "Send to others";
