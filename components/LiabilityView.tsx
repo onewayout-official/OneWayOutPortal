@@ -37,20 +37,26 @@ export default function LiabilityView() {
                     expenseType: l.type,
                     name: l.name,
                     personal: l.personal,
-                    spouse: l.spouse,
-                    total: l.personal + l.spouse,
+                    total: l.personal,
                     points: l.points,
                     interestRate: l.interestRate,
                 })));
             } else {
                 const d = await storage.getOnboardingData();
-                setLiabilityData(d.liabilities);
+                setLiabilityData((d.liabilities || []).map((l: any) => ({
+                    expenses: l.expenses,
+                    expenseType: l.expenseType,
+                    name: l.name,
+                    personal: l.personal,
+                    total: l.total ?? l.personal,
+                    points: l.points,
+                    interestRate: l.interestRate,
+                })));
             }
         })();
     }, []);
 
     const totalPersonal = liabilityData.reduce((sum, item) => sum + (item.personal || 0), 0);
-    const totalSpouse = liabilityData.reduce((sum, item) => sum + (item.spouse || 0), 0);
     const totalLiabilities = liabilityData.reduce((sum, item) => sum + (item.total || 0), 0);
     const totalPoints = liabilityData.reduce((sum, item) => sum + (item.points || 0), 0);
 
@@ -78,18 +84,6 @@ export default function LiabilityView() {
                                 </p>
                             </div>
                             <TrendingDown className="h-8 w-8 text-blue-500 opacity-50" />
-                        </div>
-                    </div>
-
-                    <div className="bg-gradient-to-br from-pink-50 to-rose-100 dark:from-pink-900/30 dark:to-rose-800/30 rounded-lg p-4 border border-pink-200 dark:border-pink-700">
-                        <div className="flex items-center justify-between">
-                            <div>
-                                <p className="text-sm text-pink-600 dark:text-pink-300 font-medium">Spouse Liabilities</p>
-                                <p className="text-xl font-bold text-pink-700 dark:text-pink-100 mt-1">
-                                    N${totalSpouse.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                </p>
-                            </div>
-                            <TrendingDown className="h-8 w-8 text-pink-500 opacity-50" />
                         </div>
                     </div>
 
@@ -128,8 +122,7 @@ export default function LiabilityView() {
                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider">Liability Type</th>
                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider">Liability Name</th>
                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider">Category</th>
-                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Personal</th>
-                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Spouse</th>
+                                <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Amount</th>
                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Total</th>
                                 <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Points</th>
                             </tr>
@@ -153,9 +146,6 @@ export default function LiabilityView() {
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <span className="text-gray-900 dark:text-white font-semibold">N${(item.personal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                                        </td>
-                                        <td className="px-6 py-4 text-right">
-                                            <span className="text-gray-900 dark:text-white font-semibold">N${(item.spouse || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <span className="inline-flex items-center px-3 py-1 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200 font-bold">
@@ -189,11 +179,6 @@ export default function LiabilityView() {
                                     <td className="px-6 py-4 text-right">
                                         <span className="text-base font-bold text-blue-600 dark:text-blue-400">
                                             N${totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 text-right">
-                                        <span className="text-base font-bold text-pink-600 dark:text-pink-400">
-                                            N${totalSpouse.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
@@ -264,40 +249,6 @@ export default function LiabilityView() {
                             </div>
                         </div>
 
-                        {/* Spouse Liabilities */}
-                        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
-                            <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                                <PieChart className="h-5 w-5 text-pink-600" />
-                                Spouse Liabilities
-                            </h4>
-                            <div className="h-[300px] w-full flex items-center justify-center">
-                                {liabilityData.some(i => (i.spouse || 0) > 0) ? (
-                                    <Pie
-                                        data={{
-                                            labels: liabilityData.filter(i => (i.spouse || 0) > 0).map(i => i.expenses),
-                                            datasets: [{
-                                                data: liabilityData.filter(i => (i.spouse || 0) > 0).map(i => i.spouse || 0),
-                                                backgroundColor: ['#ec4899', '#f472b6', '#f1a4d9', '#fbcfe8', '#fce7f3'],
-                                                borderWidth: 0,
-                                            }]
-                                        }}
-                                        options={{
-                                            responsive: true,
-                                            maintainAspectRatio: false,
-                                            plugins: {
-                                                legend: { position: 'bottom' }
-                                            }
-                                        }}
-                                    />
-                                ) : (
-                                    <p className="text-gray-500">No spouse liability data</p>
-                                )}
-                            </div>
-                            <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                                <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Total: <span className="text-pink-600 dark:text-pink-400">N${totalSpouse.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
-                            </div>
-                        </div>
-
                         {/* Liability Distribution */}
                         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
                             <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -308,10 +259,10 @@ export default function LiabilityView() {
                                 {liabilityData.length > 0 ? (
                                     <Pie
                                         data={{
-                                            labels: ['Personal', 'Spouse'],
+                                            labels: ['Total'],
                                             datasets: [{
-                                                data: [totalPersonal, totalSpouse],
-                                                backgroundColor: ['#3b82f6', '#ec4899'],
+                                                data: [totalLiabilities],
+                                                backgroundColor: ['#3b82f6'],
                                                 borderWidth: 0,
                                             }]
                                         }}
@@ -346,7 +297,7 @@ export default function LiabilityView() {
                                         data={{
                                             labels: liabilityData.map(i => i.expenses),
                                             datasets: [{
-                                                data: liabilityData.map(i => (i.personal || 0) + (i.spouse || 0)),
+                                                data: liabilityData.map(i => (i.personal || 0)),
                                                 backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6'],
                                                 borderWidth: 0,
                                             }]
@@ -365,11 +316,11 @@ export default function LiabilityView() {
                             </div>
                         </div>
 
-                        {/* Personal vs Spouse */}
+                        {/* Personal vs Total */}
                         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
                             <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                                 <BarChart3 className="h-5 w-5 text-purple-600" />
-                                Personal vs Spouse
+                                Personal vs Total
                             </h4>
                             <div className="h-[300px] w-full flex items-center justify-center">
                                 {liabilityData.length > 0 ? (
@@ -378,14 +329,9 @@ export default function LiabilityView() {
                                             labels: liabilityData.map(i => i.expenses),
                                             datasets: [
                                                 {
-                                                    label: 'Personal',
-                                                    data: liabilityData.map(i => i.personal || 0),
+                                                    label: 'Total',
+                                                    data: liabilityData.map(i => i.total || i.personal || 0),
                                                     backgroundColor: '#3b82f6',
-                                                },
-                                                {
-                                                    label: 'Spouse',
-                                                    data: liabilityData.map(i => i.spouse || 0),
-                                                    backgroundColor: '#ec4899',
                                                 }
                                             ]
                                         }}

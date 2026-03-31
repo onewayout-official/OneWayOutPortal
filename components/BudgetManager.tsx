@@ -83,12 +83,12 @@ export default function BudgetManager() {
       if (incomeList.length > 0) {
         setIncomeIcons(
           incomeList
-            .filter((i) => (Number(i.personal) || 0) + (Number(i.spouse) || 0) > 0)
+            .filter((i) => (Number(i.personal) || 0) > 0)
             .map((i) => ({
               id: i.id,
               key: incomeIconKey(i.category),
               label: i.name && i.name.trim() ? i.name : i.category,
-              amount: (Number(i.personal) || 0) + (Number(i.spouse) || 0),
+              amount: (Number(i.personal) || 0),
               category: i.category,
               name: i.name && i.name.trim() ? i.name : undefined,
             }))
@@ -102,12 +102,12 @@ export default function BudgetManager() {
       if (budgetExpensesList.length > 0) {
         setExpenseIcons(
           budgetExpensesList
-            .filter((e) => (Number(e.personal) || 0) + (Number(e.spouse) || 0) > 0)
+            .filter((e) => (Number(e.personal) || 0) > 0)
             .map((e) => ({
               id: e.id,
               key: expenseIconKey(e.category),
               label: e.name && e.name.trim() ? e.name : e.category,
-              amount: (Number(e.personal) || 0) + (Number(e.spouse) || 0),
+              amount: (Number(e.personal) || 0),
               category: e.category,
               name: e.name && e.name.trim() ? e.name : undefined,
             }))
@@ -189,14 +189,14 @@ export default function BudgetManager() {
     );
   }
 
-  // Pool income and expenses from onboarding (personal + spouse per item)
+  // Pool income and expenses from onboarding (personal amounts only)
   const pooledIncome =
     onboardingIncome.length > 0
-      ? onboardingIncome.reduce((sum, i) => sum + (Number(i.personal) || 0) + (Number(i.spouse) || 0), 0)
+      ? onboardingIncome.reduce((sum, i) => sum + (Number(i.personal) || 0), 0)
       : (profile?.monthlyIncome ?? 0);
   const pooledExpenses =
     onboardingExpenses.length > 0
-      ? onboardingExpenses.reduce((sum, e) => sum + (Number(e.personal) || 0) + (Number(e.spouse) || 0), 0)
+      ? onboardingExpenses.reduce((sum, e) => sum + (Number(e.personal) || 0), 0)
       : (profile?.lastExpenses ?? 0);
 
   const monthlyIncome = pooledIncome;
@@ -233,7 +233,7 @@ export default function BudgetManager() {
           <div className="flex flex-col items-center gap-4">
             {accounts.map((acc) => {
               const Icon = ICONS[acc.key] || Wallet;
-              const title = acc.amount != null ? `${acc.label}: $${acc.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : acc.label;
+              const title = acc.amount != null ? `${acc.label}: N$${acc.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : acc.label;
               const showName = acc.name && acc.category && acc.name !== acc.category;
               return (
                 <div
@@ -261,7 +261,7 @@ export default function BudgetManager() {
                   )}
                   {acc.amount != null && acc.amount > 0 && (
                     <span className="text-[10px] text-blue-600 dark:text-blue-400 font-medium mt-0.5">
-                      ${acc.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                      N${acc.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                     </span>
                   )}
                 </div>
@@ -284,20 +284,20 @@ export default function BudgetManager() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
                 <div className="text-sm text-gray-500">Income (onboarding)</div>
-                <div className="text-xl font-bold text-[#2f6064]">${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div className="text-xl font-bold text-[#2f6064]">N${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               </div>
               <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
                 <div className="text-sm text-gray-500">Planned expenses (onboarding)</div>
-                <div className="text-xl font-bold">${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div className="text-xl font-bold">N${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               </div>
               <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
                 <div className="text-sm text-gray-500">Spent this month</div>
-                <div className={`text-xl font-bold ${totalExpenses > pooledExpenses ? "text-red-600 dark:text-red-400" : ""}`}>${totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+                <div className={`text-xl font-bold ${totalExpenses > pooledExpenses ? "text-red-600 dark:text-red-400" : ""}`}>N${totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
               </div>
               <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
                 <div className="text-sm text-gray-500">Remaining (vs 80% budget)</div>
                 <div className={`text-xl font-bold ${remainingBudget < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                  ${remainingBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  N${remainingBudget.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
             </div>
@@ -316,14 +316,14 @@ export default function BudgetManager() {
               </h3>
               {pooledIncome > 0 && (
                 <span className="text-sm font-semibold text-[#2f6064]">
-                  Total: ${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  Total: N${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-4">
               {incomeIcons.map((inc) => {
                 const Icon = ICONS[inc.key] || Wallet;
-                const title = inc.amount != null ? `${inc.label}: $${inc.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : inc.label;
+                const title = inc.amount != null ? `${inc.label}: N$${inc.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : inc.label;
                 const showName = inc.name && inc.category && inc.name !== inc.category;
                 return (
                   <div
@@ -351,7 +351,7 @@ export default function BudgetManager() {
                     )}
                     {inc.amount != null && inc.amount > 0 && (
                       <span className="text-[10px] text-[#2f6064] font-medium mt-0.5">
-                        ${inc.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        N${inc.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </span>
                     )}
                   </div>
@@ -372,14 +372,14 @@ export default function BudgetManager() {
               </h3>
               {pooledExpenses > 0 && (
                 <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Total: ${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  Total: N${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               )}
             </div>
             <div className="flex flex-wrap items-center gap-4">
               {expenseIcons.map((exp) => {
                 const Icon = ICONS[exp.key] || CreditCard;
-                const title = exp.amount != null ? `${exp.label}: $${exp.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : exp.label;
+                const title = exp.amount != null ? `${exp.label}: N$${exp.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : exp.label;
                 const showName = exp.name && exp.category && exp.name !== exp.category;
                 return (
                   <div
@@ -405,7 +405,7 @@ export default function BudgetManager() {
                     )}
                     {exp.amount != null && exp.amount > 0 && (
                       <span className="text-[10px] text-orange-600 dark:text-orange-400 font-medium mt-0.5">
-                        ${exp.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        N${exp.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                       </span>
                     )}
                   </div>

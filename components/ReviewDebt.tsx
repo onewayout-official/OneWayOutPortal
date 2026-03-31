@@ -36,7 +36,6 @@ type OnboardingDebtEntry = {
   type: string;
   amount: number;
   personal: number;
-  spouse: number;
   interestRate: number;
 };
 
@@ -48,7 +47,6 @@ type DebtPaymentBudgetEntry = {
   type: string;
   amount: number;
   personal: number;
-  spouse: number;
 };
 
 const emptyDebtForm = (): Omit<Debt, "id" | "createdAt"> => ({
@@ -96,7 +94,7 @@ export default function ReviewDebt() {
     const entries: OnboardingDebtEntry[] = [];
     if (liabilities.length > 0) {
       liabilities.forEach((l: Liability) => {
-        const total = l.personal + l.spouse;
+        const total = l.personal;
         if (total > 0) {
           entries.push({
             id: l.id,
@@ -105,14 +103,13 @@ export default function ReviewDebt() {
             type: l.type,
             amount: total,
             personal: l.personal,
-            spouse: l.spouse,
             interestRate: l.interestRate ?? 0,
           });
         }
       });
     } else if (legacy.liabilities?.length > 0) {
       legacy.liabilities.forEach((item: any, index: number) => {
-        const total = item.total ?? (Number(item.personal) || 0) + (Number(item.spouse) || 0);
+        const total = item.total ?? (Number(item.personal) || 0);
         if (total > 0) {
           entries.push({
             id: `legacy-${index}-${item.name ?? item.expenses ?? ""}`,
@@ -121,7 +118,6 @@ export default function ReviewDebt() {
             type: item.expenseType ?? item.type ?? "—",
             amount: total,
             personal: Number(item.personal) || 0,
-            spouse: Number(item.spouse) || 0,
             interestRate: Number(item.interestRate) || 0,
           });
         }
@@ -134,7 +130,7 @@ export default function ReviewDebt() {
     if (budgetExpenses.length > 0) {
       budgetExpenses.forEach((e: RegistrationExpense) => {
         if (DEBT_PAYMENT_CATEGORIES.includes(e.category as typeof DEBT_PAYMENT_CATEGORIES[number])) {
-          const total = e.personal + e.spouse;
+          const total = e.personal;
           if (total > 0) {
             paymentEntries.push({
               id: e.id,
@@ -143,7 +139,6 @@ export default function ReviewDebt() {
               type: e.type,
               amount: total,
               personal: e.personal,
-              spouse: e.spouse,
             });
           }
         }
@@ -152,7 +147,7 @@ export default function ReviewDebt() {
       legacy.expenses.forEach((item: any, index: number) => {
         const cat = item.expenseCategory ?? item.category;
         if (cat && DEBT_PAYMENT_CATEGORIES.includes(cat)) {
-          const total = item.total ?? (Number(item.personal) || 0) + (Number(item.spouse) || 0);
+          const total = item.total ?? (Number(item.personal) || 0);
           if (total > 0) {
             paymentEntries.push({
               id: `legacy-exp-${index}-${item.name ?? cat ?? ""}`,
@@ -161,7 +156,6 @@ export default function ReviewDebt() {
               type: item.expenseType ?? item.type ?? "Fixed",
               amount: total,
               personal: Number(item.personal) || 0,
-              spouse: Number(item.spouse) || 0,
             });
           }
         }
@@ -500,9 +494,9 @@ export default function ReviewDebt() {
                     <div className="text-lg font-bold text-gray-900 dark:text-white">
                       ${entry.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
-                    {(entry.personal > 0 || entry.spouse > 0) && (
+                    {entry.personal > 0 && (
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        Personal ${entry.personal.toLocaleString()} / Spouse ${entry.spouse.toLocaleString()}
+                        Personal ${entry.personal.toLocaleString()}
                       </div>
                     )}
                   </div>
@@ -553,9 +547,9 @@ export default function ReviewDebt() {
                     <div className="text-lg font-bold text-gray-900 dark:text-white">
                       ${entry.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/mo
                     </div>
-                    {(entry.personal > 0 || entry.spouse > 0) && (
+                    {entry.personal > 0 && (
                       <div className="text-xs text-gray-500 dark:text-gray-400">
-                        Personal ${entry.personal.toLocaleString()} / Spouse ${entry.spouse.toLocaleString()}
+                        Personal ${entry.personal.toLocaleString()}
                       </div>
                     )}
                   </div>

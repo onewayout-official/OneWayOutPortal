@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { UserProfile, Asset } from "@/types";
 import { storage } from "@/lib/storage";
 import { useAuth } from "@/contexts/AuthContext";
+import Image from "next/image";
 import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, Search, User, ChevronDown, LogOut, Shield, Crown, Building2, Gem, Check } from "lucide-react";
 import Link from "next/link";
 import {
@@ -86,11 +87,17 @@ export default function Dashboard() {
             source: i.type,
             name: i.name,
             personal: i.personal,
-            spouse: i.spouse,
-            total: i.personal + i.spouse,
+            total: i.personal,
             points: i.points,
           }))
-          : onboarding.income;
+          : (onboarding.income || []).map((i: any) => ({
+            incomeType: i.incomeType,
+            source: i.source,
+            name: i.name,
+            personal: i.personal,
+            total: i.personal,
+            points: i.points,
+          }));
 
       const expensesForCharts =
         budgetExpenseRows.length > 0
@@ -99,11 +106,17 @@ export default function Dashboard() {
             expenseType: e.type,
             name: e.name,
             personal: e.personal,
-            spouse: e.spouse,
-            total: e.personal + e.spouse,
+            total: e.personal,
             points: e.points,
           }))
-          : onboarding.expenses;
+          : (onboarding.expenses || []).map((e: any) => ({
+            expenseCategory: e.expenseCategory,
+            expenseType: e.expenseType,
+            name: e.name,
+            personal: e.personal,
+            total: e.total ?? e.personal,
+            points: e.points,
+          }));
 
       const assetsForCharts =
         loadedAssets.length > 0
@@ -112,12 +125,19 @@ export default function Dashboard() {
             expenseType: a.type,
             name: a.name,
             personal: a.personal,
-            spouse: a.spouse,
-            total: a.personal + a.spouse,
+            total: a.personal,
             points: a.points,
             interestRate: a.interestRate,
           }))
-          : onboarding.assets;
+          : (onboarding.assets || []).map((a: any) => ({
+            expenses: a.expenses,
+            expenseType: a.expenseType,
+            name: a.name,
+            personal: a.personal,
+            total: a.total ?? a.personal,
+            points: a.points,
+            interestRate: a.interestRate,
+          }));
 
       const liabilitiesForCharts =
         liabilityRows.length > 0
@@ -126,12 +146,19 @@ export default function Dashboard() {
             expenseType: l.type,
             name: l.name,
             personal: l.personal,
-            spouse: l.spouse,
-            total: l.personal + l.spouse,
+            total: l.personal,
             points: l.points,
             interestRate: l.interestRate,
           }))
-          : onboarding.liabilities;
+          : (onboarding.liabilities || []).map((l: any) => ({
+            expenses: l.expenses,
+            expenseType: l.expenseType,
+            name: l.name,
+            personal: l.personal,
+            total: l.total ?? l.personal,
+            points: l.points,
+            interestRate: l.interestRate,
+          }));
 
       setOnboardingData({
         income: incomeForCharts,
@@ -245,7 +272,7 @@ export default function Dashboard() {
   const availableAfterExpenses = monthlyIncome - totalExpenses - monthlyMinimumPayments;
   const savingsRate = monthlyIncome > 0 ? (availableAfterExpenses / monthlyIncome) * 100 : 0;
 
-  // Total points from onboarding (same rule as form: count points only when both personal and spouse > 0)
+  // Total points from onboarding (count points only when personal > 0)
   const totalPoints = [
     ...(onboardingData.income || []),
     ...(onboardingData.expenses || []),
@@ -254,7 +281,7 @@ export default function Dashboard() {
   ].reduce(
     (sum, entry) =>
       sum +
-      ((entry.personal > 0 || entry.spouse > 0 ? (entry.points ?? 0) : 0)),
+      (entry.personal > 0 ? (entry.points ?? 0) : 0),
     0
   );
 
@@ -507,7 +534,14 @@ export default function Dashboard() {
 
           {/* Center — Logo */}
           <div className="flex flex-col items-center justify-center">
-            <h1 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white text-center">OneWayOut</h1>
+            <Image
+              src="/logo.png"
+              alt="OneWayOut logo"
+              width={180}
+              height={64}
+              priority
+              className="h-10 md:h-12 w-auto object-contain"
+            />
             <p className="text-xs text-gray-400 dark:text-gray-500 hidden sm:block">{todayFormatted}</p>
           </div>
 
@@ -943,10 +977,10 @@ export default function Dashboard() {
               {/*<p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Total Assets · Total Liabilities · Net Worth</p>*/}
               {(() => {
                 const totalAssets = onboardingData.assets.reduce(
-                  (sum: number, a: any) => sum + (a.personal ?? 0) + (a.spouse ?? 0), 0
+                  (sum: number, a: any) => sum + (a.personal ?? 0), 0
                 );
                 const totalLiabilities = onboardingData.liabilities.reduce(
-                  (sum: number, l: any) => sum + (l.personal ?? 0) + (l.spouse ?? 0), 0
+                  (sum: number, l: any) => sum + (l.personal ?? 0), 0
                 );
                 const netWorth = totalAssets - totalLiabilities;
 

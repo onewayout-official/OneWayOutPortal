@@ -11,7 +11,6 @@ interface AssetEntry {
   expenseType: string;
   name: string;
   personal: number;
-  spouse: number;
   total: number;
   points: number;
   interestRate: number;
@@ -23,7 +22,6 @@ interface IncomeEntry {
   source: string;
   name: string;
   personal: number;
-  spouse: number;
   total: number;
   points: number;
   namePlaceholder: string;
@@ -45,7 +43,6 @@ interface ExpenseEntry {
   expenseType: string;
   name: string;
   personal: number;
-  spouse: number;
   total: number;
   points: number;
   namePlaceholder: string;
@@ -72,25 +69,25 @@ export default function OnboardingForm() {
     "Other": 0,
   });
   const [assetEntries, setAssetEntries] = useState<AssetEntry[]>([
-    { expenses: "House", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Property Name" },
-    { expenses: "Farm", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Property Name" },
-    { expenses: "Vehicles", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Vehicle Name" },
-    { expenses: "Investment Fund", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Investment Name" },
-    { expenses: "Pension Fund", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Pension Fund Name" },
-    { expenses: "Retirement Annuity", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Retirement Fund Name" },
-    { expenses: "Employee Shares", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Company Name" },
-    { expenses: "Shares", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Share Name" },
-    { expenses: "Long Term loans to Others", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Name" },
-    { expenses: "Household Furniture", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Jewelry", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Clothing & Attire", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Machinery", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Insurance Policies", expenseType: "Fixed Assets", name: "", personal: 0, spouse: 0, total: 0, points: 100, interestRate: 0, namePlaceholder: "Insurer Name" },
-    { expenses: "Inventory", expenseType: "Current Assets", name: "", personal: 0, spouse: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Cash Balance", expenseType: "Current Assets", name: "", personal: 0, spouse: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Short term loans to Other", expenseType: "Current Assets", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Prepayments", expenseType: "Current Assets", name: "", personal: 0, spouse: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Deposits", expenseType: "Current Assets", name: "", personal: 0, spouse: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "House", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Property Name" },
+    { expenses: "Farm", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Property Name" },
+    { expenses: "Vehicles", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Vehicle Name" },
+    { expenses: "Investment Fund", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Investment Name" },
+    { expenses: "Pension Fund", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Pension Fund Name" },
+    { expenses: "Retirement Annuity", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Retirement Fund Name" },
+    { expenses: "Employee Shares", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Company Name" },
+    { expenses: "Shares", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Share Name" },
+    { expenses: "Long Term loans to Others", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Name" },
+    { expenses: "Household Furniture", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Jewelry", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Clothing & Attire", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Machinery", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Insurance Policies", expenseType: "Fixed Assets", name: "", personal: 0, total: 0, points: 100, interestRate: 0, namePlaceholder: "Insurer Name" },
+    { expenses: "Inventory", expenseType: "Current Assets", name: "", personal: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Cash Balance", expenseType: "Current Assets", name: "", personal: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Short term loans to Other", expenseType: "Current Assets", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Prepayments", expenseType: "Current Assets", name: "", personal: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Deposits", expenseType: "Current Assets", name: "", personal: 0, total: 0, points: 25, interestRate: 0, namePlaceholder: "Various" },
   ]);
   const [isAddAssetModalOpen, setIsAddAssetModalOpen] = useState(false);
   const [newAsset, setNewAsset] = useState({
@@ -98,24 +95,23 @@ export default function OnboardingForm() {
     expenseType: "",
     name: "",
     personal: 0,
-    spouse: 0,
     total: 0,
     points: 0,
     interestRate: 0,
     namePlaceholder: "",
   });
   const [liabilityEntries, setLiabilityEntries] = useState<AssetEntry[]>([
-    { expenses: "Equity", expenseType: "Net Worth", name: "", personal: 0, spouse: 0, total: 0, points: 0, interestRate: 0, namePlaceholder: "Net Worth" },
-    { expenses: "House", expenseType: "Long Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 100, interestRate: 0, namePlaceholder: "Property Name" },
-    { expenses: "Farm", expenseType: "Long Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 75, interestRate: 0, namePlaceholder: "Property Name" },
-    { expenses: "Vehicles", expenseType: "Long Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 75, interestRate: 0, namePlaceholder: "Vehicle Name" },
-    { expenses: "Long Term loans from Others", expenseType: "Long Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Name" },
-    { expenses: "Household Furniture", expenseType: "Long Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Jewelry", expenseType: "Short Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Clothing & Attire", expenseType: "Short Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
-    { expenses: "Credit Card", expenseType: "Short Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 100, interestRate: 0, namePlaceholder: "Bank Name" },
-    { expenses: "Overdraft", expenseType: "Short Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 100, interestRate: 0, namePlaceholder: "Bank Name" },
-    { expenses: "Short term loans to Other", expenseType: "Short Term Liabilities", name: "", personal: 0, spouse: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Equity", expenseType: "Net Worth", name: "", personal: 0, total: 0, points: 0, interestRate: 0, namePlaceholder: "Net Worth" },
+    { expenses: "House", expenseType: "Long Term Liabilities", name: "", personal: 0, total: 0, points: 100, interestRate: 0, namePlaceholder: "Property Name" },
+    { expenses: "Farm", expenseType: "Long Term Liabilities", name: "", personal: 0, total: 0, points: 75, interestRate: 0, namePlaceholder: "Property Name" },
+    { expenses: "Vehicles", expenseType: "Long Term Liabilities", name: "", personal: 0, total: 0, points: 75, interestRate: 0, namePlaceholder: "Vehicle Name" },
+    { expenses: "Long Term loans from Others", expenseType: "Long Term Liabilities", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Name" },
+    { expenses: "Household Furniture", expenseType: "Long Term Liabilities", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Jewelry", expenseType: "Short Term Liabilities", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Clothing & Attire", expenseType: "Short Term Liabilities", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
+    { expenses: "Credit Card", expenseType: "Short Term Liabilities", name: "", personal: 0, total: 0, points: 100, interestRate: 0, namePlaceholder: "Bank Name" },
+    { expenses: "Overdraft", expenseType: "Short Term Liabilities", name: "", personal: 0, total: 0, points: 100, interestRate: 0, namePlaceholder: "Bank Name" },
+    { expenses: "Short term loans to Other", expenseType: "Short Term Liabilities", name: "", personal: 0, total: 0, points: 50, interestRate: 0, namePlaceholder: "Various" },
   ]);
   const [isAddLiabilityModalOpen, setIsAddLiabilityModalOpen] = useState(false);
   const [newLiability, setNewLiability] = useState({
@@ -123,25 +119,24 @@ export default function OnboardingForm() {
     expenseType: "",
     name: "",
     personal: 0,
-    spouse: 0,
     total: 0,
     points: 0,
     interestRate: 0,
     namePlaceholder: "",
   });
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>([
-    { incomeType: "Salary", source: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 500, namePlaceholder: "Employer Name" },
-    { incomeType: "Rental Income", source: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 200, namePlaceholder: "Leasee Name" },
-    { incomeType: "Bonus", source: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Employer Name" },
-    { incomeType: "Side Hustle", source: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Name" },
-    { incomeType: "Board Fees", source: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Employer Name" },
-    { incomeType: "Commission", source: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Employer Name" },
-    { incomeType: "Business Income", source: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Employer Name" },
-    { incomeType: "Pension", source: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Pension Fund Name" },
-    { incomeType: "Retirement Annuities", source: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Retirement Fund Name" },
-    { incomeType: "Dividends", source: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Investment Name" },
-    { incomeType: "Interest Income", source: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Investment Name" },
-    { incomeType: "Sales of Goods", source: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Good Name" },
+    { incomeType: "Salary", source: "Fixed", name: "", personal: 0, total: 0, points: 500, namePlaceholder: "Employer Name" },
+    { incomeType: "Rental Income", source: "Fixed", name: "", personal: 0, total: 0, points: 200, namePlaceholder: "Leasee Name" },
+    { incomeType: "Bonus", source: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Employer Name" },
+    { incomeType: "Side Hustle", source: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Name" },
+    { incomeType: "Board Fees", source: "Fixed", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Employer Name" },
+    { incomeType: "Commission", source: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Employer Name" },
+    { incomeType: "Business Income", source: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Employer Name" },
+    { incomeType: "Pension", source: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Pension Fund Name" },
+    { incomeType: "Retirement Annuities", source: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Retirement Fund Name" },
+    { incomeType: "Dividends", source: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Investment Name" },
+    { incomeType: "Interest Income", source: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Investment Name" },
+    { incomeType: "Sales of Goods", source: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Good Name" },
   ]);
   const [isAddIncomeModalOpen, setIsAddIncomeModalOpen] = useState(false);
   const [newIncome, setNewIncome] = useState({
@@ -149,55 +144,54 @@ export default function OnboardingForm() {
     source: "",
     name: "",
     personal: 0,
-    spouse: 0,
     total: 0,
     points: 0,
     namePlaceholder: "",
   });
 
   const [expenseEntries, setExpenseEntries] = useState<ExpenseEntry[]>([
-    { expenseCategory: "Company Pension", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 500, namePlaceholder: "Pension Fund Name" },
-    { expenseCategory: "Tax", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 200, namePlaceholder: "NAMRA" },
-    { expenseCategory: "Medical Aid", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 200, namePlaceholder: "Medical Aid Name" },
-    { expenseCategory: "Investments", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 105, namePlaceholder: "Investment Name" },
-    { expenseCategory: "Retirement Annuity", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Fund Name" },
-    { expenseCategory: "Long Term Insurance", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Insurer Name" },
-    { expenseCategory: "Short Term Insurance", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Insurer Name" },
-    { expenseCategory: "Funeral Insurance", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Insurer Name" },
-    { expenseCategory: "Bank Charges", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Bank Name" },
-    { expenseCategory: "Personal Loan Payments", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Bank Name" },
-    { expenseCategory: "Home Loan Payments", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Bank Name" },
-    { expenseCategory: "Vehicle Loan Payments", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Bank Name" },
-    { expenseCategory: "Credit Card Payments", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Bank Name" },
-    { expenseCategory: "Rental Expenses", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Property Name" },
-    { expenseCategory: "Water & Electricity", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Property Name" },
-    { expenseCategory: "Rates and Taxes", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Property Name" },
-    { expenseCategory: "Groceries", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Various" },
-    { expenseCategory: "Dining Out", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Lunch", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Subscriptions", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Various" },
-    { expenseCategory: "Clothing Accounts", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Various" },
-    { expenseCategory: "Fuel & Transport Expenses", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 50, namePlaceholder: "Various" },
-    { expenseCategory: "Entertainment", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Domestic Staff Salary", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Staff Name" },
-    { expenseCategory: "Garden Staff Salary", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Staff Name" },
-    { expenseCategory: "Kids: School Fees", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Kid Names" },
-    { expenseCategory: "Kids: After Care", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Kid Names" },
-    { expenseCategory: "Kids: Extra Mural Activities", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Kid Names" },
-    { expenseCategory: "Kids: Maintenance", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Kid Names" },
-    { expenseCategory: "Maintenance: Car", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Various" },
-    { expenseCategory: "Maintenance: House", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Various" },
-    { expenseCategory: "Armed Response", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Company Name" },
-    { expenseCategory: "Internet/Data", expenseType: "Fixed", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Company Name" },
-    { expenseCategory: "Airtime", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 25, namePlaceholder: "Company Name" },
-    { expenseCategory: "Family: Extended", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Farm Expenses", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Donations", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Legal Expense", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Educations", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Medicine", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Administration", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Various" },
-    { expenseCategory: "Vacations", expenseType: "Variable", name: "", personal: 0, spouse: 0, total: 0, points: 10, namePlaceholder: "Destination" },
+    { expenseCategory: "Company Pension", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 500, namePlaceholder: "Pension Fund Name" },
+    { expenseCategory: "Tax", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 200, namePlaceholder: "NAMRA" },
+    { expenseCategory: "Medical Aid", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 200, namePlaceholder: "Medical Aid Name" },
+    { expenseCategory: "Investments", expenseType: "Variable", name: "", personal: 0, total: 0, points: 105, namePlaceholder: "Investment Name" },
+    { expenseCategory: "Retirement Annuity", expenseType: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Fund Name" },
+    { expenseCategory: "Long Term Insurance", expenseType: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Insurer Name" },
+    { expenseCategory: "Short Term Insurance", expenseType: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Insurer Name" },
+    { expenseCategory: "Funeral Insurance", expenseType: "Variable", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Insurer Name" },
+    { expenseCategory: "Bank Charges", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Bank Name" },
+    { expenseCategory: "Personal Loan Payments", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Bank Name" },
+    { expenseCategory: "Home Loan Payments", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Bank Name" },
+    { expenseCategory: "Vehicle Loan Payments", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Bank Name" },
+    { expenseCategory: "Credit Card Payments", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Bank Name" },
+    { expenseCategory: "Rental Expenses", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Property Name" },
+    { expenseCategory: "Water & Electricity", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Property Name" },
+    { expenseCategory: "Rates and Taxes", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Property Name" },
+    { expenseCategory: "Groceries", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Various" },
+    { expenseCategory: "Dining Out", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Lunch", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Subscriptions", expenseType: "Variable", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Various" },
+    { expenseCategory: "Clothing Accounts", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Various" },
+    { expenseCategory: "Fuel & Transport Expenses", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 50, namePlaceholder: "Various" },
+    { expenseCategory: "Entertainment", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Domestic Staff Salary", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Staff Name" },
+    { expenseCategory: "Garden Staff Salary", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Staff Name" },
+    { expenseCategory: "Kids: School Fees", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Kid Names" },
+    { expenseCategory: "Kids: After Care", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Kid Names" },
+    { expenseCategory: "Kids: Extra Mural Activities", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Kid Names" },
+    { expenseCategory: "Kids: Maintenance", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Kid Names" },
+    { expenseCategory: "Maintenance: Car", expenseType: "Variable", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Various" },
+    { expenseCategory: "Maintenance: House", expenseType: "Variable", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Various" },
+    { expenseCategory: "Armed Response", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Company Name" },
+    { expenseCategory: "Internet/Data", expenseType: "Fixed", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Company Name" },
+    { expenseCategory: "Airtime", expenseType: "Variable", name: "", personal: 0, total: 0, points: 25, namePlaceholder: "Company Name" },
+    { expenseCategory: "Family: Extended", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Farm Expenses", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Donations", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Legal Expense", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Educations", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Medicine", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Administration", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Various" },
+    { expenseCategory: "Vacations", expenseType: "Variable", name: "", personal: 0, total: 0, points: 10, namePlaceholder: "Destination" },
   ]);
   const [isAddExpenseModalOpen, setIsAddExpenseModalOpen] = useState(false);
   const [newExpense, setNewExpense] = useState({
@@ -205,7 +199,6 @@ export default function OnboardingForm() {
     expenseType: "",
     name: "",
     personal: 0,
-    spouse: 0,
     total: 0,
     points: 0,
     namePlaceholder: "",
@@ -235,8 +228,8 @@ export default function OnboardingForm() {
     setAssetEntries((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
-      if (field === 'personal' || field === 'spouse') {
-        updated[index].total = updated[index].personal + updated[index].spouse;
+      if (field === 'personal') {
+        updated[index].total = updated[index].personal;
       }
       const totalCapital = updated.reduce((sum, entry) => sum + entry.total, 0);
       updateFormData("capital", totalCapital);
@@ -255,7 +248,6 @@ export default function OnboardingForm() {
       expenseType: "",
       name: "",
       personal: 0,
-      spouse: 0,
       total: 0,
       points: 0,
       interestRate: 0,
@@ -266,8 +258,8 @@ export default function OnboardingForm() {
   const updateNewAsset = (field: keyof typeof newAsset, value: string | number) => {
     setNewAsset((prev) => {
       const updated = { ...prev, [field]: value };
-      if (field === 'personal' || field === 'spouse') {
-        updated.total = updated.personal + updated.spouse;
+      if (field === 'personal') {
+        updated.total = updated.personal;
       }
       return updated;
     });
@@ -284,8 +276,8 @@ export default function OnboardingForm() {
     setLiabilityEntries((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
-      if (field === 'personal' || field === 'spouse') {
-        updated[index].total = updated[index].personal + updated[index].spouse;
+      if (field === 'personal') {
+        updated[index].total = updated[index].personal;
       }
       const totalLiabilities = updated.reduce((sum, entry) => sum + entry.total, 0);
       updateFormData("debts", totalLiabilities);
@@ -304,7 +296,6 @@ export default function OnboardingForm() {
       expenseType: "",
       name: "",
       personal: 0,
-      spouse: 0,
       total: 0,
       points: 0,
       interestRate: 0,
@@ -315,8 +306,8 @@ export default function OnboardingForm() {
   const updateNewLiability = (field: keyof typeof newLiability, value: string | number) => {
     setNewLiability((prev) => {
       const updated = { ...prev, [field]: value };
-      if (field === 'personal' || field === 'spouse') {
-        updated.total = updated.personal + updated.spouse;
+      if (field === 'personal') {
+        updated.total = updated.personal;
       }
       return updated;
     });
@@ -333,11 +324,11 @@ export default function OnboardingForm() {
     setIncomeEntries((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
-      if (field === 'personal' || field === 'spouse') {
-        updated[index].total = (Number(updated[index].personal) || 0) + (Number(updated[index].spouse) || 0);
+      if (field === 'personal') {
+        updated[index].total = Number(updated[index].personal) || 0;
       }
       // Update total income in formData
-      const totalIncome = updated.reduce((sum, entry) => sum + ((entry.personal || 0) + (entry.spouse || 0)), 0);
+      const totalIncome = updated.reduce((sum, entry) => sum + (entry.personal || 0), 0);
       updateFormData("lastIncome", totalIncome);
       return updated;
     });
@@ -354,7 +345,6 @@ export default function OnboardingForm() {
       source: "",
       name: "",
       personal: 0,
-      spouse: 0,
       total: 0,
       points: 0,
       namePlaceholder: "",
@@ -364,8 +354,8 @@ export default function OnboardingForm() {
   const updateNewIncome = (field: keyof typeof newIncome, value: string | number) => {
     setNewIncome((prev) => {
       const updated = { ...prev, [field]: value };
-      if (field === 'personal' || field === 'spouse') {
-        updated.total = (Number(updated.personal) || 0) + (Number(updated.spouse) || 0);
+      if (field === 'personal') {
+        updated.total = Number(updated.personal) || 0;
       }
       return updated;
     });
@@ -384,11 +374,11 @@ export default function OnboardingForm() {
     setExpenseEntries((prev) => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
-      if (field === 'personal' || field === 'spouse') {
-        updated[index].total = (Number(updated[index].personal) || 0) + (Number(updated[index].spouse) || 0);
+      if (field === 'personal') {
+        updated[index].total = Number(updated[index].personal) || 0;
       }
       // Update total expenses in formData
-      const totalExpenses = updated.reduce((sum, entry) => sum + ((entry.personal || 0) + (entry.spouse || 0)), 0);
+      const totalExpenses = updated.reduce((sum, entry) => sum + (entry.personal || 0), 0);
       updateFormData("lastExpenses", totalExpenses);
       return updated;
     });
@@ -405,7 +395,6 @@ export default function OnboardingForm() {
       expenseType: "",
       name: "",
       personal: 0,
-      spouse: 0,
       total: 0,
       points: 0,
       namePlaceholder: "",
@@ -415,8 +404,8 @@ export default function OnboardingForm() {
   const updateNewExpense = (field: keyof typeof newExpense, value: string | number) => {
     setNewExpense((prev) => {
       const updated = { ...prev, [field]: value };
-      if (field === 'personal' || field === 'spouse') {
-        updated.total = (Number(updated.personal) || 0) + (Number(updated.spouse) || 0);
+      if (field === 'personal') {
+        updated.total = Number(updated.personal) || 0;
       }
       return updated;
     });
@@ -438,7 +427,7 @@ export default function OnboardingForm() {
   /** True when the user is on the income step with zero total income (fix #15) */
   const showZeroIncomeWarning =
     currentStep === 2 &&
-    incomeEntries.reduce((s, e) => s + (e.personal || 0) + (e.spouse || 0), 0) === 0;
+    incomeEntries.reduce((s, e) => s + (e.personal || 0), 0) === 0;
 
   const handlePrevious = () => {
     if (currentStep > 1) {
@@ -478,14 +467,14 @@ export default function OnboardingForm() {
 
       // Sync onboarding income to the income table
       const incomeToSave: Income[] = incomeEntries
-        .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
+        .filter((e) => e.personal > 0 || (e.name && e.name.trim() !== ""))
         .map((e) => ({
           id: crypto.randomUUID(),
           category: e.incomeType as IncomeCategory,
           type: (e.source === "Fixed" || e.source === "Variable" ? e.source : "Variable") as Income["type"],
           name: (e.name && e.name.trim()) || e.incomeType,
           personal: e.personal,
-          spouse: e.spouse,
+          spouse: 0,
           points: e.points,
           editable: true,
         }));
@@ -495,14 +484,14 @@ export default function OnboardingForm() {
 
       // Sync onboarding expense entries to the budget_expenses table
       const budgetExpensesToSave: RegistrationExpense[] = expenseEntries
-        .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
+        .filter((e) => e.personal > 0 || (e.name && e.name.trim() !== ""))
         .map((e) => ({
           id: crypto.randomUUID(),
           category: e.expenseCategory as ExpenseCategory,
           type: (e.expenseType === "Fixed" || e.expenseType === "Variable" ? e.expenseType : "Variable") as RegistrationExpense["type"],
           name: (e.name && e.name.trim()) || e.expenseCategory,
           personal: e.personal,
-          spouse: e.spouse,
+          spouse: 0,
           points: e.points,
           editable: true,
         }));
@@ -512,14 +501,14 @@ export default function OnboardingForm() {
 
       // Sync onboarding assets to the assets table
       const assetsToSave: Asset[] = assetEntries
-        .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
+        .filter((e) => e.personal > 0 || (e.name && e.name.trim() !== ""))
         .map((e) => ({
           id: crypto.randomUUID(),
           category: e.expenses as AssetCategory,
           type: e.expenseType as "Fixed Assets" | "Current Assets",
           name: (e.name && e.name.trim()) || e.expenses,
           personal: e.personal,
-          spouse: e.spouse,
+          spouse: 0,
           points: e.points,
           interestRate: e.interestRate ?? 0,
           editable: true,
@@ -530,14 +519,14 @@ export default function OnboardingForm() {
 
       // Sync onboarding liabilities to the liabilities table
       const liabilitiesToSave: Liability[] = liabilityEntries
-        .filter((e) => e.personal > 0 || e.spouse > 0 || (e.name && e.name.trim() !== ""))
+        .filter((e) => e.personal > 0 || (e.name && e.name.trim() !== ""))
         .map((e) => ({
           id: crypto.randomUUID(),
           category: e.expenses as LiabilityCategory,
           type: e.expenseType as Liability["type"],
           name: (e.name && e.name.trim()) || e.expenses,
           personal: e.personal,
-          spouse: e.spouse,
+          spouse: 0,
           points: e.points,
           interestRate: e.interestRate ?? 0,
           editable: true,
@@ -643,7 +632,6 @@ export default function OnboardingForm() {
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Income Type</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Name</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Personal</th>
-                      <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Spouse</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Total</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Points</th>
                     </tr>
@@ -673,21 +661,10 @@ export default function OnboardingForm() {
                             step="0.01"
                           />
                         </td>
-                        <td className="py-2 px-2 whitespace-normal">
-                          <input
-                            type="number"
-                            value={entry.spouse || ''}
-                            onChange={(e) => updateIncomeEntry(index, 'spouse', parseFloat(e.target.value) || 0)}
-                            className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
-                            placeholder="0"
-                            min="0.01"
-                            step="0.01"
-                          />
-                        </td>
                         <td className="py-2 px-2 text-sm text-gray-900 dark:text-white font-medium whitespace-normal">
-                          N${((entry.personal || 0) + (entry.spouse || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          N${(entry.personal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="py-2 px-2 text-sm text-gray-900 dark:text-white whitespace-normal">{(entry.personal > 0 || entry.spouse > 0) ? (entry.points ?? 0) : 0}</td>
+                        <td className="py-2 px-2 text-sm text-gray-900 dark:text-white whitespace-normal">{entry.personal > 0 ? (entry.points ?? 0) : 0}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -702,21 +679,15 @@ export default function OnboardingForm() {
                     </div>
                   </div>
                   <div className="text-center">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Spouse</span>
-                    <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                      N${incomeEntries.reduce((sum, entry) => sum + (entry.spouse || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                  </div>
-                  <div className="text-center">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Points</span>
                     <div className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                      {incomeEntries.reduce((sum, entry) => sum + ((entry.personal > 0 || entry.spouse > 0) ? (entry.points ?? 0) : 0), 0)}
+                      {incomeEntries.reduce((sum, entry) => sum + (entry.personal > 0 ? (entry.points ?? 0) : 0), 0)}
                     </div>
                   </div>
                   <div className="text-center">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Income</span>
                     <div className="text-lg font-bold text-green-600 dark:text-green-400">
-                      N${incomeEntries.reduce((sum, entry) => sum + ((entry.personal || 0) + (entry.spouse || 0)), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      N${incomeEntries.reduce((sum, entry) => sum + (entry.personal || 0), 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   </div>
                 </div>
@@ -739,7 +710,7 @@ export default function OnboardingForm() {
         const totalFixedExpenses = expenseEntries.filter(e => e.expenseType === 'Fixed').reduce((sum, entry) => sum + (entry.total || 0), 0);
         const totalVariableExpenses = expenseEntries.filter(e => e.expenseType === 'Variable').reduce((sum, entry) => sum + (entry.total || 0), 0);
         const totalExpenses = expenseEntries.reduce((sum, entry) => sum + (entry.total || 0), 0);
-        const totalExpensePoints = expenseEntries.reduce((sum, entry) => sum + ((entry.personal > 0 || entry.spouse > 0) ? (entry.points ?? 0) : 0), 0);
+        const totalExpensePoints = expenseEntries.reduce((sum, entry) => sum + (entry.personal > 0 ? (entry.points ?? 0) : 0), 0);
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -758,7 +729,6 @@ export default function OnboardingForm() {
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Expense Type</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Name</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Personal</th>
-                      <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Spouse</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Total</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Points</th>
                     </tr>
@@ -788,28 +758,17 @@ export default function OnboardingForm() {
                             step="0.01"
                           />
                         </td>
-                        <td className="py-2 px-2 whitespace-normal">
-                          <input
-                            type="number"
-                            value={entry.spouse || ''}
-                            onChange={(e) => updateExpenseEntry(index, 'spouse', parseFloat(e.target.value) || 0)}
-                            className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
-                            placeholder="0"
-                            min="0.01"
-                            step="0.01"
-                          />
-                        </td>
                         <td className="py-2 px-2 text-sm text-gray-900 dark:text-white font-medium whitespace-normal">
-                          N${((entry.personal || 0) + (entry.spouse || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          N${(entry.personal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="py-2 px-2 text-sm text-gray-900 dark:text-white whitespace-normal">{(entry.personal > 0 || entry.spouse > 0) ? (entry.points ?? 0) : 0}</td>
+                        <td className="py-2 px-2 text-sm text-gray-900 dark:text-white whitespace-normal">{entry.personal > 0 ? (entry.points ?? 0) : 0}</td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
               </div>
               <div className="border-t border-gray-200 dark:border-gray-600 pt-4 mt-4">
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Fixed</span>
                     <div className="text-lg font-bold text-red-600 dark:text-red-400">
@@ -853,8 +812,7 @@ export default function OnboardingForm() {
       case 4:
         const totalCapital = assetEntries.reduce((sum, entry) => sum + entry.total, 0);
         const totalPersonal = assetEntries.reduce((sum, entry) => sum + entry.personal, 0);
-        const totalSpouse = assetEntries.reduce((sum, entry) => sum + entry.spouse, 0);
-        const totalPoints = assetEntries.reduce((sum, entry) => sum + ((entry.personal > 0 || entry.spouse > 0) ? (entry.points ?? 0) : 0), 0);
+                const totalPoints = assetEntries.reduce((sum, entry) => sum + (entry.personal > 0 ? (entry.points ?? 0) : 0), 0);
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -873,7 +831,6 @@ export default function OnboardingForm() {
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300 w-32">Asset Type</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Name</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Personal</th>
-                      <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Spouse</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Total</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Points</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Interest Rate*</th>
@@ -903,20 +860,10 @@ export default function OnboardingForm() {
                             step="0.01"
                           />
                         </td>
-                        <td className="py-2 px-2 whitespace-normal">
-                          <input
-                            type="number"
-                            value={entry.spouse || ''}
-                            onChange={(e) => updateAssetEntry(index, 'spouse', parseFloat(e.target.value) || 0)}
-                            className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
-                            placeholder="0"
-                            step="0.01"
-                          />
-                        </td>
                         <td className="py-2 px-2 text-sm text-gray-900 dark:text-white font-medium whitespace-normal">
                           N${entry.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="py-2 px-2 text-sm text-gray-900 dark:text-white whitespace-normal">{(entry.personal > 0 || entry.spouse > 0) ? (entry.points ?? 0) : 0}</td>
+                        <td className="py-2 px-2 text-sm text-gray-900 dark:text-white whitespace-normal">{entry.personal > 0 ? (entry.points ?? 0) : 0}</td>
                         <td className="py-2 px-2 whitespace-normal">
                           <input
                             type="number"
@@ -934,17 +881,11 @@ export default function OnboardingForm() {
                 </table>
               </div>
               <div className="border-t border-gray-200 dark:border-gray-600 pt-4 mt-4">
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Personal</span>
                     <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
                       N${totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Spouse</span>
-                    <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                      N${totalSpouse.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   </div>
                   <div className="text-center">
@@ -983,8 +924,7 @@ export default function OnboardingForm() {
       case 5:
         const totalLiabilities = liabilityEntries.reduce((sum, entry) => sum + entry.total, 0);
         const totalPersonalLiabilities = liabilityEntries.reduce((sum, entry) => sum + entry.personal, 0);
-        const totalSpouseLiabilities = liabilityEntries.reduce((sum, entry) => sum + entry.spouse, 0);
-        const totalLiabilityPoints = liabilityEntries.reduce((sum, entry) => sum + ((entry.personal > 0 || entry.spouse > 0) ? (entry.points ?? 0) : 0), 0);
+                const totalLiabilityPoints = liabilityEntries.reduce((sum, entry) => sum + (entry.personal > 0 ? (entry.points ?? 0) : 0), 0);
         return (
           <div className="space-y-6">
             <div className="text-center">
@@ -1003,7 +943,6 @@ export default function OnboardingForm() {
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300 w-32">Liability Type</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Name</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Personal</th>
-                      <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Spouse</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Total</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Points</th>
                       <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Interest Rate*</th>
@@ -1034,21 +973,10 @@ export default function OnboardingForm() {
                             min="0.01"
                           />
                         </td>
-                        <td className="py-2 px-2 whitespace-normal">
-                          <input
-                            type="number"
-                            value={entry.spouse || ''}
-                            onChange={(e) => updateLiabilityEntry(index, 'spouse', parseFloat(e.target.value) || 0)}
-                            className="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm"
-                            placeholder="0"
-                            step="0.01"
-                            min="0.01"
-                          />
-                        </td>
                         <td className="py-2 px-2 text-sm text-gray-900 dark:text-white font-medium whitespace-normal">
                           N${entry.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </td>
-                        <td className="py-2 px-2 text-sm text-gray-900 dark:text-white whitespace-normal">{(entry.personal > 0 || entry.spouse > 0) ? (entry.points ?? 0) : 0}</td>
+                        <td className="py-2 px-2 text-sm text-gray-900 dark:text-white whitespace-normal">{entry.personal > 0 ? (entry.points ?? 0) : 0}</td>
                         <td className="py-2 px-2 whitespace-normal">
                           <input
                             type="number"
@@ -1066,17 +994,11 @@ export default function OnboardingForm() {
                 </table>
               </div>
               <div className="border-t border-gray-200 dark:border-gray-600 pt-4 mt-4">
-                <div className="grid grid-cols-4 gap-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
                     <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Personal</span>
                     <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
                       N${totalPersonalLiabilities.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </div>
-                  </div>
-                  <div className="text-center">
-                    <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Spouse</span>
-                    <div className="text-lg font-bold text-purple-600 dark:text-purple-400">
-                      N${totalSpouseLiabilities.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </div>
                   </div>
                   <div className="text-center">
@@ -1304,20 +1226,6 @@ export default function OnboardingForm() {
                     step="0.01"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Spouse
-                  </label>
-                  <input
-                    type="number"
-                    value={newAsset.spouse || ''}
-                    onChange={(e) => updateNewAsset('spouse', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1414,20 +1322,6 @@ export default function OnboardingForm() {
                     type="number"
                     value={newLiability.personal || ''}
                     onChange={(e) => updateNewLiability('personal', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                    placeholder="0.00"
-                    min="0.01"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Spouse
-                  </label>
-                  <input
-                    type="number"
-                    value={newLiability.spouse || ''}
-                    onChange={(e) => updateNewLiability('spouse', parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
                     placeholder="0.00"
                     min="0.01"
@@ -1550,20 +1444,6 @@ export default function OnboardingForm() {
                     step="0.01"
                   />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Spouse
-                  </label>
-                  <input
-                    type="number"
-                    value={newIncome.spouse || ''}
-                    onChange={(e) => updateNewIncome('spouse', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                    placeholder="0.00"
-                    min="0.01"
-                    step="0.01"
-                  />
-                </div>
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1665,20 +1545,6 @@ export default function OnboardingForm() {
                     type="number"
                     value={newExpense.personal || ''}
                     onChange={(e) => updateNewExpense('personal', parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                    placeholder="0.00"
-                    min="0"
-                    step="0.01"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Spouse
-                  </label>
-                  <input
-                    type="number"
-                    value={newExpense.spouse || ''}
-                    onChange={(e) => updateNewExpense('spouse', parseFloat(e.target.value) || 0)}
                     className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
                     placeholder="0.00"
                     min="0"

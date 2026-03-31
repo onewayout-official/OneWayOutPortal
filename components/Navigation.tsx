@@ -1,8 +1,9 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Home, User, DollarSign, CreditCard, TrendingUp, TrendingDown, FileText, BarChart3, LogOut } from "lucide-react";
+import { Home, User, DollarSign, CreditCard, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navSections = [
@@ -26,6 +27,17 @@ const navSections = [
     items: [
       { href: "/assets", label: "Assets", icon: DollarSign },
       { href: "/liabilities", label: "Liabilities", icon: CreditCard },
+    ],
+  },
+  {
+    label: "Actions",
+    items: [
+      { href: "/mood", label: "Mood", icon: Smile },
+      { href: "/earn", label: "Earn", icon: DollarSign },
+      { href: "/budget", label: "Budget", icon: Wallet },
+      { href: "/help-me", label: "Help me", icon: HelpCircle },
+      { href: "/spend", label: "Spend", icon: ShoppingCart },
+      { href: "/review-debt", label: "Review debt", icon: FileText },
     ],
   },
   {
@@ -70,7 +82,16 @@ export default function Navigation() {
       >
         {/* Brand mark at top */}
         <div className="px-4 pt-2 pb-4 border-b border-white/20">
-          <span className="text-white text-lg font-bold tracking-wide">OneWayOut</span>
+          <div className="flex justify-center md:justify-start">
+            <Image
+              src="/logo.png"
+              alt="OneWayOut logo"
+              width={180}
+              height={64}
+              priority
+              className="h-12 w-auto object-contain"
+            />
+          </div>
         </div>
 
         {navSections.map((section) => (

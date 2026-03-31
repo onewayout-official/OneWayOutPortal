@@ -65,12 +65,18 @@ export default function ExpenseList() {
           expenseType: e.type,
           name: e.name,
           personal: e.personal,
-          spouse: e.spouse,
-          total: e.personal + e.spouse,
+          total: e.personal,
           points: e.points,
         })));
       } else {
-        setOnboardingExpenses(onboarding.expenses);
+        setOnboardingExpenses((onboarding.expenses || []).map((e: any) => ({
+          expenseCategory: e.expenseCategory,
+          expenseType: e.expenseType,
+          name: e.name,
+          personal: e.personal,
+          total: e.total ?? e.personal,
+          points: e.points,
+        })));
       }
     })();
   }, []);
@@ -107,7 +113,6 @@ export default function ExpenseList() {
   }, {} as Record<string, number>);
 
   const totalPersonal = onboardingExpenses.reduce((sum, item) => sum + (item.personal || 0), 0);
-  const totalSpouse = onboardingExpenses.reduce((sum, item) => sum + (item.spouse || 0), 0);
   const totalOnboarding = onboardingExpenses.reduce((sum, item) => sum + (item.total || 0), 0);
   const totalPoints = onboardingExpenses.reduce((sum, item) => sum + (item.points || 0), 0);
 
@@ -137,18 +142,6 @@ export default function ExpenseList() {
                   </p>
                 </div>
                 <Wallet className="h-8 w-8 text-blue-500 opacity-50" />
-              </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-pink-50 to-rose-100 dark:from-pink-900/30 dark:to-rose-800/30 rounded-lg p-4 border border-pink-200 dark:border-pink-700">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-pink-600 dark:text-pink-300 font-medium">Spouse Expenses</p>
-                  <p className="text-xl font-bold text-pink-700 dark:text-pink-100 mt-1">
-                    N${totalSpouse.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <Wallet className="h-8 w-8 text-pink-500 opacity-50" />
               </div>
             </div>
 
@@ -186,8 +179,7 @@ export default function ExpenseList() {
                     <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider">Category</th>
                     <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider">Type</th>
                     <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider">Name</th>
-                    <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Personal</th>
-                    <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Spouse</th>
+                    <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Amount</th>
                     <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Total</th>
                     <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Points</th>
                   </tr>
@@ -213,9 +205,6 @@ export default function ExpenseList() {
                           <span className="text-gray-900 dark:text-white font-semibold">N${(item.personal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <span className="text-gray-900 dark:text-white font-semibold">N${(item.spouse || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        </td>
-                        <td className="px-6 py-4 text-right">
                           <span className="inline-flex items-center px-3 py-1 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200 font-bold">
                             N${(item.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </span>
@@ -238,11 +227,6 @@ export default function ExpenseList() {
                       <td className="px-6 py-4 text-right">
                         <span className="text-base font-bold text-blue-600 dark:text-blue-400">
                           N${totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-base font-bold text-pink-600 dark:text-pink-400">
-                          N${totalSpouse.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -313,40 +297,6 @@ export default function ExpenseList() {
                   </div>
                 </div>
 
-                {/* Spouse Expenses */}
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <PieChart className="h-5 w-5 text-pink-600" />
-                    Spouse Expenses
-                  </h4>
-                  <div className="h-[300px] w-full flex items-center justify-center">
-                    {onboardingExpenses.some(i => (i.spouse || 0) > 0) ? (
-                      <Pie
-                        data={{
-                          labels: onboardingExpenses.filter(i => (i.spouse || 0) > 0).map(i => i.expenseCategory),
-                          datasets: [{
-                            data: onboardingExpenses.filter(i => (i.spouse || 0) > 0).map(i => i.spouse || 0),
-                            backgroundColor: ['#ec4899', '#f472b6', '#f1a4d9', '#fbcfe8', '#fce7f3'],
-                            borderWidth: 0,
-                          }]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: { position: 'bottom' }
-                          }
-                        }}
-                      />
-                    ) : (
-                      <p className="text-gray-500">No spouse expense data</p>
-                    )}
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Total: <span className="text-pink-600 dark:text-pink-400">N${totalSpouse.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
-                  </div>
-                </div>
-
                 {/* Expense Distribution */}
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -357,10 +307,10 @@ export default function ExpenseList() {
                     {onboardingExpenses.length > 0 ? (
                       <Pie
                         data={{
-                          labels: ['Personal', 'Spouse'],
+                          labels: ['Total'],
                           datasets: [{
-                            data: [totalPersonal, totalSpouse],
-                            backgroundColor: ['#3b82f6', '#ec4899'],
+                            data: [totalOnboarding],
+                            backgroundColor: ['#3b82f6'],
                             borderWidth: 0,
                           }]
                         }}
@@ -395,7 +345,7 @@ export default function ExpenseList() {
                         data={{
                           labels: onboardingExpenses.map(i => i.expenseCategory),
                           datasets: [{
-                            data: onboardingExpenses.map(i => (i.personal || 0) + (i.spouse || 0)),
+                            data: onboardingExpenses.map(i => (i.personal || 0)),
                             backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6'],
                             borderWidth: 0,
                           }]
@@ -427,7 +377,7 @@ export default function ExpenseList() {
                           labels: onboardingExpenses.map(i => i.expenseType),
                           datasets: [{
                             label: 'Total Expenses',
-                            data: onboardingExpenses.map(i => (i.personal || 0) + (i.spouse || 0)),
+                            data: onboardingExpenses.map(i => (i.personal || 0)),
                             backgroundColor: '#ef4444',
                           }]
                         }}
@@ -448,11 +398,11 @@ export default function ExpenseList() {
                   </div>
                 </div>
 
-                {/* Personal vs Spouse */}
+                {/* Personal vs Total */}
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <BarChart3 className="h-5 w-5 text-purple-600" />
-                    Personal vs Spouse
+                    Personal vs Total
                   </h4>
                   <div className="h-[300px] w-full flex items-center justify-center">
                     {onboardingExpenses.length > 0 ? (
@@ -461,14 +411,9 @@ export default function ExpenseList() {
                           labels: onboardingExpenses.map(i => i.expenseCategory),
                           datasets: [
                             {
-                              label: 'Personal',
-                              data: onboardingExpenses.map(i => i.personal || 0),
+                              label: 'Total',
+                              data: onboardingExpenses.map(i => i.total || i.personal || 0),
                               backgroundColor: '#3b82f6',
-                            },
-                            {
-                              label: 'Spouse',
-                              data: onboardingExpenses.map(i => i.spouse || 0),
-                              backgroundColor: '#ec4899',
                             }
                           ]
                         }}
