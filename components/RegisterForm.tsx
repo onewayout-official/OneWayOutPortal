@@ -55,7 +55,8 @@ export default function RegisterForm() {
         console.error("Error saving initial profile:", err);
       }
 
-      router.push("/");
+      // Go straight to onboarding — never hit the dashboard first (avoids flash before OnboardingCheck redirects).
+      router.push("/onboarding");
     } else {
       setError(result.error || "Failed to create account");
     }

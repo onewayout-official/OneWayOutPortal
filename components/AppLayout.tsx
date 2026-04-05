@@ -1,6 +1,7 @@
 "use client";
 
 import Navigation from "@/components/Navigation";
+import OnboardingPortalGate from "@/components/OnboardingPortalGate";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -14,7 +15,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <Navigation />
         </aside>
         <main className="flex-1 p-4 md:p-8 pb-20 md:pb-8 md:ml-64 min-h-screen">
-          {children}
+          <OnboardingPortalGate>{children}</OnboardingPortalGate>
         </main>
       </div>
     </div>

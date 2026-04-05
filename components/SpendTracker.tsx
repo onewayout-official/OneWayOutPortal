@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { Expense, SpendCategory, UserProfile } from "@/types";
 import { storage } from "@/lib/storage";
+
+type UserAccount = { id: string; accountType: string; name: string; sortOrder: number };
 import {
   ShoppingCart,
   Fuel,
@@ -60,13 +62,16 @@ export default function SpendTracker() {
     category: SpendCategory;
     date: string;
     description: string;
+    accountId: string;
   }>({
     title: "",
     amount: 0,
     category: "Grocery",
     date: new Date().toISOString().split("T")[0],
     description: "",
+    accountId: "",
   });
+  const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [redeemPoints, setRedeemPoints] = useState("");
   const [redeemNote, setRedeemNote] = useState("");
@@ -79,15 +84,17 @@ export default function SpendTracker() {
 
   const loadData = async () => {
     setIsLoading(true);
-    const [userProfile, expenseList, budgetMap] = await Promise.all([
+    const [userProfile, expenseList, budgetMap, accounts] = await Promise.all([
       storage.getProfile(),
       storage.getExpenses(),
       storage.getSpendBudgets(),
+      storage.getUserAccounts(),
     ]);
     setProfile(userProfile);
     setExpenses(expenseList);
     setBudgets(budgetMap);
     setEditBudgets(budgetMap);
+    setUserAccounts(accounts);
     setIsLoading(false);
   };
 
@@ -128,6 +135,7 @@ export default function SpendTracker() {
       category: formData.category,
       date: formData.date,
       description: formData.description || undefined,
+      accountId: formData.accountId || undefined,
     });
     await loadData();
     setFormData({
@@ -136,6 +144,7 @@ export default function SpendTracker() {
       category: "Grocery",
       date: new Date().toISOString().split("T")[0],
       description: "",
+      accountId: "",
     });
     setShowForm(false);
   };
@@ -402,16 +411,35 @@ export default function SpendTracker() {
                 </select>
               </div>
             </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Date
-              </label>
-              <input
-                type="date"
-                value={formData.date}
-                onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-              />
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Date
+                </label>
+                <input
+                  type="date"
+                  value={formData.date}
+                  onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Paid from account
+                </label>
+                <select
+                  value={formData.accountId}
+                  onChange={(e) => setFormData({ ...formData, accountId: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
+                >
+                  <option value="">— none —</option>
+                  {userAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
             </div>
             <div className="flex gap-2">
               <button

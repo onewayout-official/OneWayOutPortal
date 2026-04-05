@@ -15,6 +15,8 @@ export interface UserProfile {
   incomeGoals?: number;
   savingGoals?: number;
   onboardingCompleted?: boolean;
+  /** User chose "Skip for now" on onboarding; cleared when they complete setup */
+  onboardingSkipped?: boolean;
   /** Redeemable points earned from tasks (Earn screen), spent on Spend screen */
   userPoints?: number;
 }
@@ -31,6 +33,7 @@ export interface Expense {
   category: ExpenseCategoryOld | SpendCategory;
   date: string;
   description?: string;
+  accountId?: string;
 }
 
 /** Spend screen categories (7 fixed items with budget vs spent) */

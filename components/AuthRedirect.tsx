@@ -15,7 +15,9 @@ export default function AuthRedirect({ children }: { children: React.ReactNode }
       if (pathname === "/register") return;
 
       storage.getProfile().then((profile) => {
-        if (profile && profile.onboardingCompleted) {
+        const canUseApp =
+          profile && (profile.onboardingCompleted || profile.onboardingSkipped);
+        if (canUseApp) {
           router.push("/");
         } else if (pathname !== "/register") {
           router.push("/onboarding");

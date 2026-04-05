@@ -93,6 +93,7 @@ export default function MoodTracker() {
   const [moodHistory, setMoodHistory] = useState<DailyMood[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [chartDays, setChartDays] = useState<7 | 14 | 30>(30);
 
   useEffect(() => {
@@ -117,25 +118,37 @@ export default function MoodTracker() {
   };
 
   const handleMoodSelect = async (mood: "😊" | "😐" | "😔") => {
-    if (!profile || isSaving) return;
-    setIsSaving(true);
-    setSelectedMood(mood);
-
     const todayKey = format(new Date(), "yyyy-MM-dd");
+    const alreadyLogged = moodHistory.some((m) => m.date === todayKey);
+    if (isSaving || alreadyLogged) return;
 
-    // Save to profile (current mood)
-    const updatedProfile = { ...profile, mood };
-    await storage.saveProfile(updatedProfile);
-    setProfile(updatedProfile);
+    setIsSaving(true);
+    setSaveError(null);
 
-    // Save to daily_moods history
-    await storage.saveDailyMood({ date: todayKey, mood });
+    try {
+      // Persist daily row first (history + chart); does not depend on profile
+      await storage.saveDailyMood({ date: todayKey, mood });
 
-    // Reload history
-    const dailyMoods = await storage.getDailyMoods();
-    setMoodHistory(dailyMoods);
+      let nextProfile = profile;
+      if (!nextProfile) {
+        nextProfile = await storage.getProfile();
+      }
+      if (nextProfile) {
+        const updatedProfile = { ...nextProfile, mood };
+        await storage.saveProfile(updatedProfile);
+        setProfile(updatedProfile);
+      }
 
-    setIsSaving(false);
+      setSelectedMood(mood);
+      const dailyMoods = await storage.getDailyMoods();
+      setMoodHistory(dailyMoods);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Could not save your mood. Please try again.";
+      setSaveError(message);
+      setSelectedMood(moodHistory.find((m) => m.date === todayKey)?.mood ?? null);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   if (isLoading) {
@@ -163,6 +176,7 @@ export default function MoodTracker() {
 
   const todayKey = format(today, "yyyy-MM-dd");
   const todayMood = moodHistory.find((m) => m.date === todayKey);
+  const moodLockedForToday = Boolean(todayMood);
 
   return (
     <div className="space-y-6">
@@ -201,22 +215,34 @@ export default function MoodTracker() {
 
       {/* Mood Selection */}
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-          {todayMood ? "Update Today's Mood" : "Log Today's Mood"}
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">
+          {moodLockedForToday ? "Today's mood" : "Log today's mood"}
         </h2>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+          {moodLockedForToday
+            ? "You've already saved your mood for today. You can log again tomorrow."
+            : "Choose one mood for today — you can only save once per day."}
+        </p>
+        {saveError && (
+          <div className="mb-4 p-3 rounded-lg bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-200">
+            {saveError}
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-4">
           {moods.map((mood) => {
             const isActive = selectedMood === mood.emoji;
+            const disabled = isSaving || moodLockedForToday;
             return (
               <button
                 key={mood.emoji}
+                type="button"
                 onClick={() => handleMoodSelect(mood.emoji)}
-                disabled={isSaving}
+                disabled={disabled}
                 className={`p-5 rounded-xl border-2 transition-all duration-200 flex flex-col items-center gap-2 ${
                   isActive
                     ? "border-yellow-500 bg-yellow-50 dark:bg-yellow-900/20 scale-105 shadow-md"
                     : "border-gray-200 dark:border-gray-700 hover:border-yellow-300 dark:hover:border-yellow-700 hover:scale-102"
-                } ${isSaving ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
+                } ${disabled ? "opacity-60 cursor-not-allowed" : "cursor-pointer"}`}
               >
                 <span className="text-4xl">{mood.emoji}</span>
                 <span className="text-sm font-semibold text-gray-900 dark:text-white">{mood.label}</span>

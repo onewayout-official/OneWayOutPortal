@@ -5,34 +5,13 @@ import { UserProfile, Asset } from "@/types";
 import { storage } from "@/lib/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import Image from "next/image";
-import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, Search, User, ChevronDown, LogOut, Shield, Crown, Building2, Gem, Check } from "lucide-react";
+import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, User, ChevronDown, LogOut, Shield, Crown, Building2, Gem, Check } from "lucide-react";
 import Link from "next/link";
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-} from 'chart.js';
-import { Pie, Bar } from 'react-chartjs-2';
 import {
   LineChart, Line, BarChart, Bar as ReBar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   Legend as ReLegend, ResponsiveContainer,
 } from 'recharts';
-
-ChartJS.register(
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title
-);
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -49,35 +28,38 @@ export default function Dashboard() {
     assets: any[];
     liabilities: any[];
   }>({ income: [], expenses: [], assets: [], liabilities: [] });
-  const [searchQuery, setSearchQuery] = useState("");
+
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; Income: number; Expenses: number; Surplus: number }[]>([]);
+  const [moodDates, setMoodDates] = useState<Set<string>>(new Set());
+  const [budgetDates, setBudgetDates] = useState<Set<string>>(new Set());
+  const [accountBalance, setAccountBalance] = useState<{ allocated: number; budgeted: number; spent: number } | null>(null);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const { logout } = useAuth();
 
   useEffect(() => {
     const loadData = async () => {
+      try {
       // Single batched call: one auth check + 8 parallel table reads (faster than 8 separate getUserId + fetch)
       const data = await storage.getDashboardData();
-      if (!data) {
-        setIsDashboardLoading(false);
-        return;
-      }
+      if (!data) return;
 
-      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, onboarding } = data;
+      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, onboarding, incomeAllocations, accountExpenseAllocations } = data;
 
       // If profile missing (e.g. new user), ensure it exists via normal getProfile (upsert)
       if (!userProfile) {
         const fallbackProfile = await storage.getProfile();
         setProfile(fallbackProfile);
-        setIsDashboardLoading(false);
         return;
       }
 
       setProfile(userProfile);
       setAssets(loadedAssets);
+
+      setMoodDates(new Set(dailyMoods.map((m) => m.date)));
+      setBudgetDates(new Set(expenses.map((e) => e.date.slice(0, 10))));
 
       // Prefer normalized tables; fall back to legacy onboarding_data JSONB
       const incomeForCharts =
@@ -177,6 +159,24 @@ export default function Dashboard() {
         .reduce((sum, exp) => sum + exp.amount, 0);
       setTotalExpenses(monthlyExpenses);
 
+      // Compute real per-account figures if the user has set up allocations
+      const allocatedIncomeIds = new Set(incomeAllocations.map((a) => a.accountId ? a.incomeId : null).filter(Boolean));
+      if (incomeAllocations.length > 0 && incomeRows.length > 0) {
+        const allocatedIncomeTotal = incomeRows
+          .filter((i) => allocatedIncomeIds.has(i.id))
+          .reduce((s, i) => s + (Number(i.personal) || 0), 0);
+        const totalBudgeted = accountExpenseAllocations.reduce((s, a) => s + a.amount, 0);
+        const totalSpentFromAccounts = expenses
+          .filter((exp) => {
+            const d = new Date(exp.date);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear && exp.accountId;
+          })
+          .reduce((s, e) => s + e.amount, 0);
+        setAccountBalance({ allocated: allocatedIncomeTotal, budgeted: totalBudgeted, spent: totalSpentFromAccounts });
+      } else {
+        setAccountBalance(null);
+      }
+
       // Build last-6-months data for the Income Statement line chart
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const now = new Date();
@@ -197,7 +197,11 @@ export default function Dashboard() {
       const totalMinPayments = debts.reduce((sum, debt) => sum + debt.minimumPayment, 0);
       setTotalDebt(totalDebtAmount);
       setMonthlyMinimumPayments(totalMinPayments);
-      setIsDashboardLoading(false);
+      } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+      } finally {
+        setIsDashboardLoading(false);
+      }
     };
 
     loadData();
@@ -312,10 +316,13 @@ export default function Dashboard() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
 
-  // Calendar ring status — no hardcoded fake data (fix #9).
-  // Returns empty status for all days; replace with real activity data when available.
-  const getDateStatus = (_day: number): { mood: boolean; earned: boolean; budget: boolean } => {
-    return { mood: false, earned: false, budget: false };
+  const getDateStatus = (day: number): { mood: boolean; earned: boolean; budget: boolean } => {
+    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    return {
+      mood: moodDates.has(key),
+      earned: false, // no dated earn log yet
+      budget: budgetDates.has(key),
+    };
   };
 
   const getDaysArray = () => {
@@ -370,7 +377,7 @@ export default function Dashboard() {
     const r = 14;
     const circ = 2 * Math.PI * r;
     const segment = circ / 3; // 120° each
-    const strokeWidth = 3.5;
+    const strokeWidth = 10;
 
     return (
       <svg viewBox="0 0 36 36" className="w-7 h-7 -rotate-90" style={{ overflow: "visible" }}>
@@ -550,12 +557,35 @@ export default function Dashboard() {
             {/* Wallet info */}
             <div className="flex flex-col items-end">
               <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">OneWayOut Wallet</span>
-              <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
-                Balance N${(profile.monthlyIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                Available N${Math.max(0, (profile.monthlyIncome || 0) - totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
+              {accountBalance ? (
+                <>
+                  <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
+                    Income N${accountBalance.allocated.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  {accountBalance.budgeted > 0 && (
+                    <span className="text-xs font-semibold text-orange-500">
+                      Budgeted N${accountBalance.budgeted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  )}
+                  {accountBalance.spent > 0 && (
+                    <span className="text-xs font-semibold text-red-500">
+                      Spent N${accountBalance.spent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
+                  )}
+                  <span className={`text-sm font-bold ${Math.max(0, accountBalance.allocated - accountBalance.budgeted - accountBalance.spent) === 0 ? "text-gray-400" : "text-blue-600 dark:text-blue-400"}`}>
+                    Available N${Math.max(0, accountBalance.allocated - accountBalance.budgeted - accountBalance.spent).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </>
+              ) : (
+                <>
+                  <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
+                    Balance N${(profile.monthlyIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
+                    Available N${Math.max(0, (profile.monthlyIncome || 0) - totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </>
+              )}
             </div>
 
             {/* Profile dropdown */}
@@ -874,7 +904,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Capital / Assets</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    ${(profile.capital || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    N${(profile.capital || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-green-600" />
@@ -886,7 +916,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Total Debts</p>
                   <p className="text-2xl font-bold text-orange-600">
-                    ${totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    N${totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <TrendingDown className="h-8 w-8 text-orange-600" />
@@ -898,7 +928,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Last Income</p>
                   <p className="text-2xl font-bold text-blue-600">
-                    ${(profile.lastIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    N${(profile.lastIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <DollarSign className="h-8 w-8 text-blue-600" />
@@ -910,7 +940,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Last Expenses</p>
                   <p className="text-2xl font-bold text-red-600">
-                    ${(profile.lastExpenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    N${(profile.lastExpenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <Wallet className="h-8 w-8 text-red-600" />

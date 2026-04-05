@@ -459,6 +459,7 @@ export default function OnboardingForm() {
         ...profile,
         ...formData,
         onboardingCompleted: true,
+        onboardingSkipped: false,
         monthlyIncome: formData.lastIncome || profile.monthlyIncome,
         savingsGoal: formData.savingsGoal ?? formData.savingGoals ?? profile.savingsGoal,
       };
@@ -561,6 +562,38 @@ export default function OnboardingForm() {
     } catch (error) {
       console.error("Onboarding submission error:", error);
       setSubmitError("Something went wrong while saving your data. Please try again.");
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleSkipOnboarding = async () => {
+    if (!user || isSubmitting) return;
+
+    setIsSubmitting(true);
+    setSubmitError(null);
+
+    try {
+      let profile = await storage.getProfile();
+      if (!profile) {
+        profile = {
+          id: user.userId,
+          name: "",
+          email: user.email || "",
+          monthlyIncome: 0,
+          createdAt: new Date().toISOString(),
+        };
+      }
+
+      await storage.saveProfile({
+        ...profile,
+        onboardingSkipped: true,
+        onboardingCompleted: false,
+      });
+
+      router.push("/");
+    } catch (error) {
+      console.error("Skip onboarding error:", error);
+      setSubmitError("Could not save your choice. Please try again.");
       setIsSubmitting(false);
     }
   };
@@ -1114,7 +1147,18 @@ export default function OnboardingForm() {
         )}
 
         {/* Navigation Buttons */}
-        <div className="flex justify-between items-center mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+        <div className="flex flex-col gap-4 mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+          <div className="flex justify-center">
+            <button
+              type="button"
+              onClick={handleSkipOnboarding}
+              disabled={isSubmitting}
+              className="text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 underline underline-offset-2 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Skip for now — I&apos;ll complete this later
+            </button>
+          </div>
+          <div className="flex justify-between items-center">
           <button
             type="button"
             onClick={handlePrevious}
@@ -1166,6 +1210,7 @@ export default function OnboardingForm() {
               )}
             </button>
           )}
+          </div>
         </div>
       </div>
 

@@ -20,6 +20,14 @@ export async function getSession(): Promise<AuthSession | null> {
   };
 }
 
+/** Normalize Postgres `date` / ISO strings to `yyyy-MM-dd` for consistent app comparisons */
+function normalizePgDateKey(d: string): string {
+  if (!d) return "";
+  const s = String(d).trim();
+  if (s.length >= 10) return s.slice(0, 10);
+  return s;
+}
+
 export const storage = {
   // Session (delegates to Supabase Auth)
   getSession,
@@ -59,6 +67,7 @@ export const storage = {
         income_goals: null,
         saving_goals: null,
         onboarding_completed: false,
+        onboarding_skipped: false,
         user_points: 0,
       });
       const { data: inserted } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
@@ -87,6 +96,7 @@ export const storage = {
       income_goals: profile.incomeGoals ?? null,
       saving_goals: profile.savingGoals ?? null,
       onboarding_completed: profile.onboardingCompleted ?? false,
+      onboarding_skipped: profile.onboardingSkipped ?? false,
       user_points: profile.userPoints ?? 0,
     });
     if (error) console.error("[storage] saveProfile error:", error.message);
@@ -125,6 +135,7 @@ export const storage = {
         category: e.category,
         date: e.date,
         description: e.description ?? null,
+        account_id: e.accountId ?? null,
       })),
       { onConflict: "id" }
     );
@@ -142,6 +153,7 @@ export const storage = {
       category: expense.category,
       date: expense.date,
       description: expense.description ?? null,
+      account_id: expense.accountId ?? null,
     });
   },
 
@@ -471,19 +483,174 @@ export const storage = {
       .select("*")
       .eq("user_id", userId)
       .order("date", { ascending: false });
-    if (error) return [];
-    return (data ?? []).map((r: { date: string; mood: string }) => ({ date: r.date, mood: r.mood as DailyMood["mood"] }));
+    if (error) {
+      console.error("[storage] getDailyMoods error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: { date: string; mood: string }) => ({
+      date: normalizePgDateKey(r.date),
+      mood: r.mood as DailyMood["mood"],
+    }));
   },
 
   saveDailyMood: async (mood: DailyMood): Promise<void> => {
     const userId = await getCurrentUserId();
-    if (!userId) return;
-    // Must specify onConflict for composite PK (user_id, date) (fix #8)
+    if (!userId) {
+      throw new Error("You must be signed in to save your mood.");
+    }
+    const dateKey = normalizePgDateKey(mood.date);
     const { error } = await supabase.from("daily_moods").upsert(
-      { user_id: userId, date: mood.date, mood: mood.mood },
+      { user_id: userId, date: dateKey, mood: mood.mood },
       { onConflict: "user_id,date" }
     );
-    if (error) console.error("[storage] saveDailyMood error:", error.message);
+    if (error) {
+      console.error("[storage] saveDailyMood error:", error.message);
+      throw new Error(error.message);
+    }
+  },
+
+  // User Accounts (dynamic accounts per type)
+  getUserAccounts: async (): Promise<{ id: string; accountType: string; name: string; sortOrder: number }[]> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+    const { data, error } = await supabase
+      .from("user_accounts")
+      .select("id, account_type, name, sort_order")
+      .eq("user_id", userId)
+      .order("sort_order")
+      .order("created_at");
+    if (error) {
+      console.error("[storage] getUserAccounts error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: { id: string; account_type: string; name: string; sort_order: number }) => ({
+      id: r.id,
+      accountType: r.account_type,
+      name: r.name,
+      sortOrder: r.sort_order,
+    }));
+  },
+
+  createUserAccount: async (accountType: string, name: string): Promise<string> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { data, error } = await supabase
+      .from("user_accounts")
+      .insert({ user_id: userId, account_type: accountType, name })
+      .select("id")
+      .single();
+    if (error) {
+      console.error("[storage] createUserAccount error:", error.message);
+      throw new Error(error.message);
+    }
+    return data.id as string;
+  },
+
+  deleteUserAccount: async (accountId: string): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { error } = await supabase
+      .from("user_accounts")
+      .delete()
+      .eq("id", accountId)
+      .eq("user_id", userId);
+    if (error) {
+      console.error("[storage] deleteUserAccount error:", error.message);
+      throw new Error(error.message);
+    }
+  },
+
+  // Income Allocations (income → specific account)
+  getIncomeAllocations: async (): Promise<{ incomeId: string; accountId: string }[]> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+    const { data, error } = await supabase
+      .from("income_allocations")
+      .select("income_id, account_id")
+      .eq("user_id", userId);
+    if (error) {
+      console.error("[storage] getIncomeAllocations error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: { income_id: string; account_id: string }) => ({
+      incomeId: r.income_id,
+      accountId: r.account_id,
+    }));
+  },
+
+  saveIncomeAllocation: async (incomeId: string, accountId: string): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { error } = await supabase.from("income_allocations").upsert(
+      { user_id: userId, income_id: incomeId, account_id: accountId },
+      { onConflict: "user_id,income_id" }
+    );
+    if (error) {
+      console.error("[storage] saveIncomeAllocation error:", error.message);
+      throw new Error(error.message);
+    }
+  },
+
+  // Account → Expense allocations (how much from an account goes to a planned expense)
+  getAccountExpenseAllocations: async (): Promise<{ id: string; accountId: string; expenseId: string; amount: number }[]> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+    const { data, error } = await supabase
+      .from("account_expense_allocations")
+      .select("id, account_id, expense_id, amount")
+      .eq("user_id", userId);
+    if (error) {
+      console.error("[storage] getAccountExpenseAllocations error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r: { id: string; account_id: string; expense_id: string; amount: number }) => ({
+      id: r.id,
+      accountId: r.account_id,
+      expenseId: r.expense_id,
+      amount: Number(r.amount),
+    }));
+  },
+
+  saveAccountExpenseAllocation: async (accountId: string, expenseId: string, amount: number): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { error } = await supabase.from("account_expense_allocations").upsert(
+      { user_id: userId, account_id: accountId, expense_id: expenseId, amount },
+      { onConflict: "user_id,account_id,expense_id" }
+    );
+    if (error) {
+      console.error("[storage] saveAccountExpenseAllocation error:", error.message);
+      throw new Error(error.message);
+    }
+  },
+
+  deleteAccountExpenseAllocation: async (accountId: string, expenseId: string): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { error } = await supabase
+      .from("account_expense_allocations")
+      .delete()
+      .eq("user_id", userId)
+      .eq("account_id", accountId)
+      .eq("expense_id", expenseId);
+    if (error) {
+      console.error("[storage] deleteAccountExpenseAllocation error:", error.message);
+      throw new Error(error.message);
+    }
+  },
+
+  removeIncomeAllocation: async (incomeId: string): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { error } = await supabase
+      .from("income_allocations")
+      .delete()
+      .eq("user_id", userId)
+      .eq("income_id", incomeId);
+    if (error) {
+      console.error("[storage] removeIncomeAllocation error:", error.message);
+      throw new Error(error.message);
+    }
   },
 
   // Legacy onboarding data store (JSONB). Read-only fallback for older users.
@@ -522,7 +689,11 @@ export const storage = {
     income: Income[];
     budgetExpenses: RegistrationExpense[];
     liabilities: Liability[];
+    dailyMoods: DailyMood[];
     onboarding: { income: any[]; expenses: any[]; assets: any[]; liabilities: any[] };
+    userAccounts: { id: string; accountType: string; name: string }[];
+    incomeAllocations: { incomeId: string; accountId: string }[];
+    accountExpenseAllocations: { accountId: string; expenseId: string; amount: number }[];
   } | null> => {
     const userId = await getCurrentUserId();
     if (!userId) return null;
@@ -535,7 +706,11 @@ export const storage = {
       incomeData,
       budgetExpensesData,
       liabilitiesData,
+      dailyMoodsData,
       onboardingData,
+      userAccountsData,
+      incomeAllocationsData,
+      accountExpenseAllocationsData,
     ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
       supabase.from("expenses").select("*").eq("user_id", userId).order("date", { ascending: false }),
@@ -544,7 +719,11 @@ export const storage = {
       supabase.from("income").select("*").eq("user_id", userId),
       supabase.from("budget_expenses").select("*").eq("user_id", userId),
       supabase.from("liabilities").select("*").eq("user_id", userId),
+      supabase.from("daily_moods").select("date, mood").eq("user_id", userId),
       supabase.from("onboarding_data").select("income, expenses, assets, liabilities").eq("user_id", userId).maybeSingle(),
+      supabase.from("user_accounts").select("id, account_type, name").eq("user_id", userId),
+      supabase.from("income_allocations").select("income_id, account_id").eq("user_id", userId),
+      supabase.from("account_expense_allocations").select("account_id, expense_id, amount").eq("user_id", userId),
     ]);
 
     const profile =
@@ -560,6 +739,10 @@ export const storage = {
       income: (incomeData.data ?? []).map((r) => mapRowToIncome(r as Record<string, unknown>)),
       budgetExpenses: (budgetExpensesData.data ?? []).map((r) => mapRowToRegistrationExpense(r as Record<string, unknown>)),
       liabilities: (liabilitiesData.data ?? []).map((r) => mapRowToLiability(r as Record<string, unknown>)),
+      dailyMoods: (dailyMoodsData.data ?? []).map((r: { date: string; mood: string }) => ({
+        date: normalizePgDateKey(r.date),
+        mood: r.mood as DailyMood["mood"],
+      })),
       onboarding:
         onboardingData.data && !onboardingData.error
           ? {
@@ -569,6 +752,20 @@ export const storage = {
             liabilities: ((onboardingData.data as any).liabilities as any[]) ?? [],
           }
           : { income: [], expenses: [], assets: [], liabilities: [] },
+      userAccounts: (userAccountsData.data ?? []).map((r: { id: string; account_type: string; name: string }) => ({
+        id: r.id,
+        accountType: r.account_type,
+        name: r.name,
+      })),
+      incomeAllocations: (incomeAllocationsData.data ?? []).map((r: { income_id: string; account_id: string }) => ({
+        incomeId: r.income_id,
+        accountId: r.account_id,
+      })),
+      accountExpenseAllocations: (accountExpenseAllocationsData.data ?? []).map((r: { account_id: string; expense_id: string; amount: number }) => ({
+        accountId: r.account_id,
+        expenseId: r.expense_id,
+        amount: Number(r.amount),
+      })),
     };
   },
 };
@@ -591,6 +788,7 @@ function mapRowToProfile(r: Record<string, unknown>): UserProfile {
     incomeGoals: r.income_goals != null ? Number(r.income_goals) : undefined,
     savingGoals: r.saving_goals != null ? Number(r.saving_goals) : undefined,
     onboardingCompleted: Boolean(r.onboarding_completed),
+    onboardingSkipped: Boolean(r.onboarding_skipped),
     userPoints: r.user_points != null ? Number(r.user_points) : undefined,
   };
 }
@@ -603,6 +801,7 @@ function mapRowToExpense(r: Record<string, unknown>): Expense {
     category: r.category as Expense["category"],
     date: r.date as string,
     description: r.description as string | undefined,
+    accountId: r.account_id as string | undefined,
   };
 }
 
