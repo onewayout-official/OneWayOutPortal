@@ -13,6 +13,21 @@ import {
   Legend as ReLegend, ResponsiveContainer,
 } from 'recharts';
 
+const COUNSELORS = [
+  { name: "Sarah Mitchell", title: "Financial Counselor", specialty: "Debt Management & Budgeting", bio: "Expert guidance on eliminating debt and building healthy spending habits tailored to your lifestyle.", img: 5 },
+  { name: "James Okonkwo", title: "Investment Advisor", specialty: "Wealth Building & Investments", bio: "Helping clients grow long-term wealth through diversified investment strategies and financial planning.", img: 11 },
+  { name: "Priya Sharma", title: "Savings Strategist", specialty: "Emergency Funds & Savings", bio: "Specialising in building safety nets and achieving short-term savings goals that last.", img: 44 },
+  { name: "Michael Torres", title: "Retirement Planner", specialty: "Retirement & Legacy Planning", bio: "Focused on securing your future with smart retirement strategies and long-term legacy building.", img: 15 },
+  { name: "Amara Diallo", title: "Budget Coach", specialty: "Income Optimisation", bio: "Helping you stretch every dollar further with practical budgeting techniques that actually work.", img: 21 },
+  { name: "David Chen", title: "Tax Consultant", specialty: "Tax Planning & Efficiency", bio: "Reducing your tax burden legally while maximising the money that stays in your pocket.", img: 25 },
+  { name: "Natasha Williams", title: "Wealth Manager", specialty: "High Net Worth Planning", bio: "Tailored strategies for growing and protecting significant wealth across multiple asset classes.", img: 48 },
+  { name: "Robert Nakamura", title: "Credit Advisor", specialty: "Credit Repair & Building", bio: "Rebuilding credit scores and establishing healthy credit habits for a stronger financial future.", img: 32 },
+  { name: "Fatima Al-Hassan", title: "Financial Educator", specialty: "Financial Literacy", bio: "Empowering clients with foundational knowledge to make confident, informed financial decisions.", img: 64 },
+  { name: "Marcus Johnson", title: "Investment Coach", specialty: "Stocks, ETFs & Index Funds", bio: "Breaking down investment options into clear, actionable steps for first-time and seasoned investors.", img: 38 },
+  { name: "Elena Petrov", title: "Estate Planner", specialty: "Estate & Inheritance Planning", bio: "Ensuring your assets are protected and distributed according to your wishes for generations to come.", img: 47 },
+  { name: "Samuel Boateng", title: "Business Finance Advisor", specialty: "Entrepreneurship & SME Finance", bio: "Supporting small business owners with financial strategies to grow, sustain, and scale their ventures.", img: 12 },
+];
+
 export default function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [totalExpenses, setTotalExpenses] = useState(0);
@@ -35,6 +50,12 @@ export default function Dashboard() {
   const [moodDates, setMoodDates] = useState<Set<string>>(new Set());
   const [budgetDates, setBudgetDates] = useState<Set<string>>(new Set());
   const [accountBalance, setAccountBalance] = useState<{ allocated: number; budgeted: number; spent: number } | null>(null);
+  const [userAccounts, setUserAccounts] = useState<{ id: string; accountType: string; name: string }[]>([]);
+  const [pooledIncome, setPooledIncome] = useState(0);
+  const [pooledExpenses, setPooledExpenses] = useState(0);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferMethod, setTransferMethod] = useState("");
+  const [transferInput, setTransferInput] = useState("");
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const { logout } = useAuth();
@@ -46,7 +67,8 @@ export default function Dashboard() {
       const data = await storage.getDashboardData();
       if (!data) return;
 
-      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, onboarding, incomeAllocations, accountExpenseAllocations } = data;
+      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, onboarding, incomeAllocations, accountExpenseAllocations, userAccounts: loadedAccounts } = data;
+      setUserAccounts(loadedAccounts);
 
       // If profile missing (e.g. new user), ensure it exists via normal getProfile (upsert)
       if (!userProfile) {
@@ -57,6 +79,18 @@ export default function Dashboard() {
 
       setProfile(userProfile);
       setAssets(loadedAssets);
+
+      // Mirror BudgetManager's pooled calculations so cards reflect live data
+      setPooledIncome(
+        incomeRows.length > 0
+          ? incomeRows.reduce((sum, i) => sum + (Number(i.personal) || 0), 0)
+          : (userProfile.monthlyIncome ?? 0)
+      );
+      setPooledExpenses(
+        budgetExpenseRows.length > 0
+          ? budgetExpenseRows.reduce((sum, e) => sum + (Number(e.personal) || 0), 0)
+          : (userProfile.lastExpenses ?? 0)
+      );
 
       setMoodDates(new Set(dailyMoods.map((m) => m.date)));
       setBudgetDates(new Set(expenses.map((e) => e.date.slice(0, 10))));
@@ -184,7 +218,11 @@ export default function Dashboard() {
         const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
         return { year: d.getFullYear(), month: d.getMonth(), label: `${monthNames[d.getMonth()]} ${d.getFullYear()}` };
       });
-      const monthlyInc = userProfile.monthlyIncome || userProfile.lastIncome || 0;
+      // Prefer the live sum of all income-source rows; fall back to the profile cached value
+      const monthlyInc =
+        incomeRows.length > 0
+          ? incomeRows.reduce((sum, i) => sum + (i.personal || 0), 0)
+          : (userProfile.monthlyIncome || userProfile.lastIncome || 0);
       const chartData = chartMonths.map(({ year, month: m, label }) => {
         const exp = expenses
           .filter(e => { const d = new Date(e.date); return d.getMonth() === m && d.getFullYear() === year; })
@@ -530,12 +568,14 @@ export default function Dashboard() {
 
           {/* Left — OneWayOut Investment */}
           <div className="flex flex-col">
-            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">OneWayOut Investment</span>
+            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ONE INVESTMENT</span>
             <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
-              {totalPoints.toLocaleString()} Points
+              {/*{totalPoints.toLocaleString()} Points*/}
+             
             </span>
             <span className="text-base font-bold text-green-600 dark:text-green-400">
-              N${(profile.savingsGoal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {/*N${(profile.savingsGoal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*/}
+              N$ 3,000
             </span>
           </div>
 
@@ -556,8 +596,22 @@ export default function Dashboard() {
           <div className="flex items-center justify-end gap-3">
             {/* Wallet info */}
             <div className="flex flex-col items-end">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">OneWayOut Wallet</span>
-              {accountBalance ? (
+              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ONE WALLET</span>
+              <span className="text-base font-bold text-green-600 dark:text-green-400">
+              {/*N${(profile.savingsGoal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*/}
+              Balance: N$ 3,000
+              </span>
+
+              <span className="text-base font-bold text-blue-600 dark:text-blue-400">
+              Available: N$ 1,500
+              </span>
+              <button
+                onClick={() => { setShowTransfer(true); setTransferMethod(""); setTransferInput(""); }}
+                className="mt-1.5 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-[#2f6064] hover:bg-[#254e52] rounded-lg transition-colors"
+              >
+                ⇄ Quick Transfer
+              </button>
+              {/*accountBalance ? (
                 <>
                   <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
                     Income N${accountBalance.allocated.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -585,7 +639,7 @@ export default function Dashboard() {
                     Available N${Math.max(0, (profile.monthlyIncome || 0) - totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 </>
-              )}
+              )}*/}
             </div>
 
             {/* Profile dropdown */}
@@ -869,8 +923,8 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Mood Display */}
-      {profile.onboardingCompleted && profile.mood && (
+      {/* Mood Display — commented out, replaced by counselor slider below */}
+      {/* {profile.onboardingCompleted && profile.mood && (
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your Current Mood</h3>
           <div className="flex items-center gap-4">
@@ -884,11 +938,49 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
-      )}
+      )} */}
 
+      {/* Financial Counselors */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meet Your Financial Counselors</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Browse our growing pool of expert advisors</p>
+          </div>
+          <span className="text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-800">
+            Bookings Opening Soon
+          </span>
+        </div>
 
-
-
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+          {COUNSELORS.slice(0, 8).map((counselor, idx) => (
+            <div
+              key={idx}
+              className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4 flex flex-col items-center text-center gap-3"
+            >
+              <img
+                src={`https://i.pravatar.cc/150?img=${counselor.img}`}
+                alt={counselor.name}
+                className="w-14 h-14 rounded-full object-cover shadow-md ring-2 ring-white dark:ring-gray-600"
+              />
+              <div>
+                <p className="font-semibold text-gray-900 dark:text-white text-sm">{counselor.name}</p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">{counselor.title}</p>
+              </div>
+              <span className="text-[10px] font-medium bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-700">
+                {counselor.specialty}
+              </span>
+              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{counselor.bio}</p>
+              <button
+                disabled
+                className="mt-auto w-full text-xs font-medium py-1.5 px-3 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+              >
+                Book a Session
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
 
       {/* Cash is king Heading */}
       <div>
@@ -926,9 +1018,9 @@ export default function Dashboard() {
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Last Income</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Monthly Income</p>
                   <p className="text-2xl font-bold text-blue-600">
-                    N${(profile.lastIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    N${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <DollarSign className="h-8 w-8 text-blue-600" />
@@ -938,9 +1030,9 @@ export default function Dashboard() {
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Last Expenses</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Planned Expenses</p>
                   <p className="text-2xl font-bold text-red-600">
-                    N${(profile.lastExpenses || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    N${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <Wallet className="h-8 w-8 text-red-600" />
@@ -1060,6 +1152,76 @@ export default function Dashboard() {
         </div>
       )}
 
+      {/* ── Quick Transfer modal ── */}
+      {showTransfer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Quick Transfer</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">How would you like to send?</p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Send to</label>
+                <select
+                  value={transferMethod}
+                  onChange={(e) => { setTransferMethod(e.target.value); setTransferInput(""); }}
+                  className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
+                >
+                  <option value="">— Select option —</option>
+                  <option value="number">Enter number</option>
+                  <option value="contact">Select from contact list</option>
+                </select>
+              </div>
+
+              {transferMethod === "number" && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Phone / Account number</label>
+                  <input
+                    autoFocus
+                    type="text"
+                    value={transferInput}
+                    onChange={(e) => setTransferInput(e.target.value)}
+                    placeholder="e.g. +264 81 234 5678"
+                    className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
+                  />
+                </div>
+              )}
+
+              {transferMethod === "contact" && (
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Contact</label>
+                  <select
+                    autoFocus
+                    value={transferInput}
+                    onChange={(e) => setTransferInput(e.target.value)}
+                    className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
+                  >
+                    <option value="">— Select contact —</option>
+                    {/* Contact list to be populated */}
+                  </select>
+                  <p className="text-[11px] text-gray-400 mt-1.5 italic">No contacts saved yet.</p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex gap-3 mt-6">
+              <button
+                disabled={!transferMethod || (transferMethod === "number" && !transferInput.trim())}
+                onClick={() => setShowTransfer(false)}
+                className="flex-1 py-2.5 bg-[#2f6064] hover:bg-[#254e52] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
+              >
+                Confirm
+              </button>
+              <button
+                onClick={() => setShowTransfer(false)}
+                className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

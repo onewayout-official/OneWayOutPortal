@@ -2,7 +2,7 @@ import FinancialInsights from "@/components/FinancialInsights";
 import AppLayout from "@/components/AppLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
-export default function InsightsPage() {
+export default function FinancialPlanPage() {
   return (
     <ProtectedRoute>
       <AppLayout>
@@ -11,4 +11,3 @@ export default function InsightsPage() {
     </ProtectedRoute>
   );
 }
-

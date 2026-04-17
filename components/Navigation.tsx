@@ -11,22 +11,7 @@ const navSections = [
     label: "Overview",
     items: [
       { href: "/", label: "Dashboard", icon: Home },
-      { href: "/insights", label: "Insights", icon: BarChart3 },
-    ],
-  },
-  {
-    label: "Money",
-    items: [
-      { href: "/income", label: "Income", icon: TrendingUp },
-      { href: "/expenses", label: "Expenses", icon: TrendingDown },
-      { href: "/debts", label: "Debts", icon: FileText },
-    ],
-  },
-  {
-    label: "Net Worth",
-    items: [
-      { href: "/assets", label: "Assets", icon: DollarSign },
-      { href: "/liabilities", label: "Liabilities", icon: CreditCard },
+      { href: "/financial-plan", label: "Financial Plan", icon: BarChart3 },
     ],
   },
   {
@@ -40,6 +25,24 @@ const navSections = [
       { href: "/review-debt", label: "Review debt", icon: FileText },
     ],
   },
+  
+  {
+    label: "My Money",
+    items: [
+      { href: "/income", label: "Income", icon: TrendingUp },
+      { href: "/expenses", label: "Expenses", icon: TrendingDown },
+      
+    ],
+  },
+  {
+    label: "My Net Worth",
+    items: [
+      { href: "/assets", label: "Assets", icon: DollarSign },
+      
+      { href: "/debts", label: "Debts", icon: FileText },
+    ],
+  },
+  
   {
     label: "Account",
     items: [
