@@ -51,6 +51,7 @@ export default function Dashboard() {
   const [budgetDates, setBudgetDates] = useState<Set<string>>(new Set());
   const [accountBalance, setAccountBalance] = useState<{ allocated: number; budgeted: number; spent: number } | null>(null);
   const [userAccounts, setUserAccounts] = useState<{ id: string; accountType: string; name: string }[]>([]);
+  const [accountTypeBalances, setAccountTypeBalances] = useState<{ type: string; total: number }[]>([]);
   const [pooledIncome, setPooledIncome] = useState(0);
   const [pooledExpenses, setPooledExpenses] = useState(0);
   const [showTransfer, setShowTransfer] = useState(false);
@@ -67,7 +68,7 @@ export default function Dashboard() {
       const data = await storage.getDashboardData();
       if (!data) return;
 
-      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, onboarding, incomeAllocations, accountExpenseAllocations, userAccounts: loadedAccounts } = data;
+      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, onboarding, incomeAllocations, accountExpenseAllocations, accountTransfers, userAccounts: loadedAccounts } = data;
       setUserAccounts(loadedAccounts);
 
       // If profile missing (e.g. new user), ensure it exists via normal getProfile (upsert)
@@ -210,6 +211,60 @@ export default function Dashboard() {
       } else {
         setAccountBalance(null);
       }
+
+      // Mirror BudgetManager account balance math by account type:
+      // income + transfer in - transfer out - spent - budgeted
+      const incomeById = new Map(incomeRows.map((i) => [i.id, Number(i.personal) || 0]));
+      const incomeByAccount = new Map<string, number>();
+      for (const alloc of incomeAllocations) {
+        const baseAmount = incomeById.get(alloc.incomeId) ?? 0;
+        const flowAmount = alloc.amount > 0 ? alloc.amount : baseAmount;
+        incomeByAccount.set(alloc.accountId, (incomeByAccount.get(alloc.accountId) ?? 0) + flowAmount);
+      }
+
+      const budgetedByAccount = new Map<string, number>();
+      for (const alloc of accountExpenseAllocations) {
+        budgetedByAccount.set(alloc.accountId, (budgetedByAccount.get(alloc.accountId) ?? 0) + (alloc.amount || 0));
+      }
+
+      const spentByAccount = new Map<string, number>();
+      for (const exp of expenses) {
+        const d = new Date(exp.date);
+        if (d.getMonth() === currentMonth && d.getFullYear() === currentYear && exp.accountId) {
+          spentByAccount.set(exp.accountId, (spentByAccount.get(exp.accountId) ?? 0) + (exp.amount || 0));
+        }
+      }
+
+      const transferOutByAccount = new Map<string, number>();
+      const transferInByAccount = new Map<string, number>();
+      for (const t of accountTransfers) {
+        transferOutByAccount.set(t.fromAccountId, (transferOutByAccount.get(t.fromAccountId) ?? 0) + (t.amount || 0));
+        transferInByAccount.set(t.toAccountId, (transferInByAccount.get(t.toAccountId) ?? 0) + (t.amount || 0));
+      }
+
+      const typeTotals = new Map<string, number>();
+      for (const acc of loadedAccounts) {
+        const total =
+          (incomeByAccount.get(acc.id) ?? 0) +
+          (transferInByAccount.get(acc.id) ?? 0) -
+          (transferOutByAccount.get(acc.id) ?? 0) -
+          (spentByAccount.get(acc.id) ?? 0) -
+          (budgetedByAccount.get(acc.id) ?? 0);
+        typeTotals.set(acc.accountType, (typeTotals.get(acc.accountType) ?? 0) + total);
+      }
+
+      const orderedTypes = ["cash", "bank", "investment", "savings", "wallet"];
+      const typeLabels: Record<string, string> = {
+        cash: "Cash",
+        bank: "Bank",
+        investment: "Investment",
+        savings: "Savings",
+        wallet: "Wallet",
+      };
+      const balances = orderedTypes
+        .filter((type) => typeTotals.has(type))
+        .map((type) => ({ type: typeLabels[type] ?? type, total: typeTotals.get(type) ?? 0 }));
+      setAccountTypeBalances(balances);
 
       // Build last-6-months data for the Income Statement line chart
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -952,8 +1007,8 @@ export default function Dashboard() {
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {COUNSELORS.slice(0, 8).map((counselor, idx) => (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
+          {COUNSELORS.slice(0, 3).map((counselor, idx) => (
             <div
               key={idx}
               className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4 flex flex-col items-center text-center gap-3"
@@ -975,17 +1030,38 @@ export default function Dashboard() {
                 disabled
                 className="mt-auto w-full text-xs font-medium py-1.5 px-3 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed"
               >
-                Book a Session
+                Book Free Session
               </button>
             </div>
           ))}
         </div>
+        <button
+          type="button"
+          className="mt-4 w-full sm:w-auto text-sm font-medium py-2 px-4 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+        >
+          View other counsellors
+        </button>
       </div>
 
       {/* Cash is king Heading */}
       <div>
         <h3 className="text font-bold text-gray-900 dark:text-white">Cash is king - total cash balances</h3>
       </div>
+      {accountTypeBalances.length > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {accountTypeBalances.map((b) => (
+            <div
+              key={b.type}
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+            >
+              <p className="text-sm text-gray-600 dark:text-gray-400">{b.type}</p>
+              <p className={`text-xl font-bold ${b.total < 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}>
+                N${b.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* Financial Overview Cards */}
       {profile.onboardingCompleted && (

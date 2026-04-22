@@ -653,6 +653,107 @@ export const storage = {
     }
   },
 
+  // Budget flow helper state (server persistence for amount-based drag flows)
+  getBudgetFlowState: async (): Promise<{
+    incomeTransferAmounts: { incomeId: string; amount: number }[];
+    accountTransfers: { fromAccountId: string; toAccountId: string; amount: number }[];
+  }> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return { incomeTransferAmounts: [], accountTransfers: [] };
+
+    const [incomeTransferRows, accountTransferRows] = await Promise.all([
+      supabase
+        .from("income_allocations")
+        .select("income_id, amount")
+        .eq("user_id", userId)
+        .gt("amount", 0),
+      supabase
+        .from("account_transfers")
+        .select("from_account_id, to_account_id, amount")
+        .eq("user_id", userId),
+    ]);
+
+    if (incomeTransferRows.error) {
+      console.error("[storage] getBudgetFlowState income transfers error:", incomeTransferRows.error.message);
+    }
+    if (accountTransferRows.error) {
+      console.error("[storage] getBudgetFlowState account transfers error:", accountTransferRows.error.message);
+    }
+
+    return {
+      incomeTransferAmounts: (incomeTransferRows.data ?? []).map((r: { income_id: string; amount: number }) => ({
+        incomeId: r.income_id,
+        amount: Number(r.amount) || 0,
+      })),
+      accountTransfers: (accountTransferRows.data ?? []).map((r: { from_account_id: string; to_account_id: string; amount: number }) => ({
+        fromAccountId: r.from_account_id,
+        toAccountId: r.to_account_id,
+        amount: Number(r.amount) || 0,
+      })),
+    };
+  },
+
+  saveIncomeTransferAmount: async (incomeId: string, amount: number): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { error } = await supabase
+      .from("income_allocations")
+      .update({ amount })
+      .eq("user_id", userId)
+      .eq("income_id", incomeId);
+    if (error) {
+      console.error("[storage] saveIncomeTransferAmount error:", error.message);
+      throw new Error(error.message);
+    }
+  },
+
+  removeIncomeTransferAmount: async (incomeId: string): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { error } = await supabase
+      .from("income_allocations")
+      .update({ amount: 0 })
+      .eq("user_id", userId)
+      .eq("income_id", incomeId);
+    if (error) {
+      console.error("[storage] removeIncomeTransferAmount error:", error.message);
+      throw new Error(error.message);
+    }
+  },
+
+  saveAccountTransferAmount: async (fromAccountId: string, toAccountId: string, amount: number): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { error } = await supabase.from("account_transfers").upsert(
+      {
+        user_id: userId,
+        from_account_id: fromAccountId,
+        to_account_id: toAccountId,
+        amount,
+      },
+      { onConflict: "user_id,from_account_id,to_account_id" }
+    );
+    if (error) {
+      console.error("[storage] saveAccountTransferAmount error:", error.message);
+      throw new Error(error.message);
+    }
+  },
+
+  removeAccountTransferAmount: async (fromAccountId: string, toAccountId: string): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) throw new Error("You must be signed in.");
+    const { error } = await supabase
+      .from("account_transfers")
+      .delete()
+      .eq("user_id", userId)
+      .eq("from_account_id", fromAccountId)
+      .eq("to_account_id", toAccountId);
+    if (error) {
+      console.error("[storage] removeAccountTransferAmount error:", error.message);
+      throw new Error(error.message);
+    }
+  },
+
   // Legacy onboarding data store (JSONB). Read-only fallback for older users.
   getOnboardingData: async (): Promise<{
     income: any[];
@@ -692,8 +793,9 @@ export const storage = {
     dailyMoods: DailyMood[];
     onboarding: { income: any[]; expenses: any[]; assets: any[]; liabilities: any[] };
     userAccounts: { id: string; accountType: string; name: string }[];
-    incomeAllocations: { incomeId: string; accountId: string }[];
+    incomeAllocations: { incomeId: string; accountId: string; amount: number }[];
     accountExpenseAllocations: { accountId: string; expenseId: string; amount: number }[];
+    accountTransfers: { fromAccountId: string; toAccountId: string; amount: number }[];
   } | null> => {
     const userId = await getCurrentUserId();
     if (!userId) return null;
@@ -711,6 +813,7 @@ export const storage = {
       userAccountsData,
       incomeAllocationsData,
       accountExpenseAllocationsData,
+      accountTransfersData,
     ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
       supabase.from("expenses").select("*").eq("user_id", userId).order("date", { ascending: false }),
@@ -722,8 +825,9 @@ export const storage = {
       supabase.from("daily_moods").select("date, mood").eq("user_id", userId),
       supabase.from("onboarding_data").select("income, expenses, assets, liabilities").eq("user_id", userId).maybeSingle(),
       supabase.from("user_accounts").select("id, account_type, name").eq("user_id", userId),
-      supabase.from("income_allocations").select("income_id, account_id").eq("user_id", userId),
+      supabase.from("income_allocations").select("income_id, account_id, amount").eq("user_id", userId),
       supabase.from("account_expense_allocations").select("account_id, expense_id, amount").eq("user_id", userId),
+      supabase.from("account_transfers").select("from_account_id, to_account_id, amount").eq("user_id", userId),
     ]);
 
     const profile =
@@ -757,14 +861,20 @@ export const storage = {
         accountType: r.account_type,
         name: r.name,
       })),
-      incomeAllocations: (incomeAllocationsData.data ?? []).map((r: { income_id: string; account_id: string }) => ({
+      incomeAllocations: (incomeAllocationsData.data ?? []).map((r: { income_id: string; account_id: string; amount: number }) => ({
         incomeId: r.income_id,
         accountId: r.account_id,
+        amount: Number(r.amount) || 0,
       })),
       accountExpenseAllocations: (accountExpenseAllocationsData.data ?? []).map((r: { account_id: string; expense_id: string; amount: number }) => ({
         accountId: r.account_id,
         expenseId: r.expense_id,
         amount: Number(r.amount),
+      })),
+      accountTransfers: (accountTransfersData.data ?? []).map((r: { from_account_id: string; to_account_id: string; amount: number }) => ({
+        fromAccountId: r.from_account_id,
+        toAccountId: r.to_account_id,
+        amount: Number(r.amount) || 0,
       })),
     };
   },

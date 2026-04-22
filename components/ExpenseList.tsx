@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Expense, ExpenseCategoryOld } from "@/types";
+import { Expense, ExpenseCategoryOld, RegistrationExpense } from "@/types";
 import { storage } from "@/lib/storage";
 import { format } from "date-fns";
 import { Trash2, Plus, Wallet, Info, TrendingDown, BarChart3, PieChart } from "lucide-react";
@@ -39,6 +39,18 @@ const categories: ExpenseCategoryOld[] = [
 ];
 
 export default function ExpenseList() {
+  type OnboardingExpenseRow = {
+    id?: string;
+    category?: RegistrationExpense["category"];
+    type?: RegistrationExpense["type"];
+    expenseCategory: string;
+    expenseType: string;
+    name: string;
+    personal: number;
+    total: number;
+    points: number;
+  };
+
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState<Omit<Expense, "id">>({
@@ -48,7 +60,11 @@ export default function ExpenseList() {
     date: new Date().toISOString().split("T")[0],
     description: "",
   });
-  const [onboardingExpenses, setOnboardingExpenses] = useState<any[]>([]);
+  const [onboardingExpenses, setOnboardingExpenses] = useState<OnboardingExpenseRow[]>([]);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editingExpenses, setEditingExpenses] = useState<OnboardingExpenseRow[]>([]);
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -61,6 +77,9 @@ export default function ExpenseList() {
       // Prefer budget_expenses table; fall back to onboarding_data
       if (budgetExpenses.length > 0) {
         setOnboardingExpenses(budgetExpenses.map((e) => ({
+          id: e.id,
+          category: e.category,
+          type: e.type,
           expenseCategory: e.category,
           expenseType: e.type,
           name: e.name,
@@ -70,6 +89,9 @@ export default function ExpenseList() {
         })));
       } else {
         setOnboardingExpenses((onboarding.expenses || []).map((e: any) => ({
+          id: e.id,
+          category: e.expenseCategory as RegistrationExpense["category"],
+          type: (e.expenseType === "Variable" ? "Variable" : "Fixed") as RegistrationExpense["type"],
           expenseCategory: e.expenseCategory,
           expenseType: e.expenseType,
           name: e.name,
@@ -115,6 +137,69 @@ export default function ExpenseList() {
   const totalPersonal = onboardingExpenses.reduce((sum, item) => sum + (item.personal || 0), 0);
   const totalOnboarding = onboardingExpenses.reduce((sum, item) => sum + (item.total || 0), 0);
   const totalPoints = onboardingExpenses.reduce((sum, item) => sum + (item.points || 0), 0);
+  const fixedExpensesTotal = onboardingExpenses.reduce(
+    (sum, item) =>
+      String(item.expenseType || "").toLowerCase() === "fixed"
+        ? sum + (item.personal || 0)
+        : sum,
+    0
+  );
+  const variableExpensesTotal = onboardingExpenses.reduce(
+    (sum, item) =>
+      String(item.expenseType || "").toLowerCase() === "variable"
+        ? sum + (item.personal || 0)
+        : sum,
+    0
+  );
+  const onboardingExpensesByCategory = onboardingExpenses.reduce((acc, item) => {
+    const category = item.expenseCategory || "Other";
+    acc[category] = (acc[category] || 0) + (item.personal || 0);
+    return acc;
+  }, {} as Record<string, number>);
+
+  const openEditModal = () => {
+    setSaveError(null);
+    setEditingExpenses(onboardingExpenses.map((item) => ({ ...item })));
+    setIsEditModalOpen(true);
+  };
+
+  const updateEditingAmount = (idx: number, value: string) => {
+    const numericValue = Math.max(0, Number(value) || 0);
+    setEditingExpenses((prev) =>
+      prev.map((item, itemIdx) =>
+        itemIdx === idx
+          ? { ...item, personal: numericValue, total: numericValue }
+          : item
+      )
+    );
+  };
+
+  const saveEditedAmounts = async () => {
+    try {
+      setIsSaving(true);
+      setSaveError(null);
+
+      const itemsToSave: RegistrationExpense[] = editingExpenses.map((item, idx) => ({
+        id: item.id || crypto.randomUUID(),
+        category: (item.category || item.expenseCategory) as RegistrationExpense["category"],
+        type: (item.type || (item.expenseType === "Variable" ? "Variable" : "Fixed")) as RegistrationExpense["type"],
+        name: item.name || `${item.expenseCategory} ${idx + 1}`,
+        personal: item.personal || 0,
+        spouse: 0,
+        points: item.points || 0,
+        editable: true,
+      }));
+
+      await storage.saveBudgetExpenses(itemsToSave);
+      setOnboardingExpenses(editingExpenses.map((item) => ({ ...item, total: item.personal || 0 })));
+      setIsEditModalOpen(false);
+    } catch (error) {
+      console.error("Failed to save expense amounts:", error);
+      setSaveError("Could not save right now. Please try again.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-8">
@@ -127,6 +212,14 @@ export default function ExpenseList() {
             </div>
             Expense Categories
           </h2>
+          <button
+            type="button"
+            onClick={openEditModal}
+            disabled={onboardingExpenses.length === 0}
+            className="px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 dark:text-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Edit Amount
+          </button>
         </div>
 
         {onboardingExpenses.length > 0 ? (
@@ -180,7 +273,7 @@ export default function ExpenseList() {
                     <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider">Type</th>
                     <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider">Name</th>
                     <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Amount</th>
-                    <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Total</th>
+                   
                     <th className="px-6 py-4 font-semibold text-gray-900 dark:text-white text-xs uppercase tracking-wider text-right">Points</th>
                   </tr>
                 </thead>
@@ -204,11 +297,7 @@ export default function ExpenseList() {
                         <td className="px-6 py-4 text-right">
                           <span className="text-gray-900 dark:text-white font-semibold">N${(item.personal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </td>
-                        <td className="px-6 py-4 text-right">
-                          <span className="inline-flex items-center px-3 py-1 rounded-lg bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-200 font-bold">
-                            N${(item.total || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                          </span>
-                        </td>
+                        
                         <td className="px-6 py-4 text-right">
                           <span className="inline-flex items-center px-3 py-1 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-200 font-bold">
                             {item.points || 0}
@@ -227,11 +316,6 @@ export default function ExpenseList() {
                       <td className="px-6 py-4 text-right">
                         <span className="text-base font-bold text-blue-600 dark:text-blue-400">
                           N${totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className="text-base font-bold text-red-600 dark:text-red-400">
-                          N${totalOnboarding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -262,76 +346,6 @@ export default function ExpenseList() {
                 Expense Analysis
               </h3>
 
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Personal Expenses */}
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <PieChart className="h-5 w-5 text-blue-600" />
-                    Personal Expenses
-                  </h4>
-                  <div className="h-[300px] w-full flex items-center justify-center">
-                    {onboardingExpenses.some(i => (i.personal || 0) > 0) ? (
-                      <Pie
-                        data={{
-                          labels: onboardingExpenses.filter(i => (i.personal || 0) > 0).map(i => i.expenseCategory),
-                          datasets: [{
-                            data: onboardingExpenses.filter(i => (i.personal || 0) > 0).map(i => i.personal || 0),
-                            backgroundColor: ['#3b82f6', '#06b6d4', '#0ea5e9', '#60a5fa', '#93c5fd'],
-                            borderWidth: 0,
-                          }]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: { position: 'bottom' }
-                          }
-                        }}
-                      />
-                    ) : (
-                      <p className="text-gray-500">No personal expense data</p>
-                    )}
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Total: <span className="text-blue-600 dark:text-blue-400">N${totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
-                  </div>
-                </div>
-
-                {/* Expense Distribution */}
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <PieChart className="h-5 w-5 text-orange-600" />
-                    Distribution
-                  </h4>
-                  <div className="h-[300px] w-full flex items-center justify-center">
-                    {onboardingExpenses.length > 0 ? (
-                      <Pie
-                        data={{
-                          labels: ['Total'],
-                          datasets: [{
-                            data: [totalOnboarding],
-                            backgroundColor: ['#3b82f6'],
-                            borderWidth: 0,
-                          }]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: { position: 'bottom' }
-                          }
-                        }}
-                      />
-                    ) : (
-                      <p className="text-gray-500">No data available</p>
-                    )}
-                  </div>
-                  <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <p className="text-sm font-semibold text-gray-700 dark:text-gray-300">Total: <span className="text-red-600 dark:text-red-400">N${totalOnboarding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span></p>
-                  </div>
-                </div>
-              </div>
-
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Expenses by Category */}
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
@@ -340,97 +354,112 @@ export default function ExpenseList() {
                     Expenses by Category
                   </h4>
                   <div className="h-[300px] w-full flex items-center justify-center">
-                    {onboardingExpenses.length > 0 ? (
-                      <Pie
-                        data={{
-                          labels: onboardingExpenses.map(i => i.expenseCategory),
-                          datasets: [{
-                            data: onboardingExpenses.map(i => (i.personal || 0)),
-                            backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6'],
-                            borderWidth: 0,
-                          }]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: { position: 'bottom' }
-                          }
-                        }}
-                      />
-                    ) : (
-                      <p className="text-gray-500">No data available</p>
-                    )}
+                    <Pie
+                      data={{
+                        labels: Object.keys(onboardingExpensesByCategory),
+                        datasets: [{
+                          data: Object.values(onboardingExpensesByCategory),
+                          backgroundColor: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6'],
+                          borderWidth: 0,
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { position: 'bottom' }
+                        }
+                      }}
+                    />
                   </div>
                 </div>
 
-                {/* Expenses by Type */}
+                {/* Expenses by Category (Bar) */}
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <BarChart3 className="h-5 w-5 text-red-600" />
+                    Expenses by Category (Bar)
+                  </h4>
+                  <div className="h-[300px] w-full flex items-center justify-center">
+                    <Bar
+                      data={{
+                        labels: Object.keys(onboardingExpensesByCategory),
+                        datasets: [{
+                          label: "Total Expenses",
+                          data: Object.values(onboardingExpensesByCategory),
+                          backgroundColor: '#ef4444',
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false }
+                        },
+                        scales: {
+                          y: { beginAtZero: true }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Expenses by Type (Pie) */}
+                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
+                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
+                    <PieChart className="h-5 w-5 text-red-600" />
+                    Expenses by Type
+                  </h4>
+                  <div className="h-[300px] w-full flex items-center justify-center">
+                    <Pie
+                      data={{
+                        labels: ["Fixed", "Variable"],
+                        datasets: [{
+                          data: [fixedExpensesTotal, variableExpensesTotal],
+                          backgroundColor: ['#ef4444', '#f97316'],
+                          borderWidth: 0,
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { position: 'bottom' }
+                        }
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Expenses by Type (Bar) */}
                 <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
                   <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
                     <BarChart3 className="h-5 w-5 text-orange-600" />
                     Expenses by Type
                   </h4>
                   <div className="h-[300px] w-full flex items-center justify-center">
-                    {onboardingExpenses.length > 0 ? (
-                      <Bar
-                        data={{
-                          labels: onboardingExpenses.map(i => i.expenseType),
-                          datasets: [{
-                            label: 'Total Expenses',
-                            data: onboardingExpenses.map(i => (i.personal || 0)),
-                            backgroundColor: '#ef4444',
-                          }]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: { display: false }
-                          },
-                          scales: {
-                            y: { beginAtZero: true }
-                          }
-                        }}
-                      />
-                    ) : (
-                      <p className="text-gray-500">No data available</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Personal vs Total */}
-                <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-lg">
-                  <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
-                    <BarChart3 className="h-5 w-5 text-purple-600" />
-                    Personal vs Total
-                  </h4>
-                  <div className="h-[300px] w-full flex items-center justify-center">
-                    {onboardingExpenses.length > 0 ? (
-                      <Bar
-                        data={{
-                          labels: onboardingExpenses.map(i => i.expenseCategory),
-                          datasets: [
-                            {
-                              label: 'Total',
-                              data: onboardingExpenses.map(i => i.total || i.personal || 0),
-                              backgroundColor: '#3b82f6',
-                            }
-                          ]
-                        }}
-                        options={{
-                          responsive: true,
-                          maintainAspectRatio: false,
-                          plugins: {
-                            legend: { position: 'bottom' }
-                          },
-                          scales: {
-                            y: { beginAtZero: true }
-                          }
-                        }}
-                      />
-                    ) : (
-                      <p className="text-gray-500">No data available</p>
-                    )}
+                    <Bar
+                      data={{
+                        labels: ["Fixed", "Variable"],
+                        datasets: [{
+                          label: 'Total Expenses',
+                          data: [fixedExpensesTotal, variableExpensesTotal],
+                          backgroundColor: '#ef4444',
+                        }]
+                      }}
+                      options={{
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                          legend: { display: false }
+                        },
+                        scales: {
+                          y: { beginAtZero: true }
+                        }
+                      }}
+                    />
                   </div>
                 </div>
               </div>
@@ -446,6 +475,73 @@ export default function ExpenseList() {
           </div>
         )}
       </div>
+
+      {isEditModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/50"
+            onClick={() => !isSaving && setIsEditModalOpen(false)}
+          />
+          <div className="relative w-full max-w-2xl bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 shadow-xl max-h-[80vh] overflow-hidden">
+            <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Edit Expense Amounts</h3>
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                disabled={isSaving}
+                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 disabled:opacity-50"
+              >
+                Close
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 overflow-y-auto max-h-[55vh]">
+              {editingExpenses.map((item, idx) => (
+                <div key={`${item.expenseCategory}-${idx}`} className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-center">
+                  <div className="sm:col-span-2">
+                    <p className="text-sm font-medium text-gray-900 dark:text-white">{item.expenseCategory}</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">{item.name || item.expenseType}</p>
+                  </div>
+                  <div>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Amount (N$)</label>
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={item.personal || 0}
+                      onChange={(e) => updateEditingAmount(idx, e.target.value)}
+                      className="w-full px-3 py-2 text-sm rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                    />
+                  </div>
+                </div>
+              ))}
+
+              {saveError && (
+                <p className="text-sm text-red-600 dark:text-red-400">{saveError}</p>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-200 dark:border-gray-700 flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setIsEditModalOpen(false)}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm font-medium rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={saveEditedAmounts}
+                disabled={isSaving}
+                className="px-4 py-2 text-sm font-semibold rounded-lg bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
+              >
+                {isSaving ? "Saving..." : "Save changes"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
