@@ -147,7 +147,15 @@ function IconCard({
         </span>
       )}
       {liveAmount != null && (
-        <span className="text-[12px] text-gray-900 dark:text-gray-100 font-semibold mt-0.5">
+        <span
+          className={`text-[12px] font-semibold mt-0.5 ${
+            item.amount != null
+              ? liveAmount > item.amount
+                ? "text-red-600 dark:text-red-400"
+                : "text-green-600 dark:text-green-400"
+              : "text-gray-900 dark:text-gray-100"
+          }`}
+        >
           {liveAmountLabel ? `${liveAmountLabel}: ` : ""}
           N${liveAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </span>
@@ -732,7 +740,7 @@ export default function BudgetManager() {
                           )}
                           {getAccountAllocated(acc.id) > 0 && (
                             <span className="text-[10px] font-medium text-orange-500">
-                              −N${getAccountAllocated(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} budgeted
+                              −N${getAccountAllocated(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} 
                             </span>
                           )}
                           {getAccountIncome(acc.id) > 0 && (
@@ -886,7 +894,7 @@ export default function BudgetManager() {
                         colorClass="text-orange-600"
                         bgClass="bg-orange-50 dark:bg-orange-900/10 border-orange-100 dark:border-orange-800"
                         liveAmount={allocated}
-                        liveAmountLabel="Budgeted"
+                        
                       />
                     </div>
                   );

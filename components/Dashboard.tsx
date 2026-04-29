@@ -52,8 +52,6 @@ export default function Dashboard() {
   const [accountBalance, setAccountBalance] = useState<{ allocated: number; budgeted: number; spent: number } | null>(null);
   const [userAccounts, setUserAccounts] = useState<{ id: string; accountType: string; name: string }[]>([]);
   const [accountTypeBalances, setAccountTypeBalances] = useState<{ type: string; total: number }[]>([]);
-  const [pooledIncome, setPooledIncome] = useState(0);
-  const [pooledExpenses, setPooledExpenses] = useState(0);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferMethod, setTransferMethod] = useState("");
   const [transferInput, setTransferInput] = useState("");
@@ -80,18 +78,6 @@ export default function Dashboard() {
 
       setProfile(userProfile);
       setAssets(loadedAssets);
-
-      // Mirror BudgetManager's pooled calculations so cards reflect live data
-      setPooledIncome(
-        incomeRows.length > 0
-          ? incomeRows.reduce((sum, i) => sum + (Number(i.personal) || 0), 0)
-          : (userProfile.monthlyIncome ?? 0)
-      );
-      setPooledExpenses(
-        budgetExpenseRows.length > 0
-          ? budgetExpenseRows.reduce((sum, e) => sum + (Number(e.personal) || 0), 0)
-          : (userProfile.lastExpenses ?? 0)
-      );
 
       setMoodDates(new Set(dailyMoods.map((m) => m.date)));
       setBudgetDates(new Set(expenses.map((e) => e.date.slice(0, 10))));
@@ -807,20 +793,20 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Mood, Earn, Budget Cards */}
+      {/* Quick action cards under calendar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
         {/* Mood Card */}
         <Link href="/mood" className="block">
           <button
             type="button"
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-yellow-400 shadow-sm hover:bg-yellow-500 dark:bg-yellow-500 dark:hover:bg-yellow-600 transition-colors"
+            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#f3e7c8] hover:bg-[#ecddb7] border border-[#eadab3] transition-colors"
           >
-            <div className="p-2 rounded-full bg-white/30">
-              <Smile className="h-10 w-10" />
+            <div className="w-12 h-12 rounded-xl bg-[#f4a91e] flex items-center justify-center text-white">
+              <Smile className="h-6 w-6" />
             </div>
-            <div className="flex flex-col items-start text-gray-900 dark:text-gray-900">
-              <span className="text-sm font-semibold">Mood</span>
-              <span className="text-xs opacity-90">How are you feeling?</span>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#8b5c00] font-semibold">Mood</span>
+              <span className="text-sm text-[#9b6e0c]">How are you feeling?</span>
             </div>
           </button>
         </Link>
@@ -829,14 +815,14 @@ export default function Dashboard() {
         <Link href="/earn" className="block">
           <button
             type="button"
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-red-500 shadow-sm hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 transition-colors"
+            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#d6ece7] hover:bg-[#cbe5df] border border-[#c2ddd6] transition-colors"
           >
-            <div className="p-2 rounded-full bg-white/30">
-              <DollarSign className="h-10 w-10 text-white" />
+            <div className="w-12 h-12 rounded-xl bg-[#14a085] flex items-center justify-center text-white">
+              <DollarSign className="h-6 w-6" />
             </div>
-            <div className="flex flex-col items-start text-white">
-              <span className="text-sm font-semibold">Earn</span>
-              <span className="text-xs opacity-90">Grow your income</span>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#1c6a5e] font-semibold">Earn</span>
+              <span className="text-sm text-[#2d8577]">Grow your income</span>
             </div>
           </button>
         </Link>
@@ -845,33 +831,30 @@ export default function Dashboard() {
         <Link href="/budget" className="block">
           <button
             type="button"
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-green-500 shadow-sm hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 transition-colors"
+            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#d9e3f4] hover:bg-[#cdd9ef] border border-[#c3d0e8] transition-colors"
           >
-            <div className="p-2 rounded-full bg-white/30">
-              <Wallet className="h-10 w-10" />
+            <div className="w-12 h-12 rounded-xl bg-[#2f6de1] flex items-center justify-center text-white">
+              <Wallet className="h-6 w-6" />
             </div>
-            <div className="flex flex-col items-start text-gray-900 dark:text-gray-900">
-              <span className="text-sm font-semibold">Budget</span>
-              <span className="text-xs opacity-90">Control your spending</span>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#1d4da9] font-semibold">Budget</span>
+              <span className="text-sm text-[#3562bb]">Control your spending</span>
             </div>
           </button>
         </Link>
-      </div>
 
-      {/* Three Action Buttons (card style, softer gradients distinct from top row) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {/* Help me Button */}
         <Link href="/help-me" className="block">
           <button
             type="button"
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-amber-100 to-yellow-100 shadow-sm hover:from-amber-200 hover:to-yellow-200 dark:from-amber-200 dark:to-yellow-200 transition-colors"
+            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#ddd8ea] hover:bg-[#d2cce3] border border-[#cbc4df] transition-colors"
           >
-            <div className="p-2 rounded-full bg-amber-500 text-white">
-              <HelpCircle className="h-10 w-10" />
+            <div className="w-12 h-12 rounded-xl bg-[#6f57c7] flex items-center justify-center text-white">
+              <HelpCircle className="h-6 w-6" />
             </div>
-            <div className="flex flex-col items-start text-gray-900">
-              <span className="text-sm font-semibold">Help me</span>
-              <span className="text-xs opacity-90">Get guidance on next steps</span>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#4e3a99] font-semibold">Help me</span>
+              <span className="text-sm text-[#6e5aa7]">Get guidance on next steps</span>
             </div>
           </button>
         </Link>
@@ -880,14 +863,14 @@ export default function Dashboard() {
         <Link href="/spend" className="block">
           <button
             type="button"
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-rose-100 to-red-100 shadow-sm hover:from-rose-200 hover:to-red-200 dark:from-rose-200 dark:to-red-200 transition-colors"
+            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#eed9d4] hover:bg-[#e6cbc3] border border-[#e0bfb6] transition-colors"
           >
-            <div className="p-2 rounded-full bg-rose-500 text-white">
-              <ShoppingCart className="h-10 w-10" />
+            <div className="w-12 h-12 rounded-xl bg-[#e76f3d] flex items-center justify-center text-white">
+              <ShoppingCart className="h-6 w-6" />
             </div>
-            <div className="flex flex-col items-start text-gray-900">
-              <span className="text-sm font-semibold">Spend</span>
-              <span className="text-xs opacity-90">Track your daily expenses</span>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#8d3413] font-semibold">Spend</span>
+              <span className="text-sm text-[#b0522c]">Track your daily expenses</span>
             </div>
           </button>
         </Link>
@@ -896,14 +879,14 @@ export default function Dashboard() {
         <Link href="/review-debt" className="block">
           <button
             type="button"
-            className="w-full flex items-center gap-3 p-4 rounded-xl bg-gradient-to-r from-emerald-100 to-green-100 shadow-sm hover:from-emerald-200 hover:to-green-200 dark:from-emerald-200 dark:to-green-200 transition-colors"
+            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#dbe0e6] hover:bg-[#d1d8e0] border border-[#c6ced8] transition-colors"
           >
-            <div className="p-2 rounded-full bg-emerald-500 text-white">
-              <FileText className="h-10 w-10" />
+            <div className="w-12 h-12 rounded-xl bg-[#4f83ac] flex items-center justify-center text-white">
+              <FileText className="h-6 w-6" />
             </div>
-            <div className="flex flex-col items-start text-gray-900">
-              <span className="text-sm font-semibold">Review debt</span>
-              <span className="text-xs opacity-90">See what you owe today</span>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#2c4d67] font-semibold">Review debt</span>
+              <span className="text-sm text-[#4d6f89]">See what you owe today</span>
             </div>
           </button>
         </Link>
@@ -1047,8 +1030,8 @@ export default function Dashboard() {
       <div>
         <h3 className="text font-bold text-gray-900 dark:text-white">Cash is king - total cash balances</h3>
       </div>
-      {accountTypeBalances.length > 0 && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+      {(accountTypeBalances.length > 0 || profile.onboardingCompleted) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           {accountTypeBalances.map((b) => (
             <div
               key={b.type}
@@ -1060,13 +1043,8 @@ export default function Dashboard() {
               </p>
             </div>
           ))}
-        </div>
-      )}
 
-      {/* Financial Overview Cards */}
-      {profile.onboardingCompleted && (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {profile.onboardingCompleted && (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -1078,7 +1056,9 @@ export default function Dashboard() {
                 <TrendingUp className="h-8 w-8 text-green-600" />
               </div>
             </div>
+          )}
 
+          {profile.onboardingCompleted && (
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
@@ -1090,34 +1070,8 @@ export default function Dashboard() {
                 <TrendingDown className="h-8 w-8 text-orange-600" />
               </div>
             </div>
-
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Monthly Income</p>
-                  <p className="text-2xl font-bold text-blue-600">
-                    N${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <DollarSign className="h-8 w-8 text-blue-600" />
-              </div>
-            </div>
-
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Planned Expenses</p>
-                  <p className="text-2xl font-bold text-red-600">
-                    N${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <Wallet className="h-8 w-8 text-red-600" />
-              </div>
-            </div>
-          </div>
-
-
-        </>
+          )}
+        </div>
       )}
 
       {/* Financial Profile Details */}
