@@ -1,13 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { HelpCircle, MessageCircle, Calendar, Phone, ArrowRight } from "lucide-react";
+import { HelpCircle, MessageCircle, Calendar, Phone, ArrowRight, type LucideIcon } from "lucide-react";
 import Link from "next/link";
 import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
 
+type QuickAction =
+  | {
+      type: "chat";
+      icon: LucideIcon;
+      label: string;
+      bg: string;
+      iconBg: string;
+      color: string;
+    }
+  | {
+      type: "link";
+      icon: LucideIcon;
+      label: string;
+      href: string;
+      bg: string;
+      iconBg: string;
+      color: string;
+    };
+
 export default function HelpMeGuide() {
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const quickActions = [
+  const quickActions: QuickAction[] = [
     {
       icon: MessageCircle,
       label: "Chat with someone",
@@ -19,6 +38,7 @@ export default function HelpMeGuide() {
     {
       icon: Calendar,
       label: "Book an appointment",
+      type: "link",
       href: `/help-me/counselors/${MOCK_COUNSELORS[0].id}`,
       bg: "bg-emerald-100 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-700 hover:bg-emerald-200 dark:hover:bg-emerald-800/50",
       iconBg: "bg-emerald-200/80 dark:bg-emerald-700/50",
@@ -27,6 +47,7 @@ export default function HelpMeGuide() {
     {
       icon: Phone,
       label: "Call me back",
+      type: "link",
       href: `/help-me/counselors/${MOCK_COUNSELORS[1].id}`,
       bg: "bg-amber-100 dark:bg-amber-900/40 border-amber-200 dark:border-amber-700 hover:bg-amber-200 dark:hover:bg-amber-800/50",
       iconBg: "bg-amber-200/80 dark:bg-amber-700/50",

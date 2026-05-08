@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 interface ProfileRow {
   id: string;
@@ -14,7 +14,7 @@ interface ProfileRow {
 }
 
 interface AdminContext {
-  adminClient: ReturnType<typeof createClient>;
+  adminClient: SupabaseClient;
 }
 
 function toUserDto(row: ProfileRow) {
@@ -178,7 +178,8 @@ export async function POST(request: NextRequest) {
   const userPoints = Number(body.userPoints ?? 0);
   const onboardingCompleted = Boolean(body.onboardingCompleted);
   const phone = body.phone?.trim() || null;
-  const role = body.role === "admin" || body.role === "counselor" ? body.role : "user";
+  const role: "admin" | "user" | "counselor" =
+    body.role === "admin" || body.role === "counselor" ? body.role : "user";
 
   const { data: createdUser, error: createUserError } =
     await context.adminClient.auth.admin.createUser({

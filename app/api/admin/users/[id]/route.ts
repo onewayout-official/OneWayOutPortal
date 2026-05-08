@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 interface ProfileRow {
   id: string;
@@ -14,7 +14,7 @@ interface ProfileRow {
 }
 
 interface AdminContext {
-  adminClient: ReturnType<typeof createClient>;
+  adminClient: SupabaseClient;
   requesterUserId: string;
 }
 
