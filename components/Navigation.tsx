@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Home, User, DollarSign, CreditCard, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart } from "lucide-react";
+import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navSections = [
@@ -21,6 +21,7 @@ const navSections = [
       { href: "/earn", label: "Earn", icon: DollarSign },
       { href: "/budget", label: "Budget", icon: Wallet },
       { href: "/help-me", label: "Help me", icon: HelpCircle },
+      { href: "/course", label: "Course", icon: GraduationCap },
       { href: "/spend", label: "Spend", icon: ShoppingCart },
       { href: "/review-debt", label: "Review debt", icon: FileText },
     ],
@@ -47,6 +48,7 @@ const navSections = [
     label: "Account",
     items: [
       { href: "/profile", label: "Profile", icon: User },
+      { href: "/admin", label: "Admin", icon: Shield },
     ],
   },
 ];

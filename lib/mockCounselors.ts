@@ -1,0 +1,114 @@
+export type Counselor = {
+  id: string;
+  name: string;
+  title: string;
+  specialty: string;
+  bio: string;
+  about: string;
+  experienceYears: number;
+  languages: string[];
+  location: string;
+  availability: string[];
+  rating: number;
+  sessionsCompleted: number;
+  image: string;
+};
+
+export const MOCK_COUNSELORS: Counselor[] = [
+  {
+    id: "sarah-mitchell",
+    name: "Sarah Mitchell",
+    title: "Financial Counselor",
+    specialty: "Debt Management & Budgeting",
+    bio: "Practical debt payoff plans and realistic monthly budgeting support.",
+    about:
+      "Sarah helps clients reduce financial stress by creating simple debt and budget systems they can actually keep up with.",
+    experienceYears: 8,
+    languages: ["English"],
+    location: "Windhoek",
+    availability: ["Mon 09:00", "Wed 14:00", "Fri 10:30"],
+    rating: 4.8,
+    sessionsCompleted: 420,
+    image: "https://i.pravatar.cc/200?img=5",
+  },
+  {
+    id: "james-okonkwo",
+    name: "James Okonkwo",
+    title: "Investment Advisor",
+    specialty: "Wealth Building & Investments",
+    bio: "Long-term investment planning for beginners and growing professionals.",
+    about:
+      "James focuses on helping clients build confidence in investing with clear, low-complexity strategies and disciplined planning.",
+    experienceYears: 11,
+    languages: ["English", "French"],
+    location: "Lagos (Remote)",
+    availability: ["Tue 11:00", "Thu 16:00", "Sat 09:00"],
+    rating: 4.7,
+    sessionsCompleted: 610,
+    image: "https://i.pravatar.cc/200?img=11",
+  },
+  {
+    id: "priya-sharma",
+    name: "Priya Sharma",
+    title: "Savings Strategist",
+    specialty: "Emergency Funds & Savings",
+    bio: "Step-by-step support to build emergency savings and financial buffers.",
+    about:
+      "Priya works with families and young professionals to set practical savings targets and stay consistent over time.",
+    experienceYears: 7,
+    languages: ["English", "Hindi"],
+    location: "Cape Town (Remote)",
+    availability: ["Mon 13:00", "Thu 09:30", "Fri 15:00"],
+    rating: 4.9,
+    sessionsCompleted: 355,
+    image: "https://i.pravatar.cc/200?img=44",
+  },
+  {
+    id: "michael-torres",
+    name: "Michael Torres",
+    title: "Retirement Planner",
+    specialty: "Retirement & Legacy Planning",
+    bio: "Retirement strategies tailored to your current income and goals.",
+    about:
+      "Michael helps clients map long-term retirement goals and create contribution plans that fit current life stages.",
+    experienceYears: 12,
+    languages: ["English", "Spanish"],
+    location: "Johannesburg",
+    availability: ["Tue 10:00", "Wed 17:00", "Fri 12:00"],
+    rating: 4.8,
+    sessionsCompleted: 530,
+    image: "https://i.pravatar.cc/200?img=15",
+  },
+  {
+    id: "amara-diallo",
+    name: "Amara Diallo",
+    title: "Budget Coach",
+    specialty: "Income Optimization",
+    bio: "Monthly planning methods to improve cash flow and reduce overspending.",
+    about:
+      "Amara specializes in helping clients optimize income usage and identify spending leaks across household budgets.",
+    experienceYears: 6,
+    languages: ["English", "French"],
+    location: "Accra (Remote)",
+    availability: ["Mon 16:00", "Thu 11:30", "Sat 10:00"],
+    rating: 4.6,
+    sessionsCompleted: 290,
+    image: "https://i.pravatar.cc/200?img=21",
+  },
+  {
+    id: "david-chen",
+    name: "David Chen",
+    title: "Tax Consultant",
+    specialty: "Tax Planning & Efficiency",
+    bio: "Tax-aware planning to keep more of your income legally and responsibly.",
+    about:
+      "David supports clients with practical tax planning habits and annual preparation guidance for better outcomes.",
+    experienceYears: 10,
+    languages: ["English", "Mandarin"],
+    location: "Nairobi (Remote)",
+    availability: ["Tue 14:00", "Thu 10:00", "Fri 16:30"],
+    rating: 4.7,
+    sessionsCompleted: 470,
+    image: "https://i.pravatar.cc/200?img=25",
+  },
+];
