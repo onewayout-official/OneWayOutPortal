@@ -230,7 +230,7 @@ export default function LoginForm() {
       >
         <span style={{ fontSize: "0.82rem", color: "var(--muted)" }}>
           Don&apos;t have an account?{" "}
-          <Link href="/" className="form-link primary" id="link-create-account">
+          <Link href="/register" className="form-link primary" id="link-create-account">
             Create one
           </Link>
         </span>
