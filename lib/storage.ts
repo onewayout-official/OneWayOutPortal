@@ -1,5 +1,17 @@
-import { UserProfile, Expense, Debt, AuthSession, Asset, DailyMood, Income, RegistrationExpense, Liability, SpendCategory } from "@/types";
+import {
+  UserProfile,
+  Expense,
+  Debt,
+  AuthSession,
+  Asset,
+  DailyMood,
+  Income,
+  RegistrationExpense,
+  Liability,
+  SpendCategory,
+} from "@/types";
 import { supabase } from "@/lib/supabase";
+import { SIGNUP_BONUS_POINTS } from "@/lib/rewards";
 
 /** Get current Supabase user id (async). */
 export async function getCurrentUserId(): Promise<string | null> {
@@ -83,7 +95,7 @@ export const storage = {
         saving_goals: null,
         onboarding_completed: false,
         onboarding_skipped: false,
-        user_points: 0,
+        user_points: SIGNUP_BONUS_POINTS,
       });
       const { data: inserted } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
       return inserted ? mapRowToProfile(inserted) : null;
@@ -118,7 +130,18 @@ export const storage = {
       saving_goals: profile.savingGoals ?? null,
       onboarding_completed: profile.onboardingCompleted ?? false,
       onboarding_skipped: profile.onboardingSkipped ?? false,
-      user_points: profile.userPoints ?? 0,
+      ...(profile.userPoints !== undefined
+        ? { user_points: profile.userPoints }
+        : {}),
+      membership: profile.membership ?? "Debt Crusher",
+      onboarding_step: profile.onboardingStep ?? 1,
+      onboarding_mood: profile.onboardingMood ?? null,
+      debt_status: profile.debtStatus ?? null,
+      savings_status: profile.savingsStatus ?? null,
+      investment_status: profile.investmentStatus ?? null,
+      income_stability: profile.incomeStability ?? null,
+      emergency_resilience: profile.emergencyResilience ?? null,
+      primary_goal: profile.primaryGoal ?? null,
     });
     if (error) console.error("[storage] saveProfile error:", error.message);
   },
@@ -928,6 +951,15 @@ function mapRowToProfile(r: Record<string, unknown>): UserProfile {
     onboardingCompleted: Boolean(r.onboarding_completed),
     onboardingSkipped: Boolean(r.onboarding_skipped),
     userPoints: r.user_points != null ? Number(r.user_points) : undefined,
+    membership: (r.membership as UserProfile["membership"]) ?? "Debt Crusher",
+    onboardingStep: r.onboarding_step != null ? Number(r.onboarding_step) : undefined,
+    onboardingMood: (r.onboarding_mood as UserProfile["onboardingMood"]) ?? undefined,
+    debtStatus: (r.debt_status as UserProfile["debtStatus"]) ?? undefined,
+    savingsStatus: (r.savings_status as UserProfile["savingsStatus"]) ?? undefined,
+    investmentStatus: (r.investment_status as UserProfile["investmentStatus"]) ?? undefined,
+    incomeStability: (r.income_stability as UserProfile["incomeStability"]) ?? undefined,
+    emergencyResilience: (r.emergency_resilience as UserProfile["emergencyResilience"]) ?? undefined,
+    primaryGoal: (r.primary_goal as UserProfile["primaryGoal"]) ?? undefined,
   };
 }
 

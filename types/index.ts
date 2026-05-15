@@ -21,7 +21,38 @@ export interface UserProfile {
   onboardingSkipped?: boolean;
   /** Redeemable points earned from tasks (Earn screen), spent on Spend screen */
   userPoints?: number;
+  /** Membership tier computed from onboarding answers */
+  membership?: MembershipTier;
+  /** Last onboarding step reached (1-7) for resume/autosave */
+  onboardingStep?: number;
+  /** Onboarding v2 answers */
+  onboardingMood?: OnboardingMood;
+  debtStatus?: DebtStatus;
+  savingsStatus?: SavingsStatus;
+  investmentStatus?: InvestmentStatus;
+  incomeStability?: IncomeStability;
+  emergencyResilience?: EmergencyResilience;
+  primaryGoal?: PrimaryGoal;
 }
+
+export type MembershipTier =
+  | "Debt Crusher"
+  | "Cash King"
+  | "Wealth Creator"
+  | "Legacy Builder";
+
+export type OnboardingMood =
+  | "overwhelmed"
+  | "struggling"
+  | "progressing"
+  | "confident";
+
+export type DebtStatus = "behind" | "uptodate" | "nodebt";
+export type SavingsStatus = "none" | "started" | "growing";
+export type InvestmentStatus = "none" | "one" | "multiple";
+export type IncomeStability = "variable" | "stable_tight" | "fixed" | "multiple";
+export type EmergencyResilience = "borrow" | "wipe_out" | "small_buffer" | "solid_fund";
+export type PrimaryGoal = "debt" | "savings" | "investments" | "legacy";
 
 export interface DailyMood {
   date: string;

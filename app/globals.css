@@ -1,12 +1,17 @@
-@import "tailwindcss";
+@import "tailwindcss" source(none);
+
+/* Only scan live app code — not reference copies in old/ */
+@source "../app/**/*.{js,ts,jsx,tsx}";
+@source "../components/**/*.{js,ts,jsx,tsx}";
 
 :root {
+  --background: #ffffff;
+  --foreground: #171717;
+  /* Portal brand tokens (auth / onboarding custom CSS below) */
   --brand-primary: #2f6064;
   --brand-secondary: #2f6064;
   --brand-accent: #3d7a7f;
   --brand-light: #e6f2f2;
-  --background: #f0f5f5;
-  --foreground: #0f1f20;
   --surface: #ffffff;
   --surface-hover: #f5fafa;
   --border: #d6e8e9;
@@ -18,20 +23,64 @@
   --shadow-button: 0 2px 8px rgba(47, 96, 100, 0.35);
 }
 
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
 }
 
-html,
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+  }
+}
+
 body {
-  height: 100%;
-  font-family: "Inter", system-ui, -apple-system, sans-serif;
   background: var(--background);
   color: var(--foreground);
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+  height: 100%;
+}
+
+/* Custom scrollbar (from old/globals.css) */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@media (prefers-color-scheme: dark) {
+  ::-webkit-scrollbar-thumb {
+    background: #475569;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+  }
 }
 
 /* --- Auth Page Layout --- */
@@ -441,19 +490,26 @@ body {
 
 .onboarding-page {
   min-height: 100vh;
-  background: var(--background);
+  background: #f0f5f5;
   display: flex;
   flex-direction: column;
 }
 
 /* --- Header / progress bar --- */
 .onboarding-header {
-  padding: 1.5rem 2rem;
+  width: 100%;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.onboarding-header-inner {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 1.5rem 1.5rem;
   display: flex;
   align-items: center;
   gap: 1.25rem;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
 }
 
 .onboarding-brand {
@@ -525,7 +581,9 @@ body {
   display: flex;
   justify-content: center;
   align-items: flex-start;
+  width: 100%;
   padding: 3rem 1.5rem 4rem;
+  background: #f0f5f5;
 }
 
 .onboarding-card {
@@ -706,7 +764,7 @@ body {
 
 /* --- Responsive --- */
 @media (max-width: 768px) {
-  .onboarding-header {
+  .onboarding-header-inner {
     padding: 1rem 1.25rem;
   }
 
@@ -727,7 +785,6 @@ body {
 /* --- Tier Result Card --- */
 .tier-result-card {
   width: 100%;
-  max-width: 640px;
   display: flex;
   flex-direction: column;
 }

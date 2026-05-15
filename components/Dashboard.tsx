@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { UserProfile, Asset } from "@/types";
+import { UserProfile, Asset, MembershipTier } from "@/types";
 import { storage } from "@/lib/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import Image from "next/image";
@@ -26,6 +26,25 @@ const COUNSELORS = [
   { name: "Marcus Johnson", title: "Investment Coach", specialty: "Stocks, ETFs & Index Funds", bio: "Breaking down investment options into clear, actionable steps for first-time and seasoned investors.", img: 38 },
   { name: "Elena Petrov", title: "Estate Planner", specialty: "Estate & Inheritance Planning", bio: "Ensuring your assets are protected and distributed according to your wishes for generations to come.", img: 47 },
   { name: "Samuel Boateng", title: "Business Finance Advisor", specialty: "Entrepreneurship & SME Finance", bio: "Supporting small business owners with financial strategies to grow, sustain, and scale their ventures.", img: 12 },
+];
+
+const MEMBERSHIP_ORDER: MembershipTier[] = [
+  "Debt Crusher",
+  "Cash King",
+  "Wealth Creator",
+  "Legacy Builder",
+];
+
+const MEMBERSHIP_STEP_UI: Array<{
+  tier: MembershipTier;
+  title: string;
+  subtitle: string;
+  Icon: typeof Shield;
+}> = [
+  { tier: "Debt Crusher", title: "1. Debt Crusher", subtitle: "In Arrears", Icon: Shield },
+  { tier: "Cash King", title: "2. Cash King", subtitle: "Cash Savings", Icon: Crown },
+  { tier: "Wealth Creator", title: "3. Wealth Creator", subtitle: "Building", Icon: Building2 },
+  { tier: "Legacy Builder", title: "4. Legacy Builder", subtitle: "Freedom", Icon: Gem },
 ];
 
 export default function Dashboard() {
@@ -601,6 +620,20 @@ export default function Dashboard() {
     year: "numeric",
   });
 
+  const normalizedMembership: MembershipTier =
+    profile.membership && MEMBERSHIP_ORDER.includes(profile.membership as MembershipTier)
+      ? (profile.membership as MembershipTier)
+      : "Debt Crusher";
+
+  let activeTierIndex = MEMBERSHIP_STEP_UI.findIndex((s) => s.tier === normalizedMembership);
+  if (activeTierIndex < 0) activeTierIndex = 0;
+
+  const progressPercent = ((activeTierIndex + 1) / MEMBERSHIP_STEP_UI.length) * 100;
+  const memberSinceLabel = new Date(profile.createdAt).toLocaleDateString("en-US", {
+    month: "short",
+    year: "numeric",
+  });
+
   return (
     <div className="space-y-8">
       {/* Dashboard Header - sticky */}
@@ -796,99 +829,69 @@ export default function Dashboard() {
       {/* Quick action cards under calendar */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
         {/* Mood Card */}
-        <Link href="/mood" className="block">
-          <button
-            type="button"
-            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#f3e7c8] hover:bg-[#ecddb7] border border-[#eadab3] transition-colors"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[#f4a91e] flex items-center justify-center text-white">
+        <Link href="/mood" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#f3e7c8] hover:bg-[#ecddb7] border border-[#eadab3] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#f4a91e] flex items-center justify-center text-white">
               <Smile className="h-6 w-6" />
             </div>
             <div className="flex flex-col items-start text-left">
               <span className="text-xl leading-tight text-[#8b5c00] font-semibold">Mood</span>
               <span className="text-sm text-[#9b6e0c]">How are you feeling?</span>
             </div>
-          </button>
         </Link>
 
         {/* Earn Card */}
-        <Link href="/earn" className="block">
-          <button
-            type="button"
-            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#d6ece7] hover:bg-[#cbe5df] border border-[#c2ddd6] transition-colors"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[#14a085] flex items-center justify-center text-white">
+        <Link href="/earn" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#d6ece7] hover:bg-[#cbe5df] border border-[#c2ddd6] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#14a085] flex items-center justify-center text-white">
               <DollarSign className="h-6 w-6" />
             </div>
             <div className="flex flex-col items-start text-left">
               <span className="text-xl leading-tight text-[#1c6a5e] font-semibold">Earn</span>
               <span className="text-sm text-[#2d8577]">Grow your income</span>
             </div>
-          </button>
         </Link>
 
         {/* Budget Card */}
-        <Link href="/budget" className="block">
-          <button
-            type="button"
-            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#d9e3f4] hover:bg-[#cdd9ef] border border-[#c3d0e8] transition-colors"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[#2f6de1] flex items-center justify-center text-white">
+        <Link href="/budget" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#d9e3f4] hover:bg-[#cdd9ef] border border-[#c3d0e8] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#2f6de1] flex items-center justify-center text-white">
               <Wallet className="h-6 w-6" />
             </div>
             <div className="flex flex-col items-start text-left">
               <span className="text-xl leading-tight text-[#1d4da9] font-semibold">Budget</span>
               <span className="text-sm text-[#3562bb]">Control your spending</span>
             </div>
-          </button>
         </Link>
 
         {/* Help me Button */}
-        <Link href="/help-me" className="block">
-          <button
-            type="button"
-            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#ddd8ea] hover:bg-[#d2cce3] border border-[#cbc4df] transition-colors"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[#6f57c7] flex items-center justify-center text-white">
+        <Link href="/help-me" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#ddd8ea] hover:bg-[#d2cce3] border border-[#cbc4df] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#6f57c7] flex items-center justify-center text-white">
               <HelpCircle className="h-6 w-6" />
             </div>
             <div className="flex flex-col items-start text-left">
               <span className="text-xl leading-tight text-[#4e3a99] font-semibold">Help me</span>
               <span className="text-sm text-[#6e5aa7]">Get guidance on next steps</span>
             </div>
-          </button>
         </Link>
 
         {/* Spend Button */}
-        <Link href="/spend" className="block">
-          <button
-            type="button"
-            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#eed9d4] hover:bg-[#e6cbc3] border border-[#e0bfb6] transition-colors"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[#e76f3d] flex items-center justify-center text-white">
+        <Link href="/spend" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#eed9d4] hover:bg-[#e6cbc3] border border-[#e0bfb6] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#e76f3d] flex items-center justify-center text-white">
               <ShoppingCart className="h-6 w-6" />
             </div>
             <div className="flex flex-col items-start text-left">
               <span className="text-xl leading-tight text-[#8d3413] font-semibold">Spend</span>
               <span className="text-sm text-[#b0522c]">Track your daily expenses</span>
             </div>
-          </button>
         </Link>
 
         {/* Review debt Button */}
-        <Link href="/review-debt" className="block">
-          <button
-            type="button"
-            className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#dbe0e6] hover:bg-[#d1d8e0] border border-[#c6ced8] transition-colors"
-          >
-            <div className="w-12 h-12 rounded-xl bg-[#4f83ac] flex items-center justify-center text-white">
+        <Link href="/review-debt" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#dbe0e6] hover:bg-[#d1d8e0] border border-[#c6ced8] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#4f83ac] flex items-center justify-center text-white">
               <FileText className="h-6 w-6" />
             </div>
             <div className="flex flex-col items-start text-left">
               <span className="text-xl leading-tight text-[#2c4d67] font-semibold">Review debt</span>
               <span className="text-sm text-[#4d6f89]">See what you owe today</span>
             </div>
-          </button>
         </Link>
       </div>
 
@@ -905,57 +908,88 @@ export default function Dashboard() {
             <p className="text-sm text-gray-500 font-medium">Membership Levels</p>
           </div>
           <div className="hidden sm:block px-3 py-1 rounded-full bg-[#2f6064]/10 text-[#2f6064] text-xs font-bold uppercase tracking-wider">
-            Current Tier: Debt Crusher
+            Current Tier: {normalizedMembership}
           </div>
         </div>
 
-        <div className="relative">
-          {/* Timeline Connector Line */}
-          <div className="absolute top-10 left-0 w-full h-1 bg-gray-100 dark:bg-gray-700 -z-0" />
-          <div className="absolute top-10 left-0 w-1/4 h-1 bg-emerald-500 -z-0" />
+        <div className="relative pb-4 sm:pb-0">
+          {/* Mobile: same badge as desktop header */}
+          <div className="mb-6 sm:hidden">
+            <span className="inline-block px-3 py-1 rounded-full bg-[#2f6064]/10 text-[#2f6064] text-xs font-bold uppercase tracking-wider">
+              Current Tier: {normalizedMembership}
+            </span>
+          </div>
 
-          <div className="grid grid-cols-4 gap-4 relative z-10">
-            {/* Tier 1: Debt Crusher */}
-            <div className="flex flex-col items-center text-center">
-              <div className="w-20 h-20 rounded-full bg-emerald-500 flex items-center justify-center text-white shadow-lg ring-4 ring-white dark:ring-gray-800 mb-4">
-                <Shield className="h-10 w-10" />
-              </div>
-              <h3 className="text-sm font-bold text-gray-900 dark:text-white">1. Debt Crusher</h3>
-              <p className="text-xs text-emerald-600 dark:text-emerald-400 font-medium mb-2">In Arrears</p>
-              <div className="px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-900/30 text-[10px] text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-100 dark:border-emerald-800 flex items-center gap-1">
-                <Check className="h-2.5 w-2.5" />
-                Active Since Jan 2026
-              </div>
-            </div>
+          <div className="relative min-w-0 overflow-x-auto sm:overflow-visible">
+            {/* Timeline Connector Line */}
+            <div className="absolute top-10 left-0 h-1 w-full max-w-full bg-gray-100 dark:bg-gray-700 -z-0" />
+            <div
+              className="absolute top-10 left-0 h-1 max-w-full bg-emerald-500 -z-0 transition-all duration-300"
+              style={{ width: `${progressPercent}%` }}
+            />
 
-            {/* Tier 2: Cash King */}
-            <div className="flex flex-col items-center text-center">
-              <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 shadow-md ring-4 ring-white dark:ring-gray-800 mb-4 transition-all hover:scale-105">
-                <Crown className="h-10 w-10" />
-              </div>
-              <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">2. Cash King</h3>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Cash Savings</p>
-              <div className="text-[10px] text-gray-400 font-medium italic">Anticipated: June 2026</div>
-            </div>
+            <div className="grid min-w-[520px] grid-cols-4 gap-4 relative z-10 sm:min-w-0">
+              {MEMBERSHIP_STEP_UI.map((step, i) => {
+                const isCurrent = i === activeTierIndex;
+                const isPast = i < activeTierIndex;
+                const Icon = step.Icon;
 
-            {/* Tier 3: Wealth Creator */}
-            <div className="flex flex-col items-center text-center">
-              <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 shadow-md ring-4 ring-white dark:ring-gray-800 mb-4 transition-all hover:scale-105">
-                <Building2 className="h-10 w-10" />
-              </div>
-              <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">3. Wealth Creator</h3>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Building</p>
-              <div className="text-[10px] text-gray-400 font-medium italic">Target: Dec 2027</div>
-            </div>
+                const iconBg = isCurrent
+                  ? "bg-emerald-500 text-white shadow-lg ring-emerald-200 dark:ring-emerald-900/50"
+                  : isPast
+                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
+                    : "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500";
 
-            {/* Tier 4: Legacy Builder */}
-            <div className="flex flex-col items-center text-center">
-              <div className="w-20 h-20 rounded-full bg-gray-100 dark:bg-gray-700 flex items-center justify-center text-gray-400 dark:text-gray-500 shadow-md ring-4 ring-white dark:ring-gray-800 mb-4 transition-all hover:scale-105">
-                <Gem className="h-10 w-10" />
-              </div>
-              <h3 className="text-sm font-bold text-gray-500 dark:text-gray-400">4. Legacy Builder</h3>
-              <p className="text-xs text-gray-400 dark:text-gray-500 mb-2">Freedom</p>
-              <div className="text-[10px] text-gray-400 font-medium italic">Vision: 2030+</div>
+                const ring = "ring-4 ring-white dark:ring-gray-800";
+
+                return (
+                  <div key={step.tier} className="flex flex-col items-center text-center">
+                    <div
+                      className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 shadow-md ${ring} ${iconBg} transition-all hover:scale-105`}
+                    >
+                      <Icon className="h-10 w-10" />
+                    </div>
+                    <h3
+                      className={`text-sm font-bold ${
+                        isCurrent
+                          ? "text-gray-900 dark:text-white"
+                          : isPast
+                            ? "text-emerald-800 dark:text-emerald-300"
+                            : "text-gray-500 dark:text-gray-400"
+                      }`}
+                    >
+                      {step.title}
+                    </h3>
+                    <p
+                      className={`text-xs font-medium mb-2 ${
+                        isCurrent
+                          ? "text-emerald-600 dark:text-emerald-400"
+                          : isPast
+                            ? "text-emerald-700/90 dark:text-emerald-400/90"
+                            : "text-gray-400 dark:text-gray-500"
+                      }`}
+                    >
+                      {step.subtitle}
+                    </p>
+                    {isCurrent && (
+                      <div className="px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-900/30 text-[10px] text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-100 dark:border-emerald-800 flex items-center gap-1 flex-wrap justify-center">
+                        <Check className="h-2.5 w-2.5 shrink-0" />
+                        Current tier · Member since {memberSinceLabel}
+                      </div>
+                    )}
+                    {isPast && !isCurrent && (
+                      <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+                        Completed
+                      </div>
+                    )}
+                    {!isPast && !isCurrent && (
+                      <div className="text-[10px] text-gray-400 font-medium italic">
+                        Keep progressing
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1028,7 +1062,7 @@ export default function Dashboard() {
 
       {/* Cash is king Heading */}
       <div>
-        <h3 className="text font-bold text-gray-900 dark:text-white">Cash is king - total cash balances</h3>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Cash is king - total cash balances</h3>
       </div>
       {(accountTypeBalances.length > 0 || profile.onboardingCompleted) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">

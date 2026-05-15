@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
+import { SIGNUP_BONUS_POINTS } from "@/lib/rewards";
 
 function GoogleIcon() {
   return (
@@ -198,6 +199,7 @@ export default function RegisterForm() {
             email: session.email || email,
             phone,
             monthlyIncome: 0,
+            userPoints: SIGNUP_BONUS_POINTS,
             createdAt: new Date().toISOString(),
           };
           await storage.saveProfile(profile);
