@@ -172,9 +172,19 @@ export default function RegisterForm() {
       return;
     }
 
-    const fullName = `${form.firstName.trim()} ${form.lastName.trim()}`.trim();
+    const firstName = form.firstName.trim();
+    const lastName = form.lastName.trim();
+    const fullName = `${firstName} ${lastName}`.trim();
+    const email = form.email.trim();
+    const phone = form.phone.trim();
     setIsLoading(true);
-    const result = await register(fullName, form.email.trim(), form.password);
+    const result = await register({
+      firstName,
+      lastName,
+      email,
+      phone,
+      password: form.password,
+    });
 
     if (result.success) {
       try {
@@ -183,8 +193,10 @@ export default function RegisterForm() {
           const profile = {
             id: session.userId,
             name: fullName,
-            email: session.email || form.email.trim(),
-            phone: form.phone.trim(),
+            firstName,
+            lastName,
+            email: session.email || email,
+            phone,
             monthlyIncome: 0,
             createdAt: new Date().toISOString(),
           };

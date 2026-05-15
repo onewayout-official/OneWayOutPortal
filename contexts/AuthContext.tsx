@@ -5,11 +5,19 @@ import { AuthSession } from "@/types";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 
+export interface RegisterPayload {
+  firstName: string;
+  lastName: string;
+  email: string;
+  phone: string;
+  password: string;
+}
+
 interface AuthContextType {
   user: AuthSession | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (name: string, email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  register: (payload: RegisterPayload) => Promise<{ success: boolean; error?: string }>;
   loginWithGoogle: (googleUser: { email: string; name: string; picture?: string }) => Promise<{ success: boolean; error?: string }>;
   // Phone OTP methods (metadata optional for signup so new user gets name/email in auth)
   sendOTP: (phone: string, metadata?: { name?: string; email?: string }) => Promise<{ success: boolean; error?: string }>;
@@ -73,18 +81,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (name: string, email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+  const register = async (payload: RegisterPayload): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured()) {
       return { success: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (same folder as package.json), then restart the dev server." };
     }
     try {
+      const firstName = payload.firstName.trim();
+      const lastName = payload.lastName.trim();
+      const email = payload.email.trim();
+      const phone = payload.phone.trim();
+      const password = payload.password;
+      const name = `${firstName} ${lastName}`.trim();
+
       if (password.length < 6) {
         return { success: false, error: "Password must be at least 6 characters long." };
       }
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { name } },
+        options: {
+          data: {
+            name,
+            first_name: firstName,
+            last_name: lastName,
+            phone,
+          },
+        },
       });
       if (error) {
         const isRateLimit = error.message.toLowerCase().includes("too many") || error.message.includes("429");

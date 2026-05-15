@@ -28,6 +28,13 @@ function normalizePgDateKey(d: string): string {
   return s;
 }
 
+function splitNameParts(name: string): { firstName: string; lastName: string } {
+  const trimmed = name.trim();
+  if (!trimmed) return { firstName: "", lastName: "" };
+  const [firstName, ...rest] = trimmed.split(/\s+/);
+  return { firstName, lastName: rest.join(" ") };
+}
+
 export const storage = {
   // Session (delegates to Supabase Auth)
   getSession,
@@ -51,9 +58,17 @@ export const storage = {
     // If no profile exists (e.g. trigger didn't run or user created before migration), create one
     if (!data) {
       const authUserPhone = (authUser as { phone?: string }).phone ?? null;
+      const metadataName = (authUser.user_metadata?.name as string) || "";
+      const metadataFirstName = (authUser.user_metadata?.first_name as string) || "";
+      const metadataLastName = (authUser.user_metadata?.last_name as string) || "";
+      const fallbackNameParts = splitNameParts(metadataName);
+      const firstName = metadataFirstName || fallbackNameParts.firstName;
+      const lastName = metadataLastName || fallbackNameParts.lastName;
       await supabase.from("profiles").upsert({
         id: userId,
-        name: (authUser.user_metadata?.name as string) || "",
+        name: metadataName || `${firstName} ${lastName}`.trim(),
+        first_name: firstName,
+        last_name: lastName,
         email: authUser.email ?? "",
         phone: authUserPhone,
         monthly_income: 0,
@@ -80,9 +95,15 @@ export const storage = {
   saveProfile: async (profile: UserProfile): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) return;
+    const fallbackNameParts = splitNameParts(profile.name ?? "");
+    const firstName = (profile.firstName ?? fallbackNameParts.firstName).trim();
+    const lastName = (profile.lastName ?? fallbackNameParts.lastName).trim();
+    const fullName = profile.name?.trim() || `${firstName} ${lastName}`.trim();
     const { error } = await supabase.from("profiles").upsert({
       id: userId,
-      name: profile.name,
+      name: fullName,
+      first_name: firstName,
+      last_name: lastName,
       email: profile.email,
       phone: profile.phone ?? null,
       monthly_income: profile.monthlyIncome,
@@ -882,9 +903,16 @@ export const storage = {
 
 // Row mappers (Supabase snake_case -> app camelCase)
 function mapRowToProfile(r: Record<string, unknown>): UserProfile {
+  const name = (r.name as string) ?? "";
+  const fallbackNameParts = splitNameParts(name);
+  const firstName = ((r.first_name as string) ?? "").trim() || fallbackNameParts.firstName;
+  const lastName = ((r.last_name as string) ?? "").trim() || fallbackNameParts.lastName;
+  const fullName = name || `${firstName} ${lastName}`.trim();
   return {
     id: r.id as string,
-    name: (r.name as string) ?? "",
+    name: fullName,
+    firstName,
+    lastName,
     email: (r.email as string) ?? "",
     phone: r.phone as string | undefined,
     monthlyIncome: Number(r.monthly_income) ?? 0,
