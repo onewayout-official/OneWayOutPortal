@@ -1,57 +1,31 @@
-"use client";
+﻿"use client";
 
-import { useState, useEffect } from "react";
-import { UserProfile } from "@/types";
-import { storage } from "@/lib/storage";
+import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
+import { Coins, CheckCircle, Lock } from "lucide-react";
 import {
-  Wallet,
-  Banknote,
-  GraduationCap,
-  MessageSquareQuote,
-  Star,
-  Video,
-  Heart,
-  Calculator,
-  Flag,
-  Coins,
-  CheckCircle,
-} from "lucide-react";
+  EARN_SCREEN_TASKS,
+  isTaskCompleted,
+  formatPointsDisplay,
+  VIDEO_QUIZ_DAILY_CAP,
+  type GamificationTaskId,
+} from "@/lib/gamification/config";
+import { rewards } from "@/lib/gamification/rewards";
+import type { GamificationState } from "@/types";
+import SpinWheel from "@/components/SpinWheel";
 
-type TaskId =
-  | "update-budget"
-  | "record-debt-payment"
-  | "complete-course"
-  | "request-quote"
-  | "leave-feedback"
-  | "register-webinar"
-  | "book-life-counseling"
-  | "book-financial-planning"
-  | "report-abuse";
-
-const TASKS: Array<{
-  id: TaskId;
-  label: string;
-  points: number | null;
-  icon: typeof Wallet;
-  href?: string;
-}> = [
-  { id: "update-budget", label: "Update Budget", points: 50, icon: Wallet, href: "/budget" },
-  { id: "record-debt-payment", label: "Record a debt payment", points: 100, icon: Banknote, href: "/review-debt" },
-  { id: "complete-course", label: "Complete Course", points: 50, icon: GraduationCap },
-  { id: "request-quote", label: "Request Quote", points: null, icon: MessageSquareQuote },
-  { id: "leave-feedback", label: "Leave verified feedback", points: null, icon: Star },
-  { id: "register-webinar", label: "Register for upcoming webinar", points: null, icon: Video },
-  { id: "book-life-counseling", label: "Book life counseling appointment", points: null, icon: Heart },
-  { id: "book-financial-planning", label: "Book financial planning appointment", points: null, icon: Calculator, href: "/financial-plan" },
-  { id: "report-abuse", label: "Report Abuse", points: null, icon: Flag },
+const NAVIGATE_ONLY: GamificationTaskId[] = [
+  "daily-mood",
+  "expense-log",
+  "monthly-budget-update",
 ];
 
 export default function EarnTracker() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [gamification, setGamification] = useState<GamificationState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const [completingId, setCompletingId] = useState<TaskId | null>(null);
-  const [showClaimed, setShowClaimed] = useState<TaskId | null>(null);
+  const [completingId, setCompletingId] = useState<GamificationTaskId | null>(null);
+  const [showClaimed, setShowClaimed] = useState<GamificationTaskId | null>(null);
+  const [taskError, setTaskError] = useState<string | null>(null);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
   const [feedbackName, setFeedbackName] = useState("");
   const [feedbackText, setFeedbackText] = useState("");
@@ -65,23 +39,32 @@ export default function EarnTracker() {
   const [webinarNotes, setWebinarNotes] = useState("");
   const [webinarSuccess, setWebinarSuccess] = useState(false);
 
-  useEffect(() => {
-    loadData();
+  const loadData = useCallback(async () => {
+    setIsLoading(true);
+    const state = await rewards.getGamificationState();
+    setGamification(state);
+    setIsLoading(false);
   }, []);
 
-  const loadData = async () => {
-    setIsLoading(true);
-    const userProfile = await storage.getProfile();
-    setProfile(userProfile);
-    setIsLoading(false);
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
+
+  const handleGamificationUpdate = (next: Partial<GamificationState> & { balance: number }) => {
+    setGamification((prev) =>
+      prev
+        ? {
+            ...prev,
+            balance: next.balance,
+            freeSpinAvailable: next.freeSpinAvailable ?? prev.freeSpinAvailable,
+            spinTokens: next.spinTokens ?? prev.spinTokens,
+          }
+        : null
+    );
   };
 
-  const handleTaskClick = async (task: (typeof TASKS)[0]) => {
-    // Update Budget should always open Budget Manager directly.
-    if ((task.id === "update-budget" || task.id === "record-debt-payment") && task.href) {
-      window.location.href = task.href;
-      return;
-    }
+  const handleTaskClick = async (task: (typeof EARN_SCREEN_TASKS)[0]) => {
+    setTaskError(null);
 
     if (task.id === "leave-feedback") {
       setIsFeedbackModalOpen(true);
@@ -94,22 +77,49 @@ export default function EarnTracker() {
       return;
     }
 
-    if (task.points !== null && task.points > 0) {
+    if (NAVIGATE_ONLY.includes(task.id) && task.href) {
+      window.location.href = task.href;
+      return;
+    }
+
+    if (task.manualClaim && task.points !== null && task.points > 0) {
+      const completed = gamification
+        ? isTaskCompleted(task.id, gamification.completedTaskKeys)
+        : false;
+      if (completed) return;
+
       const confirmed = window.confirm(
-        `Have you completed "${task.label}"? You will earn ${task.points} points.`
+        `Have you completed "${task.label}"? You will earn ${task.points ?? 100} points.`
       );
       if (!confirmed) return;
-      if (!profile) return;
+
       setCompletingId(task.id);
-      const newPoints = (profile.userPoints ?? 0) + task.points;
-      const updated = { ...profile, userPoints: newPoints };
-      await storage.saveProfile(updated);
-      setProfile(updated);
+      const result = await rewards.awardTask(task.id, {
+        metadata:
+          task.id === "video-quiz"
+            ? { content_id: `manual-${Date.now()}` }
+            : undefined,
+      });
       setCompletingId(null);
-      setShowClaimed(task.id);
-      setTimeout(() => setShowClaimed(null), 2000);
+
+      if (!result.ok && result.error) {
+        setTaskError(
+          result.error === "daily_cap_reached"
+            ? `Video quiz cap reached (${VIDEO_QUIZ_DAILY_CAP} per day).`
+            : result.error
+        );
+        return;
+      }
+
+      if (result.pointsAwarded > 0) {
+        setShowClaimed(task.id);
+        setTimeout(() => setShowClaimed(null), 2000);
+      }
+
+      await loadData();
+      return;
     }
-    // No-point tasks: could navigate or show toast
+
     if (task.href && task.points === null) {
       window.location.href = task.href;
     }
@@ -141,7 +151,7 @@ export default function EarnTracker() {
     }, 1400);
   };
 
-  if (isLoading) {
+  if (isLoading || !gamification) {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="text-center">
@@ -152,7 +162,7 @@ export default function EarnTracker() {
     );
   }
 
-  // const userPoints = profile?.userPoints ?? 0;
+  const userPoints = gamification.balance;
 
   return (
     <div className="space-y-6">
@@ -168,56 +178,80 @@ export default function EarnTracker() {
         </div>
       </div>
 
-      {/*
-      <div className="bg-gradient-to-r from-red-500 to-rose-600 rounded-xl p-5 text-white">
+      <div className="rounded-xl p-5 border border-sky-200 dark:border-sky-800 bg-gradient-to-r from-sky-50 to-blue-100 dark:from-sky-950/50 dark:to-blue-950/40">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm opacity-90">Your points</p>
-            <p className="text-3xl font-bold">{userPoints.toLocaleString()}</p>
+            <p className="text-sm font-medium text-sky-700 dark:text-sky-300">Your points</p>
+            <p className="text-3xl font-bold text-blue-900 dark:text-sky-50">
+              {userPoints.toLocaleString()}
+            </p>
+            {gamification.spinTokens > 0 && (
+              <p className="text-xs text-sky-600 dark:text-sky-400 mt-1">
+                {gamification.spinTokens} spin token{gamification.spinTokens !== 1 ? "s" : ""}
+              </p>
+            )}
           </div>
-          <Coins className="h-10 w-10 opacity-80" />
+          <Coins className="h-10 w-10 text-sky-500 dark:text-sky-400 opacity-90" />
         </div>
         <Link
           href="/spend"
-          className="mt-3 inline-block text-sm font-medium opacity-90 hover:underline"
+          className="mt-3 inline-block text-sm font-medium text-blue-700 dark:text-sky-300 hover:underline"
         >
           Redeem on Spend →
         </Link>
       </div>
-      */}
 
-      {/* Task grid: icon on top of each button */}
+      <SpinWheel state={gamification} onStateChange={handleGamificationUpdate} />
+
+      {taskError && (
+        <p className="text-sm text-red-600 dark:text-red-400">{taskError}</p>
+      )}
+
       <div>
         <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Tasks</h2>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-          {TASKS.map((task) => {
+          {EARN_SCREEN_TASKS.map((task) => {
             const Icon = task.icon;
             const isCompleting = completingId === task.id;
             const justClaimed = showClaimed === task.id;
             const hasPoints = task.points !== null && task.points > 0;
+            const completed = isTaskCompleted(task.id, gamification.completedTaskKeys);
+            const isAuto = task.autoAward === true;
 
             const buttonContent = (
               <>
                 <div
                   className={`flex items-center justify-center w-12 h-12 rounded-full mx-auto mb-2 ${
-                    hasPoints
-                      ? "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400"
-                      : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
+                    completed
+                      ? "bg-green-100 dark:bg-green-900/40 text-green-600 dark:text-green-400"
+                      : hasPoints
+                        ? "bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400"
+                        : "bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-400"
                   }`}
                 >
-                  <Icon className="h-6 w-6" />
+                  {completed ? <CheckCircle className="h-6 w-6" /> : <Icon className="h-6 w-6" />}
                 </div>
                 <span className="text-sm font-medium text-gray-900 dark:text-white text-center line-clamp-2">
                   {task.label}
                 </span>
-                {hasPoints && (
+                {hasPoints && !completed && (
                   <span className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {task.points} points
+                    {formatPointsDisplay(task.points, task.pointsLabel)}
+                  </span>
+                )}
+                {completed && (
+                  <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mt-1">
+                    <CheckCircle className="h-3.5 w-3.5" /> Done
+                  </span>
+                )}
+                {isAuto && !completed && (
+                  <span className="text-xs text-gray-500 dark:text-gray-400 mt-1 flex items-center gap-0.5">
+                    <Lock className="h-3 w-3" /> Auto on complete
                   </span>
                 )}
                 {justClaimed && (
                   <span className="inline-flex items-center gap-1 text-xs text-green-600 dark:text-green-400 mt-1">
-                    <CheckCircle className="h-3.5 w-3.5" /> Claimed
+                    <CheckCircle className="h-3.5 w-3.5" /> +{task.points} pts
                   </span>
                 )}
               </>
@@ -227,14 +261,14 @@ export default function EarnTracker() {
               <div key={task.id} className="flex flex-col items-center">
                 <button
                   type="button"
-                  disabled={isCompleting}
+                  disabled={isCompleting || (completed && !task.href)}
                   onClick={() => handleTaskClick(task)}
                   className="w-full flex flex-col items-center p-4 rounded-xl border-2 border-gray-200 dark:border-gray-600 hover:border-red-300 dark:hover:border-red-700 hover:bg-red-50/50 dark:hover:bg-red-900/20 transition-all disabled:opacity-60"
                 >
                   {isCompleting ? (
                     <div className="flex flex-col items-center gap-2 py-2">
                       <div className="h-8 w-8 rounded-full border-2 border-red-500 border-t-transparent animate-spin" />
-                      <span className="text-xs text-gray-500">Adding points...</span>
+                      <span className="text-xs text-gray-500">Claiming...</span>
                     </div>
                   ) : (
                     buttonContent
@@ -245,7 +279,7 @@ export default function EarnTracker() {
                     href={task.href}
                     className="mt-1 text-xs text-red-600 dark:text-red-400 hover:underline"
                   >
-                    Go to task →
+                    Go to task â†’
                   </Link>
                 )}
               </div>

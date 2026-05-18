@@ -644,8 +644,7 @@ export default function Dashboard() {
           <div className="flex flex-col">
             <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ONE INVESTMENT</span>
             <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
-              {/*{totalPoints.toLocaleString()} Points*/}
-             
+              {(profile.userPoints ?? 0).toLocaleString()} Points
             </span>
             <span className="text-base font-bold text-green-600 dark:text-green-400">
               {/*N${(profile.savingsGoal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*/}

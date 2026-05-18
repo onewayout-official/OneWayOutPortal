@@ -16,10 +16,8 @@ import {
 import { storage } from "@/lib/storage";
 import { useAuth } from "@/contexts/AuthContext";
 import TierResult from "@/components/onboarding/TierResult";
-import {
-  SIGNUP_BONUS_POINTS,
-  resolveUserPointsForProfile,
-} from "@/lib/rewards";
+import { SIGNUP_BONUS_POINTS } from "@/lib/rewards";
+import { rewards } from "@/lib/gamification/rewards";
 
 const TOTAL_STEPS = 7;
 const FALLBACK_TIER: MembershipTier = "Debt Crusher";
@@ -331,13 +329,25 @@ export default function OnboardingForm() {
       onboardingCompleted: markCompleted,
       onboardingSkipped: markCompleted ? false : existing.onboardingSkipped ?? false,
       membership,
-      userPoints: resolveUserPointsForProfile(existing, {
-        completingOnboarding: markCompleted,
-      }),
     };
 
     await storage.saveProfile(profile);
-    return { membership, points: profile.userPoints ?? SIGNUP_BONUS_POINTS };
+
+    let points = existing.userPoints ?? SIGNUP_BONUS_POINTS;
+    if (markCompleted) {
+      const award = await rewards.awardTask("onboarding-complete");
+      if (award.ok) {
+        points = award.balance;
+      }
+      const tierAward = await rewards.awardTask("tier-promotion", {
+        metadata: { tier: membership },
+      });
+      if (tierAward.ok && tierAward.pointsAwarded > 0) {
+        points = tierAward.balance;
+      }
+    }
+
+    return { membership, points };
   }
 
   async function handleContinue() {
@@ -408,7 +418,6 @@ export default function OnboardingForm() {
         incomeStability: answers.incomeStability ?? undefined,
         emergencyResilience: answers.emergencyResilience ?? undefined,
         primaryGoal: answers.primaryGoal ?? undefined,
-        userPoints: resolveUserPointsForProfile(profile),
       });
       router.push("/");
     } catch (error) {

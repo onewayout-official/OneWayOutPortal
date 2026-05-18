@@ -54,6 +54,47 @@ export type IncomeStability = "variable" | "stable_tight" | "fixed" | "multiple"
 export type EmergencyResilience = "borrow" | "wipe_out" | "small_buffer" | "solid_fund";
 export type PrimaryGoal = "debt" | "savings" | "investments" | "legacy";
 
+export interface GamificationState {
+  balance: number;
+  spinTokens: number;
+  freeSpinAvailable: boolean;
+  lastFreeSpinDate: string | null;
+  completedTaskKeys: string[];
+  spinCost: number;
+}
+
+export interface AwardTaskResult {
+  ok: boolean;
+  alreadyCompleted: boolean;
+  pointsAwarded: number;
+  balance: number;
+  spinTokenGranted: boolean;
+  error?: string;
+}
+
+export interface RedeemResult {
+  ok: boolean;
+  balance: number;
+  redeemed: number;
+  error?: string;
+}
+
+export interface SpinResult {
+  ok: boolean;
+  prize: number;
+  balance: number;
+  mode?: "free" | "token" | "paid";
+  error?: string;
+}
+
+export interface RewardTransaction {
+  id: string;
+  kind: string;
+  source: string;
+  pointsDelta: number;
+  createdAt: string;
+}
+
 export interface DailyMood {
   date: string;
   mood: "😊" | "😐" | "😔";

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Expense, SpendCategory, UserProfile } from "@/types";
 import { storage } from "@/lib/storage";
+import { rewards } from "@/lib/gamification/rewards";
 
 type UserAccount = { id: string; accountType: string; name: string; sortOrder: number };
 import {
@@ -90,6 +91,10 @@ export default function SpendTracker() {
       storage.getSpendBudgets(),
       storage.getUserAccounts(),
     ]);
+    const gamification = await rewards.getGamificationState();
+    if (userProfile) {
+      userProfile.userPoints = gamification.balance;
+    }
     setProfile(userProfile);
     setExpenses(expenseList);
     setBudgets(budgetMap);
@@ -111,10 +116,18 @@ export default function SpendTracker() {
       setRedeemError("Not enough points.");
       return;
     }
-    if (!profile) return;
-    const updated = { ...profile, userPoints: userPoints - amount };
-    await storage.saveProfile(updated);
-    setProfile(updated);
+    const result = await rewards.redeemPoints(amount);
+    if (!result.ok) {
+      setRedeemError(
+        result.error === "insufficient_points"
+          ? "Not enough points."
+          : "Could not redeem points. Try again."
+      );
+      return;
+    }
+    if (profile) {
+      setProfile({ ...profile, userPoints: result.balance });
+    }
     setRedeemPoints("");
     setRedeemNote("");
     setShowRedeemForm(false);

@@ -59,6 +59,9 @@ Apply in the Supabase SQL Editor (or Supabase CLI) in **filename order**:
 | `supabase/migrations/20260218000000_liabilities.sql` | `liabilities` + RLS |
 | `supabase/migrations/20260218000001_update_profile_trigger_phone.sql` | Profile trigger updates (phone metadata) |
 | `supabase/migrations/20260218000002_user_points.sql` | `profiles.user_points` |
+| `supabase/migrations/20260516021500_signup_rewards_bonus.sql` | Default 100 signup points on `profiles` |
+| `supabase/migrations/20260518000000_gamification_rewards.sql` | `reward_transactions`, `task_completions`, `user_gamification`; RPCs `award_task_points`, `redeem_points`, `spin_wheel`, `get_gamification_state`; trigger blocking direct `user_points` updates |
+| `supabase/migrations/20260519000000_gamification_points_catalog.sql` | Product points catalog (login 10, mood 20, expense 30, video 100 cap 3/day, onboarding 1500, tier bonuses, etc.) |
 
 **When you change the DB:** add a **new** migration file (do not rewrite old ones on a shared/production DB), then mirror any column renames in `lib/storage.ts` mappers and in `types/index.ts` if needed.
 
@@ -75,12 +78,28 @@ Apply in the Supabase SQL Editor (or Supabase CLI) in **filename order**:
 | `budget_expenses` | `user_id` | Also used for Spend-screen category budgets |
 | `daily_moods` | composite `(user_id, date)` | |
 | `onboarding_data` | `user_id` | Legacy JSONB; `storage` still reads it as fallback |
+| `reward_transactions` | `user_id` | Append-only points ledger (RPC inserts only) |
+| `task_completions` | `user_id` | One row per user per task key (daily/weekly keys for recurring tasks) |
+| `user_gamification` | `user_id` | Free spin date + spin tokens |
 
 Row shapes use **snake_case** in Postgres; `lib/storage.ts` maps to **camelCase** `UserProfile`, `Expense`, etc.
 
 ### 3.3 Single “data layer” file
 
 Almost all Supabase reads/writes live in **`lib/storage.ts`** (`storage` object). That is the first place to change when adding columns, new tables, or query patterns. **`getDashboardData`** batches parallel reads for the dashboard.
+
+**Gamification** (points, tasks, spin wheel): business rules in **`lib/gamification/config.ts`**; Supabase RPC wrappers in **`lib/gamification/rewards.ts`**. UI: **`components/EarnTracker.tsx`**, **`components/SpinWheel.tsx`**, redeem on **`components/SpendTracker.tsx`**. `profiles.user_points` must only change via RPCs (not `saveProfile`).
+
+### Gamification manual QA
+
+1. Apply migration `20260518000000_gamification_rewards.sql` in Supabase.
+2. New user: profile shows 100 points; one free spin on `/earn`.
+3. Log mood once per day → +25 pts; second log same day does not double-award.
+4. Save spend budgets → +50 pts once per ISO week.
+5. Record debt payment on Review Debt → +100 pts once; may grant a spin token.
+6. Complete course (manual claim on Earn) → +50 pts once.
+7. Redeem on Spend → balance decreases; ledger row in `reward_transactions`.
+8. Paid spin costs 50 pts; token spin uses `spin_tokens`; free spin once per local calendar day.
 
 ---
 

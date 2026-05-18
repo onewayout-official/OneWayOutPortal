@@ -1,7 +1,9 @@
 import { UserProfile } from "@/types";
+import { SIGNUP_BONUS_POINTS } from "@/lib/gamification/config";
 
-export const SIGNUP_BONUS_POINTS = 100;
+export { SIGNUP_BONUS_POINTS };
 
+/** Display fallback when RPC balance is unavailable */
 export function resolveUserPointsForProfile(
   profile: UserProfile,
   options?: { completingOnboarding?: boolean }

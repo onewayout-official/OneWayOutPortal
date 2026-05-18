@@ -11,7 +11,8 @@ import {
   SpendCategory,
 } from "@/types";
 import { supabase } from "@/lib/supabase";
-import { SIGNUP_BONUS_POINTS } from "@/lib/rewards";
+import { SIGNUP_BONUS_POINTS } from "@/lib/gamification/config";
+import { tryAwardTask } from "@/lib/gamification/rewards";
 
 /** Get current Supabase user id (async). */
 export async function getCurrentUserId(): Promise<string | null> {
@@ -130,9 +131,6 @@ export const storage = {
       saving_goals: profile.savingGoals ?? null,
       onboarding_completed: profile.onboardingCompleted ?? false,
       onboarding_skipped: profile.onboardingSkipped ?? false,
-      ...(profile.userPoints !== undefined
-        ? { user_points: profile.userPoints }
-        : {}),
       membership: profile.membership ?? "Debt Crusher",
       onboarding_step: profile.onboardingStep ?? 1,
       onboarding_mood: profile.onboardingMood ?? null,
@@ -199,6 +197,8 @@ export const storage = {
       description: expense.description ?? null,
       account_id: expense.accountId ?? null,
     });
+    const expenseDate = normalizePgDateKey(expense.date);
+    await tryAwardTask("expense-log", { localDate: expenseDate });
   },
 
   deleteExpense: async (id: string): Promise<void> => {
@@ -516,6 +516,7 @@ export const storage = {
       editable: true,
     }));
     await storage.saveBudgetExpenses([...other, ...spendRows]);
+    await tryAwardTask("monthly-budget-update");
   },
 
   // Daily Moods
@@ -551,6 +552,7 @@ export const storage = {
       console.error("[storage] saveDailyMood error:", error.message);
       throw new Error(error.message);
     }
+    await tryAwardTask("daily-mood", { localDate: dateKey });
   },
 
   // User Accounts (dynamic accounts per type)

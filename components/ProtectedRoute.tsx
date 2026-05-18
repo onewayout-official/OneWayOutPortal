@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import DailyLoginRewardsGate from "@/components/DailyLoginRewardsGate";
 
 export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -29,7 +30,5 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     return null;
   }
 
-  return <>{children}</>;
+  return <DailyLoginRewardsGate>{children}</DailyLoginRewardsGate>;
 }
-
-
