@@ -3,8 +3,14 @@
 import { useState, useEffect } from "react";
 import { Expense, ExpenseCategoryOld, RegistrationExpense } from "@/types";
 import { storage } from "@/lib/storage";
-import { format } from "date-fns";
-import { Trash2, Plus, Wallet, Info, TrendingDown, BarChart3, PieChart } from "lucide-react";
+import { Wallet, Info, TrendingDown, BarChart3, PieChart } from "lucide-react";
+import BudgetExpensesForm from "@/components/BudgetExpensesForm";
+import {
+  fromDisplayExpenseRows,
+  isBudgetExpensesIncomplete,
+  isPartialBudgetSave,
+  mergeWithDefaultBudgetRows,
+} from "@/lib/budgetExpenseDefaults";
 import {
   Chart as ChartJS,
   ArcElement,
@@ -65,18 +71,19 @@ export default function ExpenseList() {
   const [editingExpenses, setEditingExpenses] = useState<OnboardingExpenseRow[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showBudgetForm, setShowBudgetForm] = useState(false);
+  const [budgetLoaded, setBudgetLoaded] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      const [expenseList, budgetExpenses, onboarding] = await Promise.all([
-        storage.getExpenses(),
-        storage.getBudgetExpenses(),
-        storage.getOnboardingData(),
-      ]);
-      setExpenses(expenseList);
-      // Prefer budget_expenses table; fall back to onboarding_data
-      if (budgetExpenses.length > 0) {
-        setOnboardingExpenses(budgetExpenses.map((e) => ({
+  const loadBudgetExpenses = async () => {
+    const [expenseList, budgetExpenses, onboarding] = await Promise.all([
+      storage.getExpenses(),
+      storage.getBudgetExpenses(),
+      storage.getOnboardingData(),
+    ]);
+    setExpenses(expenseList);
+    if (budgetExpenses.length > 0) {
+      setOnboardingExpenses(
+        budgetExpenses.map((e) => ({
           id: e.id,
           category: e.category,
           type: e.type,
@@ -86,9 +93,11 @@ export default function ExpenseList() {
           personal: e.personal,
           total: e.personal,
           points: e.points,
-        })));
-      } else {
-        setOnboardingExpenses((onboarding.expenses || []).map((e: any) => ({
+        }))
+      );
+    } else {
+      setOnboardingExpenses(
+        (onboarding.expenses || []).map((e: { id?: string; expenseCategory: string; expenseType: string; name: string; personal: number; total?: number; points: number }) => ({
           id: e.id,
           category: e.expenseCategory as RegistrationExpense["category"],
           type: (e.expenseType === "Variable" ? "Variable" : "Fixed") as RegistrationExpense["type"],
@@ -98,10 +107,31 @@ export default function ExpenseList() {
           personal: e.personal,
           total: e.total ?? e.personal,
           points: e.points,
-        })));
-      }
-    })();
+        }))
+      );
+    }
+    setBudgetLoaded(true);
+  };
+
+  useEffect(() => {
+    loadBudgetExpenses();
   }, []);
+
+  const budgetFormRows =
+    onboardingExpenses.length > 0
+      ? mergeWithDefaultBudgetRows(fromDisplayExpenseRows(onboardingExpenses))
+      : undefined;
+
+  const budgetIncomplete =
+    budgetLoaded &&
+    (onboardingExpenses.length === 0 ||
+      isPartialBudgetSave(onboardingExpenses.length) ||
+      isBudgetExpensesIncomplete(budgetFormRows ?? []));
+
+  const handleBudgetSaved = async () => {
+    await loadBudgetExpenses();
+    setShowBudgetForm(false);
+  };
 
   const handleAddExpense = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -201,28 +231,66 @@ export default function ExpenseList() {
     }
   };
 
+  const showFormView = budgetIncomplete || showBudgetForm;
+
   return (
     <div className="space-y-8">
       {/* Onboarding Expenses Section */}
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        <div className="flex flex-wrap justify-between items-center gap-3">
           <h2 className="text-3xl font-bold text-gray-900 dark:text-white flex items-center gap-3">
             <div className="p-2 bg-gradient-to-br from-orange-500 to-red-600 rounded-lg">
               <Wallet className="h-6 w-6 text-white" />
             </div>
             Expense Categories
           </h2>
-          <button
-            type="button"
-            onClick={openEditModal}
-            disabled={onboardingExpenses.length === 0}
-            className="px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 dark:text-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Edit Amount
-          </button>
+          {!showFormView && (
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={openEditModal}
+                disabled={onboardingExpenses.length === 0}
+                className="px-4 py-2 text-sm font-semibold text-blue-700 bg-blue-100 hover:bg-blue-200 dark:text-blue-200 dark:bg-blue-900/40 dark:hover:bg-blue-900/60 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Edit Amount
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowBudgetForm(true)}
+                className="px-4 py-2 text-sm font-semibold text-orange-700 bg-orange-100 hover:bg-orange-200 dark:text-orange-200 dark:bg-orange-900/40 dark:hover:bg-orange-900/60 rounded-lg transition-colors"
+              >
+                Edit full budget
+              </button>
+            </div>
+          )}
         </div>
 
-        {onboardingExpenses.length > 0 ? (
+        {!budgetLoaded ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">Loading your budget...</p>
+        ) : showFormView ? (
+          <>
+            {budgetIncomplete && (
+              <div className="p-4 mb-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700">
+                <p className="text-sm text-amber-800 dark:text-amber-200 flex gap-3">
+                  <Info className="h-5 w-5 flex-shrink-0 mt-0.5" />
+                  <span>
+                    Your monthly budget is incomplete. Enter amounts (and names where
+                    applicable) for your expense categories below, then save.
+                  </span>
+                </p>
+              </div>
+            )}
+          <BudgetExpensesForm
+            initialRows={budgetFormRows}
+            onSaved={handleBudgetSaved}
+            onCancel={
+              !budgetIncomplete
+                ? () => setShowBudgetForm(false)
+                : undefined
+            }
+          />
+          </>
+        ) : onboardingExpenses.length > 0 ? (
           <>
             {/* Summary Cards */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -466,14 +534,7 @@ export default function ExpenseList() {
             </div>
           )}
         </>
-        ) : (
-          <div className="p-6 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-700">
-            <p className="text-sm text-amber-800 dark:text-amber-200 flex gap-3">
-              <Info className="h-5 w-5 flex-shrink-0 mt-0.5" />
-              <span>No expense categories from onboarding. Complete the onboarding process to see your expense categories here.</span>
-            </p>
-          </div>
-        )}
+        ) : null}
       </div>
 
       {isEditModalOpen && (

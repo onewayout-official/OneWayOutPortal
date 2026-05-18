@@ -482,7 +482,11 @@ export const storage = {
       })),
       { onConflict: "id" }
     );
-    if (upsertError) console.error("[storage] saveBudgetExpenses upsert error:", upsertError.message);
+    if (upsertError) {
+      console.error("[storage] saveBudgetExpenses upsert error:", upsertError.message);
+      return;
+    }
+    await tryAwardTask("monthly-budget-update");
   },
 
   /** Spend screen: budget amount per category (from budget_expenses where category is one of the 7). */
@@ -516,7 +520,6 @@ export const storage = {
       editable: true,
     }));
     await storage.saveBudgetExpenses([...other, ...spendRows]);
-    await tryAwardTask("monthly-budget-update");
   },
 
   // Daily Moods
