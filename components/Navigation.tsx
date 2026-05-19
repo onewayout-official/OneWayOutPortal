@@ -77,7 +77,7 @@ export default function Navigation() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 border-t-2 bg-white dark:bg-gray-900 md:relative md:border-t-0 md:border-r-0 md:min-h-screen md:text-white"
+      className="fixed bottom-0 left-0 right-0 z-50 border-t-2 bg-white dark:bg-gray-900 md:relative md:border-t-0 md:border-r-0 md:min-h-screen md:text-white md:bg-transparent"
       style={{ borderColor: '#2f6064' }}
     >
       {/* Desktop sidebar */}

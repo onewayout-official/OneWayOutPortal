@@ -181,7 +181,7 @@ export default function EarnTracker() {
       <div className="rounded-xl p-5 border border-sky-200 dark:border-sky-800 bg-gradient-to-r from-sky-50 to-blue-100 dark:from-sky-950/50 dark:to-blue-950/40">
         <div className="flex items-center justify-between">
           <div>
-            <p className="text-sm font-medium text-sky-700 dark:text-sky-300">Your points</p>
+            <p className="text-sm font-medium text-sky-700 dark:text-sky-300">My 1-Reward Points</p>
             <p className="text-3xl font-bold text-blue-900 dark:text-sky-50">
               {userPoints.toLocaleString()}
             </p>

@@ -575,14 +575,6 @@ export default function OnboardingForm() {
               </svg>
             </button>
 
-            <button
-              type="button"
-              className="consent-btn-skip"
-              disabled={isSaving}
-              onClick={handleSkip}
-            >
-              Skip for now — I&apos;ll complete this later
-            </button>
           </div>
         </div>
         )}

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { UserProfile, Asset, MembershipTier } from "@/types";
 import { storage } from "@/lib/storage";
+import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import Image from "next/image";
 import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, User, ChevronDown, LogOut, Shield, Crown, Building2, Gem, Check } from "lucide-react";
@@ -74,6 +75,8 @@ export default function Dashboard() {
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferMethod, setTransferMethod] = useState("");
   const [transferInput, setTransferInput] = useState("");
+  const [rewardTotalPoints, setRewardTotalPoints] = useState<number>(0);
+  const [rewardTodayPoints, setRewardTodayPoints] = useState<number>(0);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   const { logout } = useAuth();
@@ -295,6 +298,25 @@ export default function Dashboard() {
       const totalMinPayments = debts.reduce((sum, debt) => sum + debt.minimumPayment, 0);
       setTotalDebt(totalDebtAmount);
       setMonthlyMinimumPayments(totalMinPayments);
+
+      // Rewards tracker — total & today's points from reward_transactions
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const todayStr = new Date().toISOString().slice(0, 10);
+        const { data: txns } = await supabase
+          .from("reward_transactions")
+          .select("points_delta, created_at")
+          .eq("user_id", user.id)
+          .gt("points_delta", 0);
+        if (txns) {
+          const total = txns.reduce((s: number, r: { points_delta: number }) => s + Number(r.points_delta), 0);
+          const today = txns
+            .filter((r: { created_at: string }) => r.created_at.slice(0, 10) === todayStr)
+            .reduce((s: number, r: { points_delta: number }) => s + Number(r.points_delta), 0);
+          setRewardTotalPoints(total);
+          setRewardTodayPoints(today);
+        }
+      }
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
       } finally {
@@ -637,19 +659,28 @@ export default function Dashboard() {
   return (
     <div className="space-y-8">
       {/* Dashboard Header - sticky */}
-      <div className="sticky top-0 z-20 -mx-4 px-4 -mt-4 pt-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-8 pb-4 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900">
+      <div className="sticky top-0 z-20 -mx-4 px-4 -mt-4 pt-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-8 pb-4 border-b border-[#254e52] bg-[#2f6064]">
         <div className="grid grid-cols-3 items-center gap-4">
 
-          {/* Left — OneWayOut Investment */}
-          <div className="flex flex-col">
-            <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ONE INVESTMENT</span>
-            <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
-              {(profile.userPoints ?? 0).toLocaleString()} Points
-            </span>
-            <span className="text-base font-bold text-green-600 dark:text-green-400">
-              {/*N${(profile.savingsGoal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*/}
-              N$ 3,000
-            </span>
+          {/* Left — OneWayOut Investment + Sign-up CTA */}
+          <div className="flex items-center gap-3">
+            <div className="flex flex-col gap-0.5">
+              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">ONE INVESTMENT</span>
+              
+              <span className="text-base font-bold text-white">N$ 3,000</span>
+            </div>
+            <button
+              onClick={() => {/* TODO: sign-up flow */}}
+              className="flex flex-col items-start gap-0.5 px-2.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 transition-colors text-left shrink-0"
+            >
+              <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">Sign-up</span>
+              <span className="text-[11px] font-bold text-white leading-snug whitespace-nowrap">
+                &ldquo;OneWayOut&rdquo; as your
+              </span>
+              <span className="text-[10px] font-medium text-white/90 leading-snug whitespace-nowrap">
+                Financial Adviser
+              </span>
+            </button>
           </div>
 
           {/* Center — Logo */}
@@ -662,25 +693,34 @@ export default function Dashboard() {
               priority
               className="h-10 md:h-12 w-auto object-contain"
             />
-            <p className="text-xs text-gray-400 dark:text-gray-500 hidden sm:block">{todayFormatted}</p>
+            <p className="text-xs text-white/60 hidden sm:block">{todayFormatted}</p>
           </div>
 
           {/* Right — Wallet + profile */}
           <div className="flex items-center justify-end gap-3">
+            {/* Rewards Tracker */}
+            <div className="flex flex-col items-end gap-0.5 border-r border-white/20 pr-3">
+              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Rewards Tracker</span>
+              <div className="flex flex-col items-end mt-0.5">
+                <span className="text-[11px] text-white/80">Total Points: <span className="font-bold text-white">{rewardTotalPoints.toLocaleString()}</span></span>
+                <span className="text-[11px] text-white/80">Today&apos;s Points: <span className="font-bold text-white">{rewardTodayPoints.toLocaleString()}</span></span>
+              </div>
+            </div>
+
             {/* Wallet info */}
             <div className="flex flex-col items-end">
-              <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">ONE WALLET</span>
-              <span className="text-base font-bold text-green-600 dark:text-green-400">
+              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">My 1-Wallet</span>
+              <span className="text-base font-bold text-white">
               {/*N${(profile.savingsGoal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*/}
               Balance: N$ 3,000
               </span>
 
-              <span className="text-base font-bold text-blue-600 dark:text-blue-400">
+              <span className="text-base font-bold text-white/80">
               Available: N$ 1,500
               </span>
               <button
                 onClick={() => { setShowTransfer(true); setTransferMethod(""); setTransferInput(""); }}
-                className="mt-1.5 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-[#2f6064] hover:bg-[#254e52] rounded-lg transition-colors"
+                className="mt-1.5 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
               >
                 ⇄ Quick Transfer
               </button>
@@ -719,14 +759,14 @@ export default function Dashboard() {
             <div className="relative" ref={profileDropdownRef}>
               <button
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center gap-1 p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="flex items-center gap-1 p-2 rounded-full hover:bg-white/10 transition-colors"
                 aria-expanded={profileDropdownOpen}
                 aria-haspopup="true"
               >
-                <div className="w-9 h-9 rounded-full bg-blue-100 dark:bg-blue-900/50 flex items-center justify-center">
-                  <User className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
+                  <User className="h-5 w-5 text-white" />
                 </div>
-                <ChevronDown className={`h-4 w-4 text-gray-500 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} />
+                <ChevronDown className={`h-4 w-4 text-white/70 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} />
               </button>
 
               {profileDropdownOpen && (

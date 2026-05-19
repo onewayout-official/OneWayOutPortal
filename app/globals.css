@@ -54,6 +54,39 @@ html {
   height: 100%;
 }
 
+/* Hide scrollbar but keep overflow scrolling */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+/* Nav sidebar scrollbar — light teal */
+.nav-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #7aa8aa #2f6064;
+}
+
+.nav-scrollbar::-webkit-scrollbar {
+  width: 5px;
+}
+
+.nav-scrollbar::-webkit-scrollbar-track {
+  background: #2f6064;
+}
+
+.nav-scrollbar::-webkit-scrollbar-thumb {
+  background: #7aa8aa;
+  border-radius: 4px;
+}
+
+.nav-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #9ec0c2;
+}
+
 /* Custom scrollbar (from old/globals.css) */
 ::-webkit-scrollbar {
   width: 8px;
