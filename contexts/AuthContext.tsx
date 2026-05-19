@@ -4,6 +4,7 @@ import { createContext, useContext, useState, useEffect, ReactNode } from "react
 import { AuthSession } from "@/types";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { storage } from "@/lib/storage";
 
 export interface RegisterPayload {
   firstName: string;
@@ -27,6 +28,7 @@ interface AuthContextType {
   resetPasswordForEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
   updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   isAuthenticated: boolean;
+  isAdmin: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -43,16 +45,28 @@ function toAuthSession(session: { user: { id: string; email?: string }; expires_
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isAdmin, setIsAdmin] = useState(false);
   const router = useRouter();
+
+  const refreshAdminStatus = async () => {
+    const profile = await storage.getProfile();
+    setIsAdmin(profile?.role === "admin");
+  };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(toAuthSession(session));
       setIsLoading(false);
+      if (session) refreshAdminStatus();
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(toAuthSession(session));
+      if (session) {
+        refreshAdminStatus();
+      } else {
+        setIsAdmin(false);
+      }
     });
 
     return () => subscription.unsubscribe();
@@ -293,6 +307,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         resetPasswordForEmail,
         updatePassword,
         isAuthenticated: !!user,
+        isAdmin,
       }}
     >
       {children}

@@ -959,6 +959,7 @@ function mapRowToProfile(r: Record<string, unknown>): UserProfile {
     membership: (r.membership as UserProfile["membership"]) ?? "Debt Crusher",
     onboardingStep: r.onboarding_step != null ? Number(r.onboarding_step) : undefined,
     onboardingMood: (r.onboarding_mood as UserProfile["onboardingMood"]) ?? undefined,
+    role: (r.role as UserProfile["role"]) ?? "user",
     debtStatus: (r.debt_status as UserProfile["debtStatus"]) ?? undefined,
     savingsStatus: (r.savings_status as UserProfile["savingsStatus"]) ?? undefined,
     investmentStatus: (r.investment_status as UserProfile["investmentStatus"]) ?? undefined,

@@ -27,6 +27,7 @@ export interface UserProfile {
   onboardingStep?: number;
   /** Onboarding v2 answers */
   onboardingMood?: OnboardingMood;
+  role?: "admin" | "user" | "counselor";
   debtStatus?: DebtStatus;
   savingsStatus?: SavingsStatus;
   investmentStatus?: InvestmentStatus;

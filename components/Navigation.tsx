@@ -48,7 +48,6 @@ const navSections = [
     label: "Account",
     items: [
       { href: "/profile", label: "Profile", icon: User },
-      { href: "/admin", label: "Admin", icon: Shield },
     ],
   },
 ];
@@ -71,9 +70,16 @@ function NavLink({ href, label, icon: Icon, isActive }: { href: string; label: s
 
 export default function Navigation() {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { logout, isAdmin } = useAuth();
 
-  const allNavItems = navSections.flatMap((s) => s.items);
+  const visibleSections = navSections.map((section) => {
+    if (section.label !== "Account") return section;
+    const items = [...section.items];
+    if (isAdmin) items.push({ href: "/admin", label: "Admin", icon: Shield });
+    return { ...section, items };
+  });
+
+  const allNavItems = visibleSections.flatMap((s) => s.items);
 
   return (
     <nav
@@ -99,7 +105,7 @@ export default function Navigation() {
           </div>
         </div>
 
-        {navSections.map((section) => (
+        {visibleSections.map((section) => (
           <div key={section.label}>
             <h3 className="px-4 py-1 text-xs font-semibold uppercase tracking-wider" style={{ color: '#efc19e' }}>
               {section.label}

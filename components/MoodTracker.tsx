@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { UserProfile, DailyMood } from "@/types";
 import { storage } from "@/lib/storage";
-import { Smile, Calendar, TrendingUp } from "lucide-react";
+import { Smile, Calendar, TrendingUp, Star, X } from "lucide-react";
 import { format, subDays, parseISO } from "date-fns";
 import {
   LineChart,
@@ -95,6 +95,7 @@ export default function MoodTracker() {
   const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [chartDays, setChartDays] = useState<7 | 14 | 30>(30);
+  const [pointsPopup, setPointsPopup] = useState<{ visible: boolean; mood: "😊" | "😐" | "😔" | null }>({ visible: false, mood: null });
 
   useEffect(() => {
     loadData();
@@ -142,6 +143,9 @@ export default function MoodTracker() {
       setSelectedMood(mood);
       const dailyMoods = await storage.getDailyMoods();
       setMoodHistory(dailyMoods);
+
+      setPointsPopup({ visible: true, mood });
+      setTimeout(() => setPointsPopup({ visible: false, mood: null }), 3500);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Could not save your mood. Please try again.";
       setSaveError(message);
@@ -177,6 +181,8 @@ export default function MoodTracker() {
   const todayKey = format(today, "yyyy-MM-dd");
   const todayMood = moodHistory.find((m) => m.date === todayKey);
   const moodLockedForToday = Boolean(todayMood);
+
+  const MOOD_POINTS = 20;
 
   return (
     <div className="space-y-6">
@@ -368,6 +374,45 @@ export default function MoodTracker() {
                 </div>
               );
             })}
+          </div>
+        </div>
+      )}
+
+      {/* Points earned popup */}
+      {pointsPopup.visible && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center pointer-events-none"
+          aria-live="polite"
+        >
+          <div
+            className="pointer-events-auto relative flex flex-col items-center gap-3 bg-white dark:bg-gray-800 border border-yellow-300 dark:border-yellow-600 rounded-2xl shadow-2xl px-10 py-8 animate-bounce-in"
+            style={{ animation: "moodPopIn 0.35s cubic-bezier(0.34,1.56,0.64,1) both" }}
+          >
+            <button
+              onClick={() => setPointsPopup({ visible: false, mood: null })}
+              className="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors"
+              aria-label="Dismiss"
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <div className="flex items-center justify-center w-16 h-16 rounded-full bg-yellow-100 dark:bg-yellow-900/40">
+              <span className="text-4xl">{pointsPopup.mood}</span>
+            </div>
+
+            <p className="text-base font-semibold text-gray-700 dark:text-gray-200">Mood logged!</p>
+
+            <div className="flex items-center gap-2 bg-yellow-50 dark:bg-yellow-900/30 border border-yellow-200 dark:border-yellow-700 rounded-xl px-5 py-2.5">
+              <Star className="h-5 w-5 text-yellow-500 fill-yellow-400" />
+              <span className="text-2xl font-bold text-yellow-600 dark:text-yellow-400">
+                +{MOOD_POINTS}
+              </span>
+              <span className="text-sm font-medium text-yellow-700 dark:text-yellow-300">points earned</span>
+            </div>
+
+            <p className="text-xs text-gray-500 dark:text-gray-400 text-center max-w-[200px]">
+              Keep it up — come back tomorrow to earn more!
+            </p>
           </div>
         </div>
       )}
