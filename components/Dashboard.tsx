@@ -665,12 +665,12 @@ export default function Dashboard() {
           {/* Left — OneWayOut Investment + Sign-up CTA */}
           <div className="flex items-center gap-3">
             <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">ONE INVESTMENT</span>
+              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">MY 1-Community Savings</span>
               
               <span className="text-base font-bold text-white">N$ 3,000</span>
             </div>
-            <button
-              onClick={() => {/* TODO: sign-up flow */}}
+            <Link
+              href="/consent"
               className="flex flex-col items-start gap-0.5 px-2.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 transition-colors text-left shrink-0"
             >
               <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">Sign-up</span>
@@ -680,7 +680,7 @@ export default function Dashboard() {
               <span className="text-[10px] font-medium text-white/90 leading-snug whitespace-nowrap">
                 Financial Adviser
               </span>
-            </button>
+            </Link>
           </div>
 
           {/* Center — Logo */}
