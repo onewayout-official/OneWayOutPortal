@@ -3,7 +3,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap } from "lucide-react";
+import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap, CalendarCheck } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navSections = [
@@ -12,6 +12,7 @@ const navSections = [
     items: [
       { href: "/", label: "Dashboard", icon: Home },
       { href: "/financial-plan", label: "Financial Plan", icon: BarChart3 },
+      { href: "/book-financial-session", label: "Book Financial Planning Session", icon: CalendarCheck },
     ],
   },
   {

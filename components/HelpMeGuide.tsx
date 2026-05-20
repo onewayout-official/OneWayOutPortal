@@ -69,7 +69,7 @@ export default function HelpMeGuide() {
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
         <div className="flex items-center justify-between gap-3 mb-4">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Available Counselors</h2>
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Book Free Sessions with our Life Coaches/Counsellors below</h2>
           <span className="text-xs text-gray-500 dark:text-gray-400">
             {MOCK_COUNSELORS.length} counselors
           </span>
@@ -88,7 +88,7 @@ export default function HelpMeGuide() {
                 />
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{counselor.name}</h3>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">{counselor.title}</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400">Life Coach/Counsellor</p>
                   <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                     {counselor.experienceYears} yrs experience
                   </p>
