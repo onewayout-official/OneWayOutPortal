@@ -77,7 +77,70 @@ const INCOME_ICON_MAP: Record<string, string> = {
   Dividends: "bank",
   "Interest Income": "bank",
   "Sales of Goods": "cash",
+  Other: "wallet",
 };
+
+const INCOME_CATEGORIES = [
+  "Salary",
+  "Rental Income",
+  "Bonus",
+  "Side Hustle",
+  "Board Fees",
+  "Commission",
+  "Business Income",
+  "Pension",
+  "Retirement Annuities",
+  "Dividends",
+  "Interest Income",
+  "Sales of Goods",
+  "Other income",
+] as const;
+
+const EXPENSE_CATEGORIES = [
+  "Company Pension",
+  "Tax",
+  "Medical Aid",
+  "Investments",
+  "Retirement Annuity",
+  "Long Term Insurance",
+  "Short Term Insurance",
+  "Funeral Insurance",
+  "Bank Charges",
+  "Personal Loan Payments",
+  "Home Loan Payments",
+  "Vehicle Loan Payments",
+  "Credit Card Payments",
+  "Rental Expenses",
+  "Water & Electricity",
+  "Rates and Taxes",
+  "Groceries",
+  "Dining Out",
+  "Lunch",
+  "Subscriptions",
+  "Clothing Accounts",
+  "Fuel & Transport Expenses",
+  "Entertainment",
+  "Domestic Staff Salary",
+  "Garden Staff Salary",
+  "Kids: School Fees",
+  "Kids: After Care",
+  "Kids: Extra Mural Activities",
+  "Kids: Maintenance",
+  "Maintenance: Car",
+  "Maintenance: House",
+  "Armed Response",
+  "Internet/Data",
+  "Airtime",
+  "Family: Extended",
+  "Farm Expenses",
+  "Donations",
+  "Legal Expense",
+  "Educations",
+  "Medicine",
+  "Administration",
+  "Vacations",
+  "Other Expense",
+] as const;
 
 const ICONS: Record<string, LucideIcon> = {
   bank: Landmark,
@@ -202,6 +265,18 @@ export default function BudgetManager() {
   const [allocAmount, setAllocAmount] = useState("");
   const [transferModal, setTransferModal] = useState<TransferModal | null>(null);
   const [transferAmount, setTransferAmount] = useState("");
+
+  // Add Income modal state
+  const [addIncomeOpen, setAddIncomeOpen] = useState(false);
+  const [newIncomeCategory, setNewIncomeCategory] = useState("Salary");
+  const [newIncomeName, setNewIncomeName] = useState("");
+  const [newIncomeAmount, setNewIncomeAmount] = useState("");
+
+  // Add Expense modal state
+  const [addExpenseOpen, setAddExpenseOpen] = useState(false);
+  const [newExpenseCategory, setNewExpenseCategory] = useState("Groceries");
+  const [newExpenseName, setNewExpenseName] = useState("");
+  const [newExpenseAmount, setNewExpenseAmount] = useState("");
 
   useEffect(() => {
     loadData();
@@ -588,6 +663,82 @@ export default function BudgetManager() {
     setDeleteConfirm(null);
   };
 
+  const handleAddIncome = async () => {
+    const amount = Number(newIncomeAmount.replace(/,/g, "").trim());
+    if (!newIncomeName.trim() || isNaN(amount) || amount <= 0) return;
+
+    const category = (newIncomeCategory === "Other income" ? "Other" : newIncomeCategory) as import("@/types").IncomeCategory;
+    const newItem: Income = {
+      id: crypto.randomUUID(),
+      category,
+      type: "Fixed",
+      name: newIncomeName.trim(),
+      personal: amount,
+      spouse: 0,
+      points: 0,
+      editable: true,
+    };
+
+    try {
+      await storage.saveIncome([...onboardingIncome, newItem]);
+      setOnboardingIncome((prev) => [...prev, newItem]);
+      const iconItem: IconItem = {
+        id: newItem.id,
+        key: INCOME_ICON_MAP[newIncomeCategory] ?? INCOME_ICON_MAP[category] ?? "wallet",
+        label: newItem.name,
+        amount: newItem.personal,
+        category: newItem.category,
+        name: newItem.name,
+      };
+      setAllIncomeIcons((prev) => [...prev, iconItem]);
+    } catch (err) {
+      console.error(err);
+    }
+
+    setAddIncomeOpen(false);
+    setNewIncomeCategory("Salary");
+    setNewIncomeName("");
+    setNewIncomeAmount("");
+  };
+
+  const handleAddExpense = async () => {
+    const amount = Number(newExpenseAmount.replace(/,/g, "").trim());
+    if (!newExpenseName.trim() || isNaN(amount) || amount <= 0) return;
+
+    const category = (newExpenseCategory === "Other Expense" ? "Other" : newExpenseCategory) as import("@/types").ExpenseCategory;
+    const newItem: RegistrationExpense = {
+      id: crypto.randomUUID(),
+      category,
+      type: "Fixed",
+      name: newExpenseName.trim(),
+      personal: amount,
+      spouse: 0,
+      points: 0,
+      editable: true,
+    };
+
+    try {
+      await storage.saveBudgetExpenses([...onboardingExpenses, newItem]);
+      setOnboardingExpenses((prev) => [...prev, newItem]);
+      const iconItem: IconItem = {
+        id: newItem.id,
+        key: "card",
+        label: newItem.name,
+        amount: newItem.personal,
+        category: newItem.category,
+        name: newItem.name,
+      };
+      setExpenseIcons((prev) => [...prev, iconItem]);
+    } catch (err) {
+      console.error(err);
+    }
+
+    setAddExpenseOpen(false);
+    setNewExpenseCategory("Groceries");
+    setNewExpenseName("");
+    setNewExpenseAmount("");
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -691,29 +842,24 @@ export default function BudgetManager() {
                   return (
                     <div
                       key={acc.id}
-                      className={`w-full rounded-xl border-2 p-3 transition-all ${
+                      draggable
+                      onDragStart={(e) => { e.stopPropagation(); handleAccountDragStart(e, acc); }}
+                      className={`w-full rounded-xl border-2 p-3 transition-all cursor-grab active:cursor-grabbing select-none ${
                         isOver
                           ? `${c.border} ${c.ring} ring-2 scale-[1.02]`
                           : isDragging || isDraggingAccount
                             ? `border-gray-300 dark:border-gray-600 ${c.ring}/30 ring-1 animate-pulse`
-                            : "border-gray-200 dark:border-gray-700"
+                            : `border-gray-200 dark:border-gray-700 hover:${c.border} hover:shadow-sm`
                       }`}
+                      title={`Drag this card to a planned expense to allocate budget from ${acc.name}`}
                       onDrop={(e) => handleDropOnAccount(e, acc.id)}
                       onDragOver={(e) => { handleDragOver(e); setDragOverTarget(acc.id); }}
                       onDragLeave={() => setDragOverTarget(null)}
                     >
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex flex-col items-start gap-0.5">
-                          {/* Drag handle to allocate from this account to expenses */}
                           <div className="flex items-center gap-1">
-                            <div
-                              draggable
-                              onDragStart={(e) => handleAccountDragStart(e, acc)}
-                              className={`cursor-grab active:cursor-grabbing p-0.5 rounded ${c.text} hover:${c.bg} transition-colors`}
-                              title={`Drag to a planned expense to allocate budget from ${acc.name}`}
-                            >
-                              <GripVertical className="h-3.5 w-3.5" />
-                            </div>
+                            <GripVertical className={`h-3.5 w-3.5 ${c.text} opacity-60 flex-shrink-0`} />
                             <span className="text-xs font-semibold text-gray-900 dark:text-white truncate max-w-[80px]" title={acc.name}>
                               {acc.name}
                             </span>
@@ -765,7 +911,7 @@ export default function BudgetManager() {
                               key={inc.id}
                               item={inc}
                               draggable
-                              onDragStart={(e) => handleDragStart(e, inc)}
+                              onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, inc); }}
                               colorClass={c.text}
                               bgClass={`${c.bg} ${c.border}`}
                               hoverRing={`hover:${c.ring}`}
@@ -799,15 +945,12 @@ export default function BudgetManager() {
           })}
 
           {/* Flow hints */}
-          <div className={`flex items-center justify-center gap-1 pt-2 transition-all duration-300 ${isDragging ? "opacity-100" : "opacity-40"}`}>
-            <ArrowLeft className={`h-4 w-4 ${isDragging ? "text-[#2f6064] animate-pulse" : "text-gray-400"}`} />
-            <span className={`text-[10px] font-medium ${isDragging ? "text-[#2f6064]" : "text-gray-400"}`}>
-              {isDragging ? "Drop above" : "Drag here"}
-            </span>
-          </div>
-          <div className="text-center px-1 pt-1">
-            <p className="text-[9px] text-gray-400 leading-snug">
-              Drag the <span className="font-semibold">⠿ handle</span> on an account →<br />drop on a planned expense
+          <div className={`w-full rounded-lg px-2 py-2 text-center transition-all duration-300 ${isDraggingAccount ? "bg-[#2f6064]/10 opacity-100" : "opacity-50"}`}>
+            <p className="text-[9px] text-gray-500 dark:text-gray-400 leading-snug">
+              {isDraggingAccount
+                ? <span className="font-semibold text-[#2f6064]">Drop on an expense →</span>
+                : <><span className="font-semibold">Drag any account card</span><br />→ drop on an expense to budget it</>
+              }
             </p>
           </div>
         </aside>
@@ -826,11 +969,20 @@ export default function BudgetManager() {
                   <ArrowLeft className="h-3 w-3" /> drag to accounts
                 </span>
               </h3>
-              {pooledIncome > 0 && (
-                <span className="text-sm font-semibold text-[#2f6064]">
-                  Total: N${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {pooledIncome > 0 && (
+                  <span className="text-sm font-semibold text-[#2f6064]">
+                    Total: N${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
+                <button
+                  onClick={() => setAddIncomeOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-[#2f6064] hover:bg-[#255055] rounded-lg transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Income
+                </button>
+              </div>
             </div>
             {unallocatedIncome.length > 0 ? (
               <div className="flex flex-wrap items-center gap-4">
@@ -859,11 +1011,20 @@ export default function BudgetManager() {
                 <Receipt className="h-5 w-5 text-orange-600" />
                 Expenses
               </h3>
-              {pooledExpenses > 0 && (
-                <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                  Total: N${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </span>
-              )}
+              <div className="flex items-center gap-3">
+                {pooledExpenses > 0 && (
+                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                    Total: N${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                )}
+                <button
+                  onClick={() => setAddExpenseOpen(true)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-white bg-orange-500 hover:bg-orange-600 rounded-lg transition-colors"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                  Add Expense
+                </button>
+              </div>
             </div>
             {isDraggingAccount && (
               <p className="text-[11px] text-orange-500 font-medium mb-3 flex items-center gap-1">
@@ -878,23 +1039,25 @@ export default function BudgetManager() {
                   return (
                     <div
                       key={exp.id}
-                      className={`flex flex-col items-center gap-1 p-2 rounded-xl border-2 transition-all ${
+                      className={`relative flex flex-col items-center gap-1 rounded-xl border-2 transition-all duration-150 ${
                         isDropOver
-                          ? "border-orange-400 ring-2 ring-orange-300 bg-orange-50 dark:bg-orange-900/20 scale-105"
+                          ? "border-orange-400 ring-2 ring-orange-300 bg-orange-50 dark:bg-orange-900/20 scale-105 p-3"
                           : isDraggingAccount
-                            ? "border-dashed border-orange-300 dark:border-orange-700 cursor-copy"
-                            : "border-transparent"
+                            ? "border-dashed border-orange-300 dark:border-orange-600 bg-orange-50/50 dark:bg-orange-900/10 cursor-copy p-3 min-w-[96px] min-h-[100px] justify-center"
+                            : "border-transparent p-2"
                       }`}
                       onDrop={(e) => handleDropOnExpense(e, exp)}
                       onDragOver={(e) => { e.preventDefault(); setDragOverTarget(`exp-${exp.id}`); }}
                       onDragLeave={() => setDragOverTarget(null)}
                     >
+                      {isDraggingAccount && !isDropOver && (
+                        <span className="absolute top-1 right-1.5 text-[9px] font-semibold text-orange-400">drop here</span>
+                      )}
                       <IconCard
                         item={exp}
                         colorClass="text-orange-600"
                         bgClass="bg-orange-50 dark:bg-orange-900/10 border-orange-100 dark:border-orange-800"
                         liveAmount={allocated}
-                        
                       />
                     </div>
                   );
@@ -1015,6 +1178,174 @@ export default function BudgetManager() {
               </button>
               <button
                 onClick={() => { setAllocModal(null); setAllocAmount(""); }}
+                className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Expense modal ── */}
+      {addExpenseOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">
+              Add Expense
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+              Add a new planned expense to your budget.
+            </p>
+
+            {/* Expense category */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
+                Expense
+              </label>
+              <select
+                value={newExpenseCategory}
+                onChange={(e) => setNewExpenseCategory(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              >
+                {EXPENSE_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Name */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
+                Name
+              </label>
+              <input
+                autoFocus
+                type="text"
+                value={newExpenseName}
+                onChange={(e) => setNewExpenseName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleAddExpense(); if (e.key === "Escape") setAddExpenseOpen(false); }}
+                placeholder="e.g. Monthly Groceries"
+                className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-orange-400"
+              />
+            </div>
+
+            {/* Monthly Budget Amount */}
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
+                Monthly Budget Amount
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">N$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newExpenseAmount}
+                  onChange={(e) => setNewExpenseAmount(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddExpense(); if (e.key === "Escape") setAddExpenseOpen(false); }}
+                  placeholder="0.00"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleAddExpense}
+                disabled={!newExpenseName.trim() || !newExpenseAmount || Number(newExpenseAmount) <= 0}
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
+              >
+                Add
+              </button>
+              <button
+                onClick={() => { setAddExpenseOpen(false); setNewExpenseCategory("Groceries"); setNewExpenseName(""); setNewExpenseAmount(""); }}
+                className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Income modal ── */}
+      {addIncomeOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">
+              Add Income
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+              Add a new income source to your budget.
+            </p>
+
+            {/* Income category */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
+                Income
+              </label>
+              <select
+                value={newIncomeCategory}
+                onChange={(e) => setNewIncomeCategory(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
+              >
+                {INCOME_CATEGORIES.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Name */}
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
+                Name
+              </label>
+              <input
+                autoFocus
+                type="text"
+                value={newIncomeName}
+                onChange={(e) => setNewIncomeName(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleAddIncome(); if (e.key === "Escape") { setAddIncomeOpen(false); } }}
+                placeholder="e.g. Primary Salary"
+                className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
+              />
+            </div>
+
+            {/* Monthly Budget Amount */}
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
+                Monthly Budget Amount
+              </label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">N$</span>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={newIncomeAmount}
+                  onChange={(e) => setNewIncomeAmount(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") handleAddIncome(); if (e.key === "Escape") { setAddIncomeOpen(false); } }}
+                  placeholder="0.00"
+                  className="w-full pl-10 pr-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={handleAddIncome}
+                disabled={!newIncomeName.trim() || !newIncomeAmount || Number(newIncomeAmount) <= 0}
+                className="flex-1 py-2.5 bg-[#2f6064] hover:bg-[#255055] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
+              >
+                Add
+              </button>
+              <button
+                onClick={() => { setAddIncomeOpen(false); setNewIncomeCategory("Salary"); setNewIncomeName(""); setNewIncomeAmount(""); }}
                 className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-colors"
               >
                 Cancel

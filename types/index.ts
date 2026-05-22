@@ -250,7 +250,8 @@ export type IncomeCategory =
   | "Retirement Annuities"
   | "Dividends"
   | "Interest Income"
-  | "Sales of Goods";
+  | "Sales of Goods"
+  | "Other";
 
 export interface RegistrationExpense {
   id: string;
@@ -314,4 +315,5 @@ export type ExpenseCategory =
   | "Water"
   | "Rent"
   | "Transport"
-  | "Send to others";
+  | "Send to others"
+  | "Other";
