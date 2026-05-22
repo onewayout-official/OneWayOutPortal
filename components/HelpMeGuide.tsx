@@ -1,59 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { HelpCircle, MessageCircle, Calendar, Phone, ArrowRight, type LucideIcon } from "lucide-react";
+import { HelpCircle, MessageCircle, AlertTriangle, ArrowRight, Phone, MessageSquare, Clock, PhoneCall } from "lucide-react";
 import Link from "next/link";
 import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
 
-type QuickAction =
-  | {
-      type: "chat";
-      icon: LucideIcon;
-      label: string;
-      bg: string;
-      iconBg: string;
-      color: string;
-    }
-  | {
-      type: "link";
-      icon: LucideIcon;
-      label: string;
-      href: string;
-      bg: string;
-      iconBg: string;
-      color: string;
-    };
-
 export default function HelpMeGuide() {
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const quickActions: QuickAction[] = [
-    {
-      icon: MessageCircle,
-      label: "Chat with someone",
-      type: "chat",
-      bg: "bg-blue-100 dark:bg-blue-900/40 border-blue-200 dark:border-blue-700 hover:bg-blue-200 dark:hover:bg-blue-800/50",
-      iconBg: "bg-blue-200/80 dark:bg-blue-700/50",
-      color: "text-blue-700 dark:text-blue-300",
-    },
-    {
-      icon: Calendar,
-      label: "Book an appointment",
-      type: "link",
-      href: `/help-me/counselors/${MOCK_COUNSELORS[0].id}`,
-      bg: "bg-emerald-100 dark:bg-emerald-900/40 border-emerald-200 dark:border-emerald-700 hover:bg-emerald-200 dark:hover:bg-emerald-800/50",
-      iconBg: "bg-emerald-200/80 dark:bg-emerald-700/50",
-      color: "text-emerald-700 dark:text-emerald-300",
-    },
-    {
-      icon: Phone,
-      label: "Call me back",
-      type: "link",
-      href: `/help-me/counselors/${MOCK_COUNSELORS[1].id}`,
-      bg: "bg-amber-100 dark:bg-amber-900/40 border-amber-200 dark:border-amber-700 hover:bg-amber-200 dark:hover:bg-amber-800/50",
-      iconBg: "bg-amber-200/80 dark:bg-amber-700/50",
-      color: "text-amber-700 dark:text-amber-300",
-    },
-  ];
 
   return (
     <div className="space-y-6">
@@ -116,40 +69,156 @@ export default function HelpMeGuide() {
         </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6">
-        <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Quick Actions</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {quickActions.map((action, idx) => (
-            action.type === "chat" ? (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => setIsChatOpen(true)}
-                className={`flex items-center gap-3 p-4 rounded-xl border-2 ${action.bg} transition-all text-left`}
-              >
-                <div className={`p-2.5 rounded-full ${action.iconBg} ${action.color}`}>
-                  <action.icon className="h-5 w-5" />
+      {/* Crisis Disclaimer */}
+      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-6">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="p-2.5 rounded-full bg-red-100 dark:bg-red-800/40">
+            <AlertTriangle className="h-5 w-5 text-red-600 dark:text-red-400" />
+          </div>
+          <h2 className="text-lg font-semibold text-red-700 dark:text-red-300">
+            Feeling Extremely Overwhelmed and Helpless
+          </h2>
+        </div>
+        <p className="text-sm text-red-700 dark:text-red-300 leading-relaxed">
+          Please note that we only offer life coaching and counselling session. Our coaches are not qualified psychologist and are not allowed to offer psychologically counselling session. Should you require assistance from duly qualified psychologist – please see a list of help lines below.
+        </p>
+      </div>
+
+      {/* Help Lines */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl overflow-hidden">
+        {/* Section header */}
+        <div className="bg-teal-600 dark:bg-teal-700 px-6 py-4 flex items-center gap-3">
+          <PhoneCall className="h-5 w-5 text-white" />
+          <h2 className="text-base font-semibold text-white tracking-wide uppercase">Help Lines</h2>
+        </div>
+
+        <div className="p-6 grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-6">
+
+          {/* Column 1 — 24-Hour Emergency */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-red-100 dark:bg-red-900/30 px-3 py-1 text-xs font-semibold text-red-700 dark:text-red-300">
+                <Clock className="h-3 w-3" />
+                24-Hour Toll-Free Emergency
+              </span>
+            </div>
+            {[
+              { name: "Suicide Crisis Helpline", number: "0800 567 567" },
+              { name: "Dept. of Social Development Substance Abuse Helpline", number: "0800 12 13 14", sms: "32312" },
+              { name: "Cipla Mental Health Helpline", number: "0800 456 789", sms: "31393" },
+              { name: "NPower SA Helpline", number: "0800 515 515", sms: "43010" },
+              { name: "Healthcare Workers Care Network Helpline", number: "0800 21 21 21", sms: "43001" },
+              { name: "UFS #Fair Kitchens Chefs Helpline", number: "0800 006 333" },
+            ].map((item) => (
+              <div key={item.name} className="flex items-start gap-3 p-3 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-800/30">
+                <div className="mt-0.5 flex-shrink-0 p-1.5 rounded-full bg-red-100 dark:bg-red-800/30">
+                  <Phone className="h-3.5 w-3.5 text-red-600 dark:text-red-400" />
                 </div>
-                <span className={`text-sm font-medium ${action.color} text-left`}>
-                  {action.label}
-                </span>
-              </button>
-            ) : (
-              <Link
-                key={idx}
-                href={action.href}
-                className={`flex items-center gap-3 p-4 rounded-xl border-2 ${action.bg} transition-all`}
-              >
-                <div className={`p-2.5 rounded-full ${action.iconBg} ${action.color}`}>
-                  <action.icon className="h-5 w-5" />
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-snug">{item.name}</p>
+                  <p className="text-sm font-bold text-red-700 dark:text-red-400 mt-0.5">{item.number}</p>
+                  {item.sms && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">SMS: {item.sms}</p>
+                  )}
                 </div>
-                <span className={`text-sm font-medium ${action.color} text-left`}>
-                  {action.label}
-                </span>
-              </Link>
-            )
-          ))}
+              </div>
+            ))}
+          </div>
+
+          {/* Column 2 — 8AM-8PM Business Hours */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-100 dark:bg-teal-900/30 px-3 py-1 text-xs font-semibold text-teal-700 dark:text-teal-300">
+                <Clock className="h-3 w-3" />
+                8AM – 8PM Toll-Free
+              </span>
+            </div>
+            {[
+              { name: "Dr Reddy's Mental Health Helpline", number: "0800 21 22 23" },
+              { name: "Adcock Ingram Depression & Anxiety Helpline", number: "0800 70 80 90" },
+              { name: "ADHD Helpline", number: "0500 55 44 33" },
+              { name: "Pharma Dynamics Police & Trauma Helpline", number: "0800 20 50 26" },
+            ].map((item) => (
+              <div key={item.name} className="flex items-start gap-3 p-3 rounded-lg bg-teal-50 dark:bg-teal-900/10 border border-teal-100 dark:border-teal-800/30">
+                <div className="mt-0.5 flex-shrink-0 p-1.5 rounded-full bg-teal-100 dark:bg-teal-800/30">
+                  <Phone className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-snug">{item.name}</p>
+                  <p className="text-sm font-bold text-teal-700 dark:text-teal-400 mt-0.5">{item.number}</p>
+                </div>
+              </div>
+            ))}
+
+            <div className="flex items-center gap-2 mt-4 mb-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-teal-100 dark:bg-teal-900/30 px-3 py-1 text-xs font-semibold text-teal-700 dark:text-teal-300">
+                8AM – 8PM SADAG Office
+              </span>
+            </div>
+            <div className="flex items-start gap-3 p-3 rounded-lg bg-teal-50 dark:bg-teal-900/10 border border-teal-100 dark:border-teal-800/30">
+              <div className="mt-0.5 flex-shrink-0 p-1.5 rounded-full bg-teal-100 dark:bg-teal-800/30">
+                <Phone className="h-3.5 w-3.5 text-teal-600 dark:text-teal-400" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-snug">SADAG</p>
+                <p className="text-sm font-bold text-teal-700 dark:text-teal-400 mt-0.5">011 234 4837</p>
+              </div>
+            </div>
+          </div>
+
+          {/* Column 3 — Additional Help Lines */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30 px-3 py-1 text-xs font-semibold text-blue-700 dark:text-blue-300">
+                Additional Help Lines
+              </span>
+            </div>
+            {[
+              { name: "Akeso Crisis Helpline", number: "0861 435 787" },
+              { name: "ChaiFM Helpline", number: "0800 24 24 36" },
+              { name: "ChildLine South Africa", number: "116 (free)" },
+              { name: "Lifeline", number: "0861 322 322" },
+              { name: "Tears Foundation", number: "0800 083 277" },
+              { name: "Careline", number: "082 787 6452 / 082 822 7981" },
+            ].map((item) => (
+              <div key={item.name} className="flex items-start gap-3 p-3 rounded-lg bg-blue-50 dark:bg-blue-900/10 border border-blue-100 dark:border-blue-800/30">
+                <div className="mt-0.5 flex-shrink-0 p-1.5 rounded-full bg-blue-100 dark:bg-blue-800/30">
+                  <Phone className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-snug">{item.name}</p>
+                  <p className="text-sm font-bold text-blue-700 dark:text-blue-400 mt-0.5">{item.number}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Column 3 — WhatsApp Numbers */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 mb-1">
+              <span className="inline-flex items-center gap-1.5 rounded-full bg-green-100 dark:bg-green-900/30 px-3 py-1 text-xs font-semibold text-green-700 dark:text-green-300">
+                <MessageSquare className="h-3 w-3" />
+                WhatsApp Numbers (8AM – 5PM)
+              </span>
+            </div>
+            {[
+              { name: "Cipla Mental Health", number: "076 882 2775" },
+              { name: "Maybelline BraveTogether", number: "087 163 2030" },
+              { name: "Ke Moja Substance Abuse", number: "087 163 2025" },
+              { name: "Have Hope Chat Line", number: "087 163 2050" },
+            ].map((item) => (
+              <div key={item.name} className="flex items-start gap-3 p-3 rounded-lg bg-green-50 dark:bg-green-900/10 border border-green-100 dark:border-green-800/30">
+                <div className="mt-0.5 flex-shrink-0 p-1.5 rounded-full bg-green-100 dark:bg-green-800/30">
+                  <MessageSquare className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-gray-800 dark:text-gray-200 leading-snug">{item.name}</p>
+                  <p className="text-sm font-bold text-green-700 dark:text-green-400 mt-0.5">{item.number}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
         </div>
       </div>
 
