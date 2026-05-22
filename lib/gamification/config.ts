@@ -13,6 +13,7 @@ import {
   Users,
   Link2,
   ClipboardCheck,
+  Briefcase,
 } from "lucide-react";
 
 /** Shown in UI fallbacks; actual onboarding award is 1,500 via RPC */
@@ -44,6 +45,7 @@ export type GamificationTaskId =
   | "plan-section-complete"
   | "full-plan-complete"
   | "monthly-budget-update"
+  | "monthly-expenses-update"
   | "monthly-review-complete"
   | "month-ended-green"
   | "month-ended-red-logged"
@@ -56,6 +58,8 @@ export type GamificationTaskId =
   | "register-webinar"
   | "book-life-counseling"
   | "book-financial-planning"
+  | "connect-transunion-astute"
+  | "appoint-financial-advisor"
   | "report-abuse";
 
 export type SpinMode = "free" | "token" | "paid";
@@ -164,6 +168,8 @@ export const POINTS_CATALOG: PointsRule[] = [
   },
 ];
 
+export type TaskCategory = "daily" | "monthly" | "as-required";
+
 export interface GamificationTask {
   id: GamificationTaskId;
   label: string;
@@ -174,6 +180,7 @@ export interface GamificationTask {
   autoAward?: boolean;
   manualClaim?: boolean;
   showOnEarn?: boolean;
+  category?: TaskCategory;
 }
 
 export const GAMIFICATION_TASKS: GamificationTask[] = [
@@ -184,6 +191,7 @@ export const GAMIFICATION_TASKS: GamificationTask[] = [
     icon: LogIn,
     autoAward: true,
     showOnEarn: true,
+    category: "daily",
   },
   {
     id: "daily-mood",
@@ -193,34 +201,56 @@ export const GAMIFICATION_TASKS: GamificationTask[] = [
     href: "/mood",
     autoAward: true,
     showOnEarn: true,
+    category: "daily",
   },
   {
     id: "expense-log",
-    label: "Log an expense today",
+    label: "Log Today's Expenses",
     points: 30,
     icon: Receipt,
-    href: "/spend",
+    href: "/expenses",
     autoAward: true,
     showOnEarn: true,
-  },
-  {
-    id: "monthly-budget-update",
-    label: "Monthly budget update",
-    points: 500,
-    icon: Wallet,
-    href: "/budget",
-    autoAward: true,
-    showOnEarn: true,
+    category: "daily",
   },
   {
     id: "video-quiz",
-    label: "Video + quiz complete",
+    label: "Educational Video and Quiz",
     points: 100,
     pointsLabel: `100 each (max ${VIDEO_QUIZ_DAILY_CAP}/day)`,
     icon: GraduationCap,
     href: "/course",
     manualClaim: true,
     showOnEarn: true,
+    category: "daily",
+  },
+  {
+    id: "monthly-budget-update",
+    label: "Monthly Income Update",
+    points: 500,
+    icon: Wallet,
+    href: "/income",
+    autoAward: true,
+    showOnEarn: true,
+    category: "monthly",
+  },
+  {
+    id: "monthly-expenses-update",
+    label: "Monthly Expenses Update",
+    points: 500,
+    icon: Receipt,
+    href: "/expenses",
+    autoAward: true,
+    showOnEarn: true,
+    category: "monthly",
+  },
+  {
+    id: "monthly-review-complete",
+    label: "Last Month Budget Review",
+    points: 1500,
+    icon: ClipboardCheck,
+    showOnEarn: true,
+    category: "monthly",
   },
   {
     id: "onboarding-complete",
@@ -230,60 +260,80 @@ export const GAMIFICATION_TASKS: GamificationTask[] = [
     href: "/onboarding",
     autoAward: true,
     showOnEarn: false,
+    category: "as-required",
   },
   {
     id: "book-life-counseling",
-    label: "Book life counseling",
+    label: "Book Life Coaching Session",
     points: 500,
     pointsLabel: "500 (+50 reflection)",
     icon: Heart,
     href: "/help-me",
     showOnEarn: true,
+    category: "monthly",
   },
   {
     id: "book-financial-planning",
-    label: "Book financial planning",
+    label: "Book Financial Planning Session",
     points: null,
     icon: Calculator,
-    href: "/financial-plan",
+    href: "/book-financial-session",
     showOnEarn: true,
+    category: "monthly",
   },
   {
-    id: "register-webinar",
-    label: "Register for webinar",
-    points: null,
-    icon: Video,
+    id: "connect-transunion-astute",
+    label: "Connect Transunion & Astute",
+    points: 4500,
+    pointsLabel: "1,500 + 3,000 pts",
+    icon: Link2,
+    href: "/consent",
     showOnEarn: true,
+    category: "as-required",
   },
   {
     id: "leave-feedback",
-    label: "Leave verified feedback",
+    label: "Leave Verified Feedback",
     points: null,
     icon: Star,
     showOnEarn: true,
+    category: "as-required",
+  },
+  {
+    id: "register-webinar",
+    label: "Register for Webinar",
+    points: null,
+    icon: Video,
+    href: "/course",
+    showOnEarn: true,
+    category: "as-required",
+  },
+  {
+    id: "appoint-financial-advisor",
+    label: "Appoint OneWayOut As Financial Intermediary/Advisor",
+    points: 10000,
+    icon: Briefcase,
+    href: "/financial-plan",
+    showOnEarn: true,
+    category: "as-required",
   },
   {
     id: "transunion-connection",
     label: "Connect Transunion",
     points: 1500,
     icon: Link2,
-    showOnEarn: true,
+    showOnEarn: false,
+    category: "as-required",
   },
   {
     id: "astute-connection",
     label: "Connect Astute advisor",
     points: 3000,
     icon: Users,
-    showOnEarn: true,
+    showOnEarn: false,
+    category: "as-required",
   },
-  {
-    id: "monthly-review-complete",
-    label: "Monthly review",
-    points: 1500,
-    icon: ClipboardCheck,
-    showOnEarn: true,
-  },
-  { id: "report-abuse", label: "Report Abuse", points: null, icon: Star, showOnEarn: false },
+  { id: "report-abuse", label: "Report Abuse", points: null, icon: Star, showOnEarn: false, category: "as-required" },
 ];
 
 export const EARN_SCREEN_TASKS = GAMIFICATION_TASKS.filter((t) => t.showOnEarn !== false);
@@ -331,6 +381,8 @@ export function isTaskCompleted(
     }
     case "monthly-budget-update":
       return completedKeys.includes(`monthly-budget-update-${month}`);
+    case "monthly-expenses-update":
+      return completedKeys.includes(`monthly-expenses-update-${month}`);
     case "monthly-review-complete":
       return completedKeys.includes(`monthly-review-${month}`);
     case "month-ended-green":
@@ -341,6 +393,12 @@ export function isTaskCompleted(
       return completedKeys.some((k) => k.startsWith(`buddy-mentor-${getIsoWeekKey(date)}`));
     case "tier-promotion":
       return completedKeys.some((k) => k.startsWith("tier-promotion-"));
+    case "connect-transunion-astute":
+      return (
+        completedKeys.includes("transunion-connection") &&
+        completedKeys.includes("astute-connection")
+      );
+    case "appoint-financial-advisor":
     case "onboarding-complete":
     case "full-plan-complete":
     case "transunion-connection":
