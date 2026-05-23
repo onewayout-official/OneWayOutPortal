@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import Link from "next/link";
 import { Coins, CheckCircle, Lock, Star } from "lucide-react";
+import { storage } from "@/lib/storage";
 import {
   EARN_SCREEN_TASKS,
   isTaskCompleted,
@@ -103,6 +104,7 @@ export default function EarnTracker() {
             ? { content_id: `manual-${Date.now()}` }
             : undefined,
       });
+      storage.logEarnActivity();
       setCompletingId(null);
 
       if (!result.ok && result.error) {

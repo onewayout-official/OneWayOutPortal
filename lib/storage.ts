@@ -828,6 +828,34 @@ export const storage = {
   },
 
   /**
+   * Record that the user visited/updated their budget today.
+   * Upserts into `budget_activities (user_id, date)` — one row per day.
+   */
+  logBudgetActivity: async (): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { error } = await supabase
+      .from("budget_activities")
+      .upsert({ user_id: userId, date: today }, { onConflict: "user_id,date" });
+    if (error) console.error("[logBudgetActivity]", error.message);
+  },
+
+  /**
+   * Record that the user completed an earn task today.
+   * Upserts into `earn_activities (user_id, date)` — one row per day.
+   */
+  logEarnActivity: async (): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const { error } = await supabase
+      .from("earn_activities")
+      .upsert({ user_id: userId, date: today }, { onConflict: "user_id,date" });
+    if (error) console.error("[logEarnActivity]", error.message);
+  },
+
+  /**
    * Load all dashboard data in one go: one auth check + 8 parallel table reads.
    * Use this instead of calling getProfile, getExpenses, getDebts, etc. separately for faster load.
    */
@@ -840,6 +868,8 @@ export const storage = {
     budgetExpenses: RegistrationExpense[];
     liabilities: Liability[];
     dailyMoods: DailyMood[];
+    earnDates: string[];
+    budgetActivityDates: string[];
     onboarding: { income: any[]; expenses: any[]; assets: any[]; liabilities: any[] };
     userAccounts: { id: string; accountType: string; name: string }[];
     incomeAllocations: { incomeId: string; accountId: string; amount: number }[];
@@ -858,6 +888,8 @@ export const storage = {
       budgetExpensesData,
       liabilitiesData,
       dailyMoodsData,
+      earnActivitiesData,
+      budgetActivitiesData,
       onboardingData,
       userAccountsData,
       incomeAllocationsData,
@@ -872,6 +904,8 @@ export const storage = {
       supabase.from("budget_expenses").select("*").eq("user_id", userId),
       supabase.from("liabilities").select("*").eq("user_id", userId),
       supabase.from("daily_moods").select("date, mood").eq("user_id", userId),
+      supabase.from("earn_activities").select("date").eq("user_id", userId).then((r) => r.error ? { data: [] } : r),
+      supabase.from("budget_activities").select("date").eq("user_id", userId).then((r) => r.error ? { data: [] } : r),
       supabase.from("onboarding_data").select("income, expenses, assets, liabilities").eq("user_id", userId).maybeSingle(),
       supabase.from("user_accounts").select("id, account_type, name").eq("user_id", userId),
       supabase.from("income_allocations").select("income_id, account_id, amount").eq("user_id", userId),
@@ -896,6 +930,8 @@ export const storage = {
         date: normalizePgDateKey(r.date),
         mood: r.mood as DailyMood["mood"],
       })),
+      earnDates: (earnActivitiesData.data ?? []).map((r: { date: string }) => normalizePgDateKey(r.date)),
+      budgetActivityDates: (budgetActivitiesData.data ?? []).map((r: { date: string }) => normalizePgDateKey(r.date)),
       onboarding:
         onboardingData.data && !onboardingData.error
           ? {

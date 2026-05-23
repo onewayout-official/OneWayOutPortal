@@ -69,6 +69,7 @@ export default function Dashboard() {
   const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; Income: number; Expenses: number; Surplus: number }[]>([]);
   const [moodDates, setMoodDates] = useState<Set<string>>(new Set());
   const [budgetDates, setBudgetDates] = useState<Set<string>>(new Set());
+  const [earnDates, setEarnDates] = useState<Set<string>>(new Set());
   const [accountBalance, setAccountBalance] = useState<{ allocated: number; budgeted: number; spent: number } | null>(null);
   const [userAccounts, setUserAccounts] = useState<{ id: string; accountType: string; name: string }[]>([]);
   const [accountTypeBalances, setAccountTypeBalances] = useState<{ type: string; total: number }[]>([]);
@@ -88,7 +89,7 @@ export default function Dashboard() {
       const data = await storage.getDashboardData();
       if (!data) return;
 
-      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, onboarding, incomeAllocations, accountExpenseAllocations, accountTransfers, userAccounts: loadedAccounts } = data;
+      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, earnDates: earnDatesArr, budgetActivityDates, onboarding, incomeAllocations, accountExpenseAllocations, accountTransfers, userAccounts: loadedAccounts } = data;
       setUserAccounts(loadedAccounts);
 
       // If profile missing (e.g. new user), ensure it exists via normal getProfile (upsert)
@@ -102,7 +103,8 @@ export default function Dashboard() {
       setAssets(loadedAssets);
 
       setMoodDates(new Set(dailyMoods.map((m) => m.date)));
-      setBudgetDates(new Set(expenses.map((e) => e.date.slice(0, 10))));
+      setBudgetDates(new Set(budgetActivityDates));
+      setEarnDates(new Set(earnDatesArr));
 
       // Prefer normalized tables; fall back to legacy onboarding_data JSONB
       const incomeForCharts =
@@ -436,11 +438,11 @@ export default function Dashboard() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const today = new Date();
 
-  const getDateStatus = (day: number): { mood: boolean; earned: boolean; budget: boolean } => {
-    const key = `${year}-${String(month + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+  const getDateStatus = (date: Date): { mood: boolean; earned: boolean; budget: boolean } => {
+    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
     return {
       mood: moodDates.has(key),
-      earned: false, // no dated earn log yet
+      earned: earnDates.has(key),
       budget: budgetDates.has(key),
     };
   };
@@ -514,14 +516,14 @@ export default function Dashboard() {
           <circle cx="18" cy="18" r={r} fill="none" stroke="#eab308" strokeWidth={strokeWidth}
             strokeDasharray={`${segment} ${circ - segment}`} strokeDashoffset={0} strokeLinecap="round" />
         )}
-        {/* Earned segment (120–240°) - red */}
+        {/* Earn segment (120–240°) - green */}
         {earned && (
-          <circle cx="18" cy="18" r={r} fill="none" stroke="#ef4444" strokeWidth={strokeWidth}
+          <circle cx="18" cy="18" r={r} fill="none" stroke="#22c55e" strokeWidth={strokeWidth}
             strokeDasharray={`${segment} ${circ - segment}`} strokeDashoffset={-segment} strokeLinecap="round" />
         )}
-        {/* Budget segment (240–360°) - green */}
+        {/* Budget segment (240–360°) - orange */}
         {budget && (
-          <circle cx="18" cy="18" r={r} fill="none" stroke="#22c55e" strokeWidth={strokeWidth}
+          <circle cx="18" cy="18" r={r} fill="none" stroke="#f97316" strokeWidth={strokeWidth}
             strokeDasharray={`${segment} ${circ - segment}`} strokeDashoffset={-segment * 2} strokeLinecap="round" />
         )}
       </svg>
@@ -567,7 +569,7 @@ export default function Dashboard() {
             {day && (
               <>
                 <span className="text-sm font-medium">{day}</span>
-                <DateCircle status={getDateStatus(day)} />
+                <DateCircle status={getDateStatus(new Date(year, month, day))} />
               </>
             )}
           </div>
@@ -614,7 +616,7 @@ export default function Dashboard() {
                   }`}
               >
                 <span className="text-sm font-medium">{date.getDate()}</span>
-                <DateCircle status={getDateStatus(date.getDate())} />
+                <DateCircle status={getDateStatus(date)} />
               </div>
             );
           })}
@@ -862,6 +864,22 @@ export default function Dashboard() {
           {/* Calendar View Content */}
           {calendarView === "month" && renderMonthView()}
           {calendarView === "week" && renderWeekView()}
+
+          {/* Legend */}
+          <div className="flex items-center justify-center gap-5 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-[#eab308] inline-block" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Mood</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-[#22c55e] inline-block" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Earn</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-[#f97316] inline-block" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Budget</span>
+            </div>
+          </div>
         </div>
       </div>
 

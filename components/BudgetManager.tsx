@@ -280,6 +280,7 @@ export default function BudgetManager() {
 
   useEffect(() => {
     loadData();
+    storage.logBudgetActivity();
   }, []);
 
   const loadData = async () => {
@@ -491,6 +492,7 @@ export default function BudgetManager() {
           new Map(prev).set(`${currentModal.accountId}::${currentModal.expenseId}`, amount)
         );
       }
+      storage.logBudgetActivity();
     } catch (err) {
       console.error(err);
     }
@@ -587,6 +589,7 @@ export default function BudgetManager() {
           await storage.saveAccountTransferAmount(currentTransfer.fromAccountId, currentTransfer.toAccountId, amount);
         }
       }
+      storage.logBudgetActivity();
     } catch (err) {
       console.error(err);
     }
