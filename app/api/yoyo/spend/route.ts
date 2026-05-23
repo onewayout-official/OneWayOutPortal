@@ -1,0 +1,192 @@
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
+import { matchCampaignForStore, isYoyoSuccess } from "@/lib/yoyo/campaignMatch";
+import { randToCents, randToPoints } from "@/lib/yoyo/retailFootprint";
+import {
+  extractCampaigns,
+  issueGiftcardWithRetry,
+  isYoyoConfigured,
+  listGiftcardCampaigns,
+  normalizeGiftcard,
+} from "@/lib/yoyo/server";
+import { formatYoyoMobileNumber } from "@/lib/yoyo/phone";
+import type { IssueGiftcardBody, SpendGiftcardRequest } from "@/lib/yoyo/types";
+
+async function getAuthUser(request: NextRequest) {
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+  if (!supabaseUrl || !anonKey) return { user: null, client: null };
+
+  const authHeader = request.headers.get("authorization");
+  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "";
+  if (!token) return { user: null, client: null };
+
+  const client = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
+  const {
+    data: { user },
+  } = await client.auth.getUser(token);
+  return { user, client };
+}
+
+async function tryIssue(body: IssueGiftcardBody) {
+  let result = await issueGiftcardWithRetry(body, true);
+  if (
+    body.mobileNumber &&
+    (!isYoyoSuccess(result.data) || !result.data.giftcard?.id) &&
+    (result.status >= 400 || !result.ok)
+  ) {
+    const { mobileNumber: _m, sendSMS: _s, ...withoutMobile } = body;
+    result = await issueGiftcardWithRetry(withoutMobile, true);
+  }
+  return result;
+}
+
+export async function POST(request: NextRequest) {
+  const { user, client } = await getAuthUser(request);
+  if (!user || !client) {
+    return NextResponse.json({ ok: false, error: "Unauthorized." }, { status: 401 });
+  }
+
+  if (!isYoyoConfigured()) {
+    return NextResponse.json(
+      { ok: false, error: "Yoyo API not configured on server." },
+      { status: 503 }
+    );
+  }
+
+  const body = (await request.json()) as SpendGiftcardRequest;
+  const storeName = (body.storeName ?? "").trim();
+  const amountRand = Number(body.amountRand);
+
+  if (!storeName || !Number.isFinite(amountRand) || amountRand <= 0) {
+    return NextResponse.json(
+      { ok: false, error: "Store and a positive amount (Rands) are required." },
+      { status: 400 }
+    );
+  }
+
+  const pointsRequired = randToPoints(amountRand);
+  const balanceCents = randToCents(amountRand);
+
+  const { data: profile } = await client
+    .from("profiles")
+    .select("user_points, phone")
+    .eq("id", user.id)
+    .maybeSingle();
+
+  const userPoints = Number((profile as { user_points?: number } | null)?.user_points ?? 0);
+  if (pointsRequired > userPoints) {
+    return NextResponse.json(
+      { ok: false, error: "insufficient_points", pointsBalance: userPoints },
+      { status: 400 }
+    );
+  }
+
+  let campaignId = body.campaignId;
+  let campaignName = "";
+
+  const campaignsResult = await listGiftcardCampaigns(user.id);
+  const campaigns = extractCampaigns(campaignsResult.data);
+
+  if (campaignId) {
+    const found = campaigns.find((c) => String(c.id) === String(campaignId));
+    campaignName = found?.name ?? found?.description ?? String(campaignId);
+  } else {
+    const matched = matchCampaignForStore(storeName, campaigns);
+    if (!matched) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "no_campaign",
+          responseDesc: campaignsResult.data.responseDesc ?? "Could not load campaigns.",
+          responseCode: campaignsResult.data.responseCode,
+        },
+        { status: 502 }
+      );
+    }
+    campaignId = matched.id;
+    campaignName = matched.name ?? matched.description ?? String(matched.id);
+  }
+
+  const profilePhone = (profile as { phone?: string } | null)?.phone;
+  const mobileNumber =
+    formatYoyoMobileNumber(body.mobileNumber) ??
+    formatYoyoMobileNumber(profilePhone);
+
+  const issueBody: IssueGiftcardBody = {
+    campaignId: Number(campaignId),
+    balance: balanceCents,
+    userRef: user.id,
+    stateId: "A",
+    ...(mobileNumber ? { mobileNumber, sendSMS: false } : {}),
+  };
+
+  const issueResult = await tryIssue(issueBody);
+  const rawGc = issueResult.data.giftcard as Record<string, unknown> | undefined;
+  const giftcard = normalizeGiftcard(rawGc);
+
+  if (!isYoyoSuccess(issueResult.data) || !giftcard?.id) {
+    const desc =
+      issueResult.data.responseDesc ??
+      (issueResult.status === 503
+        ? "Yoyo sandbox temporarily unavailable (503). Wait a moment and try again."
+        : "Gift card could not be issued.");
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "issue_failed",
+        responseDesc: desc,
+        responseCode: issueResult.data.responseCode,
+        status: issueResult.status,
+        yoyoUrl: issueResult.url,
+      },
+      { status: 502 }
+    );
+  }
+
+  const { data: redeemData, error: redeemError } = await client.rpc("redeem_points", {
+    p_amount: pointsRequired,
+  });
+
+  if (redeemError) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "redeem_failed",
+        giftcard,
+        responseDesc:
+          "Gift card was issued but points could not be deducted. Contact support.",
+      },
+      { status: 500 }
+    );
+  }
+
+  const redeem = redeemData as {
+    ok?: boolean;
+    balance?: number;
+    redeemed?: number;
+    error?: string;
+  };
+
+  if (!redeem?.ok) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: redeem?.error ?? "redeem_failed",
+        giftcard,
+      },
+      { status: 400 }
+    );
+  }
+
+  return NextResponse.json({
+    ok: true,
+    giftcard,
+    pointsBalance: Number(redeem.balance ?? 0),
+    pointsRedeemed: Number(redeem.redeemed ?? pointsRequired),
+    campaignName,
+    amountRand,
+  });
+}

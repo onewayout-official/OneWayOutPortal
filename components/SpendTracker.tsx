@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Expense, SpendCategory, UserProfile } from "@/types";
 import { storage } from "@/lib/storage";
 import { rewards } from "@/lib/gamification/rewards";
@@ -20,6 +20,7 @@ import {
   Send,
 } from "lucide-react";
 import Link from "next/link";
+import PointsGiftCardSpend from "@/components/PointsGiftCardSpend";
 
 const SPEND_CATEGORIES: { id: SpendCategory; label: string; Icon: typeof ShoppingCart }[] = [
   { id: "Grocery", label: "Grocery", Icon: ShoppingCart },
@@ -74,10 +75,8 @@ export default function SpendTracker() {
   });
   const [userAccounts, setUserAccounts] = useState<UserAccount[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [redeemPoints, setRedeemPoints] = useState("");
-  const [redeemNote, setRedeemNote] = useState("");
-  const [showRedeemForm, setShowRedeemForm] = useState(false);
-  const [redeemError, setRedeemError] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<SpendCategory | null>(null);
+  const expenseFormRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadData();
@@ -101,36 +100,6 @@ export default function SpendTracker() {
     setEditBudgets(budgetMap);
     setUserAccounts(accounts);
     setIsLoading(false);
-  };
-
-  const handleRedeemPoints = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setRedeemError(null);
-    const amount = Math.floor(parseFloat(redeemPoints) || 0);
-    const userPoints = profile?.userPoints ?? 0;
-    if (amount <= 0) {
-      setRedeemError("Enter a valid amount.");
-      return;
-    }
-    if (amount > userPoints) {
-      setRedeemError("Not enough points.");
-      return;
-    }
-    const result = await rewards.redeemPoints(amount);
-    if (!result.ok) {
-      setRedeemError(
-        result.error === "insufficient_points"
-          ? "Not enough points."
-          : "Could not redeem points. Try again."
-      );
-      return;
-    }
-    if (profile) {
-      setProfile({ ...profile, userPoints: result.balance });
-    }
-    setRedeemPoints("");
-    setRedeemNote("");
-    setShowRedeemForm(false);
   };
 
   const handleSaveBudgets = async () => {
@@ -178,6 +147,27 @@ export default function SpendTracker() {
     },
     {} as Record<SpendCategory, number>
   );
+
+  const countByCategory = SPEND_CATEGORIES.reduce(
+    (acc, { id }) => {
+      acc[id] = expenses.filter((e) => e.category === id && isCurrentMonth(e.date)).length;
+      return acc;
+    },
+    {} as Record<SpendCategory, number>
+  );
+
+  const handleCategoryClick = (categoryId: SpendCategory) => {
+    setSelectedCategory(categoryId);
+    setFormData((prev) => ({
+      ...prev,
+      category: categoryId,
+      title: prev.title || categoryId,
+    }));
+    setShowForm(true);
+    requestAnimationFrame(() => {
+      expenseFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   if (isLoading) {
     return (
@@ -232,88 +222,50 @@ export default function SpendTracker() {
         </Link>
       </div>
 
-      {/* Redeem points */}
-      {showRedeemForm ? (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-5">
-          <h3 className="text-base font-semibold text-gray-900 dark:text-white mb-3">Redeem points</h3>
-          <form onSubmit={handleRedeemPoints} className="space-y-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Points to spend
-              </label>
-              <input
-                type="number"
-                min="1"
-                max={profile?.userPoints ?? 0}
-                value={redeemPoints}
-                onChange={(e) => { setRedeemPoints(e.target.value); setRedeemError(null); }}
-                placeholder="e.g. 50"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Note (optional)
-              </label>
-              <input
-                type="text"
-                value={redeemNote}
-                onChange={(e) => setRedeemNote(e.target.value)}
-                placeholder="What did you redeem for?"
-                className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-amber-500"
-              />
-            </div>
-            {redeemError && (
-              <p className="text-sm text-red-600 dark:text-red-400">{redeemError}</p>
-            )}
-            <div className="flex gap-2">
-              <button
-                type="submit"
-                className="flex-1 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors"
-              >
-                Redeem
-              </button>
-              <button
-                type="button"
-                onClick={() => { setShowRedeemForm(false); setRedeemError(null); setRedeemPoints(""); setRedeemNote(""); }}
-                className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setShowRedeemForm(true)}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-lg border-2 border-dashed border-amber-300 dark:border-amber-600 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
-        >
-          <Coins className="h-5 w-5" />
-          <span className="font-medium">Redeem points</span>
-        </button>
-      )}
+      <PointsGiftCardSpend
+        pointsBalance={profile?.userPoints ?? 0}
+        onPointsChange={(balance) => {
+          if (profile) setProfile({ ...profile, userPoints: balance });
+        }}
+      />
 
-      {/* Spending by category */}
-      <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Spending by category</h2>
+      {/* Spending by category — live from this month&apos;s expenses */}
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+          Spending by category
+        </h2>
+        <p className="text-xs text-gray-500 dark:text-gray-400">
+          {new Date().toLocaleString("en-ZA", { month: "long", year: "numeric" })}
+        </p>
+      </div>
+      <p className="text-sm text-gray-600 dark:text-gray-400 -mt-2">
+        Tap a category to log spending. Set budgets with the gear icon above.
+      </p>
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
         {SPEND_CATEGORIES.map(({ id, label, Icon }) => {
           const spent = spentByCategory[id];
           const budget = budgets[id];
+          const count = countByCategory[id];
           const isOver = budget > 0 && spent > budget;
           const progress = budget > 0 ? Math.min(1, spent / budget) : 0;
+          const isSelected = selectedCategory === id;
 
           return (
-            <div
+            <button
               key={id}
-              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5 flex flex-col items-center text-center"
+              type="button"
+              onClick={() => handleCategoryClick(id)}
+              className={`bg-white dark:bg-gray-800 border rounded-xl p-5 flex flex-col items-center text-center transition-all cursor-pointer hover:shadow-md hover:border-rose-300 dark:hover:border-rose-600 focus:outline-none focus:ring-2 focus:ring-rose-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900 ${
+                isSelected
+                  ? "border-rose-500 ring-2 ring-rose-500/30 shadow-md"
+                  : "border-gray-200 dark:border-gray-700"
+              }`}
             >
               <p className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3 w-full">
                 {label}
               </p>
               <div className="relative mb-3">
-                <svg className="w-14 h-14" viewBox="0 0 56 56">
-                  {/* Circle background (grey) */}
+                <svg className="w-14 h-14" viewBox="0 0 56 56" aria-hidden>
                   <circle
                     cx="28"
                     cy="28"
@@ -329,7 +281,6 @@ export default function SpendTracker() {
                           : "text-gray-300 dark:text-gray-600"
                     }
                   />
-                  {/* Progress fill (orange or red when over) */}
                   {progress > 0 && (
                     <circle
                       cx="28"
@@ -346,7 +297,7 @@ export default function SpendTracker() {
                     />
                   )}
                 </svg>
-                <div className="absolute inset-0 flex items-center justify-center">
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <Icon
                     className={`h-6 w-6 ${
                       isOver
@@ -359,20 +310,33 @@ export default function SpendTracker() {
                 </div>
               </div>
               <p className="text-lg font-semibold text-orange-600 dark:text-orange-400">
-                $ {spent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                R {spent.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
               </p>
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                {budget.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+              <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                {budget > 0
+                  ? `Budget R ${budget.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                  : "No budget set"}
               </p>
-            </div>
+              {count > 0 && (
+                <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                  {count} expense{count !== 1 ? "s" : ""} this month
+                </p>
+              )}
+            </button>
           );
         })}
       </div>
 
       {/* Add expense */}
       {showForm ? (
-        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Add Expense</h2>
+        <div
+          ref={expenseFormRef}
+          className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6"
+        >
+          <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
+            Add expense
+            {selectedCategory ? ` · ${selectedCategory}` : ""}
+          </h2>
           <form onSubmit={handleAddExpense} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
@@ -463,7 +427,10 @@ export default function SpendTracker() {
               </button>
               <button
                 type="button"
-                onClick={() => setShowForm(false)}
+                onClick={() => {
+                  setShowForm(false);
+                  setSelectedCategory(null);
+                }}
                 className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
               >
                 Cancel
