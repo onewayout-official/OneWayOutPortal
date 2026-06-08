@@ -1,6 +1,7 @@
 "use client";
 
 import Navigation from "@/components/Navigation";
+import DashboardTopBar from "@/components/DashboardTopBar";
 import OnboardingPortalGate from "@/components/OnboardingPortalGate";
 
 interface AppLayoutProps {
@@ -15,6 +16,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <Navigation />
         </aside>
         <main className="flex-1 min-w-0 p-4 md:p-8 pb-20 md:pb-8 md:ml-64 min-h-screen">
+          <DashboardTopBar />
           <OnboardingPortalGate>{children}</OnboardingPortalGate>
         </main>
       </div>

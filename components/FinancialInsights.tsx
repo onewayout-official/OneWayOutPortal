@@ -131,7 +131,6 @@ const DEFAULT_ASSETS: Omit<AssetEntry, "id">[] = [
 ];
 
 const DEFAULT_LIABILITIES: Omit<AssetEntry, "id">[] = [
-  { expenses: "Equity",                       expenseType: "Net Worth",             name: "", personal: 0, total: 0, points: 0,   interestRate: 0, namePlaceholder: "Net Worth" },
   { expenses: "House",                        expenseType: "Long Term Liabilities", name: "", personal: 0, total: 0, points: 100, interestRate: 0, namePlaceholder: "Property Name" },
   { expenses: "Farm",                         expenseType: "Long Term Liabilities", name: "", personal: 0, total: 0, points: 75,  interestRate: 0, namePlaceholder: "Property Name" },
   { expenses: "Vehicles",                     expenseType: "Long Term Liabilities", name: "", personal: 0, total: 0, points: 75,  interestRate: 0, namePlaceholder: "Vehicle Name" },
@@ -193,7 +192,7 @@ function mergeAssetsWithDefaults(stored: Asset[]): AssetEntry[] {
 function mergeLiabilitiesWithDefaults(stored: Liability[]): AssetEntry[] {
   const defaults: AssetEntry[] = DEFAULT_LIABILITIES.map((d) => ({ ...d, id: crypto.randomUUID() }));
   const extras: AssetEntry[] = [];
-  for (const s of stored) {
+  for (const s of stored.filter((row) => row.category !== "Equity")) {
     const idx = defaults.findIndex((d) => d.expenses === s.category && d.expenseType === s.type);
     if (idx >= 0) {
       defaults[idx] = { ...defaults[idx], id: s.id, name: s.name, personal: s.personal, total: s.personal, points: s.points, interestRate: s.interestRate };
@@ -427,7 +426,7 @@ export default function FinancialInsights() {
     setLiabilitySaving(true);
     try {
       const toSave: Liability[] = liabilityEntries
-        .filter((e) => e.personal > 0 || e.name.trim() !== "")
+        .filter((e) => e.expenses !== "Equity" && (e.personal > 0 || e.name.trim() !== ""))
         .map((e) => ({
           id: e.id,
           category: e.expenses as LiabilityCategory,
@@ -881,7 +880,7 @@ export default function FinancialInsights() {
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Add New Liability</h3>
             <div className="space-y-3">
               <div><label className={modalLabelCls}>Liability</label><input type="text" value={newLiability.expenses} onChange={(e) => setNewLiability((p) => ({ ...p, expenses: e.target.value }))} className={modalInputCls} placeholder="Liability name" /></div>
-              <div><label className={modalLabelCls}>Liability Type</label><select value={newLiability.expenseType} onChange={(e) => setNewLiability((p) => ({ ...p, expenseType: e.target.value }))} className={modalInputCls}><option value="">Select Type</option><option value="Net Worth">Net Worth</option><option value="Long Term Liabilities">Long Term Liabilities</option><option value="Short Term Liabilities">Short Term Liabilities</option></select></div>
+              <div><label className={modalLabelCls}>Liability Type</label><select value={newLiability.expenseType} onChange={(e) => setNewLiability((p) => ({ ...p, expenseType: e.target.value }))} className={modalInputCls}><option value="">Select Type</option><option value="Long Term Liabilities">Long Term Liabilities</option><option value="Short Term Liabilities">Short Term Liabilities</option></select></div>
               <div><label className={modalLabelCls}>Name</label><input type="text" value={newLiability.name} onChange={(e) => setNewLiability((p) => ({ ...p, name: e.target.value }))} className={modalInputCls} placeholder="Specific name" /></div>
               <div><label className={modalLabelCls}>Personal Amount</label><input type="number" value={newLiability.personal || ""} onChange={(e) => setNewLiability((p) => { const v = parseFloat(e.target.value) || 0; return { ...p, personal: v, total: v }; })} className={modalInputCls} placeholder="0.00" min="0" step="0.01" /></div>
               <div><label className={modalLabelCls}>Interest Rate*</label><input type="number" value={newLiability.interestRate || ""} onChange={(e) => setNewLiability((p) => ({ ...p, interestRate: parseFloat(e.target.value) || 0 }))} className={modalInputCls} placeholder="0.00" min="0" step="0.01" /></div>

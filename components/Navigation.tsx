@@ -1,9 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
-import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap, CalendarCheck } from "lucide-react";
+import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap, CalendarCheck, ClipboardList } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navSections = [
@@ -11,7 +10,8 @@ const navSections = [
     label: "Overview",
     items: [
       { href: "/", label: "Dashboard", icon: Home },
-      { href: "/financial-plan", label: "Financial Plan", icon: BarChart3 },
+      { href: "/financial-plan", label: "Financial Information", icon: BarChart3 },
+      { href: "/my-1-plan", label: "My 1-Plan", icon: ClipboardList },
       { href: "/book-financial-session", label: "Book Financial Planning Session", icon: CalendarCheck },
     ],
   },
@@ -92,20 +92,6 @@ export default function Navigation() {
         className="hidden md:flex flex-col p-4 gap-6 h-full min-h-screen"
         style={{ backgroundColor: '#2f6064' }}
       >
-        {/* Brand mark at top */}
-        <div className="px-4 pt-2 pb-4 border-b border-white/20">
-          <div className="flex justify-center md:justify-start">
-            <Image
-              src="/logo.png"
-              alt="OneWayOut logo"
-              width={180}
-              height={64}
-              priority
-              className="h-12 w-auto object-contain"
-            />
-          </div>
-        </div>
-
         {visibleSections.map((section) => (
           <div key={section.label}>
             <h3 className="px-4 py-1 text-xs font-semibold uppercase tracking-wider" style={{ color: '#efc19e' }}>

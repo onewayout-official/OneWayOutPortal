@@ -1,12 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { UserProfile, Asset, MembershipTier } from "@/types";
 import { storage } from "@/lib/storage";
-import { supabase } from "@/lib/supabase";
-import { useAuth } from "@/contexts/AuthContext";
-import Image from "next/image";
-import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, User, ChevronDown, LogOut, Shield, Crown, Building2, Gem, Check } from "lucide-react";
+import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, Shield, Crown, Building2, Gem, Check } from "lucide-react";
 import Link from "next/link";
 import {
   LineChart, Line, BarChart, Bar as ReBar, Cell,
@@ -64,7 +61,6 @@ export default function Dashboard() {
     liabilities: any[];
   }>({ income: [], expenses: [], assets: [], liabilities: [] });
 
-  const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
   const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; Income: number; Expenses: number; Surplus: number }[]>([]);
   const [moodDates, setMoodDates] = useState<Set<string>>(new Set());
@@ -73,15 +69,6 @@ export default function Dashboard() {
   const [accountBalance, setAccountBalance] = useState<{ allocated: number; budgeted: number; spent: number } | null>(null);
   const [userAccounts, setUserAccounts] = useState<{ id: string; accountType: string; name: string }[]>([]);
   const [accountTypeBalances, setAccountTypeBalances] = useState<{ type: string; total: number }[]>([]);
-  const [showTransfer, setShowTransfer] = useState(false);
-  const [transferMethod, setTransferMethod] = useState("");
-  const [transferInput, setTransferInput] = useState("");
-  const [rewardTotalPoints, setRewardTotalPoints] = useState<number>(0);
-  const [rewardTodayPoints, setRewardTodayPoints] = useState<number>(0);
-  const profileDropdownRef = useRef<HTMLDivElement>(null);
-
-  const { logout } = useAuth();
-
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -300,25 +287,6 @@ export default function Dashboard() {
       const totalMinPayments = debts.reduce((sum, debt) => sum + debt.minimumPayment, 0);
       setTotalDebt(totalDebtAmount);
       setMonthlyMinimumPayments(totalMinPayments);
-
-      // Rewards tracker — total & today's points from reward_transactions
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user) {
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const { data: txns } = await supabase
-          .from("reward_transactions")
-          .select("points_delta, created_at")
-          .eq("user_id", user.id)
-          .gt("points_delta", 0);
-        if (txns) {
-          const total = txns.reduce((s: number, r: { points_delta: number }) => s + Number(r.points_delta), 0);
-          const today = txns
-            .filter((r: { created_at: string }) => r.created_at.slice(0, 10) === todayStr)
-            .reduce((s: number, r: { points_delta: number }) => s + Number(r.points_delta), 0);
-          setRewardTotalPoints(total);
-          setRewardTodayPoints(today);
-        }
-      }
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
       } finally {
@@ -359,16 +327,6 @@ export default function Dashboard() {
       if (intervalId) clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, []);
-
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target as Node)) {
-        setProfileDropdownOpen(false);
-      }
-    };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
   if (isDashboardLoading && !profile) {
@@ -636,14 +594,6 @@ export default function Dashboard() {
     }
   };
 
-  const firstName = profile?.name?.split(" ")[0] || "there";
-  const todayFormatted = new Date().toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
-
   const normalizedMembership: MembershipTier =
     profile.membership && MEMBERSHIP_ORDER.includes(profile.membership as MembershipTier)
       ? (profile.membership as MembershipTier)
@@ -660,152 +610,6 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
-      {/* Dashboard Header - sticky */}
-      <div className="sticky top-0 z-20 -mx-4 px-4 -mt-4 pt-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-8 pb-4 border-b border-[#254e52] bg-[#2f6064]">
-        <div className="grid grid-cols-3 items-center gap-4">
-
-          {/* Left — OneWayOut Investment + Sign-up CTA */}
-          <div className="flex items-center gap-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">MY 1-Community Savings</span>
-              
-              <span className="text-base font-bold text-white">N$ 3,000</span>
-            </div>
-            <Link
-              href="/consent"
-              className="flex flex-col items-start gap-0.5 px-2.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 transition-colors text-left shrink-0"
-            >
-              <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">Sign-up</span>
-              <span className="text-[11px] font-bold text-white leading-snug whitespace-nowrap">
-                &ldquo;OneWayOut&rdquo; as your
-              </span>
-              <span className="text-[10px] font-medium text-white/90 leading-snug whitespace-nowrap">
-                Financial Adviser
-              </span>
-            </Link>
-          </div>
-
-          {/* Center — Logo */}
-          <div className="flex flex-col items-center justify-center">
-            <Image
-              src="/logo.png"
-              alt="OneWayOut logo"
-              width={180}
-              height={64}
-              priority
-              className="h-10 md:h-12 w-auto object-contain"
-            />
-            <p className="text-xs text-white/60 hidden sm:block">{todayFormatted}</p>
-          </div>
-
-          {/* Right — Wallet + profile */}
-          <div className="flex items-center justify-end gap-3">
-            {/* Rewards Tracker */}
-            <div className="flex flex-col items-end gap-0.5 border-r border-white/20 pr-3">
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Rewards Tracker</span>
-              <div className="flex flex-col items-end mt-0.5">
-                <span className="text-[11px] text-white/80">Total Points: <span className="font-bold text-white">{rewardTotalPoints.toLocaleString()}</span></span>
-                <span className="text-[11px] text-white/80">Today&apos;s Points: <span className="font-bold text-white">{rewardTodayPoints.toLocaleString()}</span></span>
-              </div>
-            </div>
-
-            {/* Wallet info */}
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">My 1-Wallet</span>
-              <span className="text-base font-bold text-white">
-              {/*N${(profile.savingsGoal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}*/}
-              Balance: N$ 3,000
-              </span>
-
-              <span className="text-base font-bold text-white/80">
-              Available: N$ 1,500
-              </span>
-              <button
-                onClick={() => { setShowTransfer(true); setTransferMethod(""); setTransferInput(""); }}
-                className="mt-1.5 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-              >
-                ⇄ Quick Transfer
-              </button>
-              {/*accountBalance ? (
-                <>
-                  <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
-                    Income N${accountBalance.allocated.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                  {accountBalance.budgeted > 0 && (
-                    <span className="text-xs font-semibold text-orange-500">
-                      Budgeted N${accountBalance.budgeted.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  )}
-                  {accountBalance.spent > 0 && (
-                    <span className="text-xs font-semibold text-red-500">
-                      Spent N${accountBalance.spent.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                    </span>
-                  )}
-                  <span className={`text-sm font-bold ${Math.max(0, accountBalance.allocated - accountBalance.budgeted - accountBalance.spent) === 0 ? "text-gray-400" : "text-blue-600 dark:text-blue-400"}`}>
-                    Available N${Math.max(0, accountBalance.allocated - accountBalance.budgeted - accountBalance.spent).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </>
-              ) : (
-                <>
-                  <span className="text-sm font-bold text-gray-900 dark:text-white mt-0.5">
-                    Balance N${(profile.monthlyIncome || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                  <span className="text-sm font-bold text-blue-600 dark:text-blue-400">
-                    Available N${Math.max(0, (profile.monthlyIncome || 0) - totalExpenses).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </span>
-                </>
-              )}*/}
-            </div>
-
-            {/* Profile dropdown */}
-            <div className="relative" ref={profileDropdownRef}>
-              <button
-                onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center gap-1 p-2 rounded-full hover:bg-white/10 transition-colors"
-                aria-expanded={profileDropdownOpen}
-                aria-haspopup="true"
-              >
-                <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
-                  <User className="h-5 w-5 text-white" />
-                </div>
-                <ChevronDown className={`h-4 w-4 text-white/70 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} />
-              </button>
-
-              {profileDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-48 py-1 rounded-lg border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 shadow-lg z-50">
-                  <div className="px-4 py-2 border-b border-gray-100 dark:border-gray-700">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">Hi, {firstName}</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{profile?.email}</p>
-                  </div>
-                  <Link
-                    href="/profile"
-                    onClick={() => setProfileDropdownOpen(false)}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
-                  >
-                    <User className="h-4 w-4" />
-                    Profile
-                  </Link>
-
-                  <button
-                    onClick={() => {
-                      setProfileDropdownOpen(false);
-                      logout();
-                    }}
-                    className="flex items-center gap-2 w-full px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20"
-                  >
-                    <LogOut className="h-4 w-4" />
-                    Log out
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-        </div>
-      </div>
-
-
-
       {/* Calendar */}
       <div className="flex justify-center">
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 w-full">
@@ -1273,76 +1077,6 @@ export default function Dashboard() {
         </div>
       )}
 
-      {/* ── Quick Transfer modal ── */}
-      {showTransfer && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
-          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
-            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Quick Transfer</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">How would you like to send?</p>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Send to</label>
-                <select
-                  value={transferMethod}
-                  onChange={(e) => { setTransferMethod(e.target.value); setTransferInput(""); }}
-                  className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
-                >
-                  <option value="">— Select option —</option>
-                  <option value="number">Enter number</option>
-                  <option value="contact">Select from contact list</option>
-                </select>
-              </div>
-
-              {transferMethod === "number" && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Phone / Account number</label>
-                  <input
-                    autoFocus
-                    type="text"
-                    value={transferInput}
-                    onChange={(e) => setTransferInput(e.target.value)}
-                    placeholder="e.g. +264 81 234 5678"
-                    className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
-                  />
-                </div>
-              )}
-
-              {transferMethod === "contact" && (
-                <div>
-                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">Contact</label>
-                  <select
-                    autoFocus
-                    value={transferInput}
-                    onChange={(e) => setTransferInput(e.target.value)}
-                    className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
-                  >
-                    <option value="">— Select contact —</option>
-                    {/* Contact list to be populated */}
-                  </select>
-                  <p className="text-[11px] text-gray-400 mt-1.5 italic">No contacts saved yet.</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex gap-3 mt-6">
-              <button
-                disabled={!transferMethod || (transferMethod === "number" && !transferInput.trim())}
-                onClick={() => setShowTransfer(false)}
-                className="flex-1 py-2.5 bg-[#2f6064] hover:bg-[#254e52] disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
-              >
-                Confirm
-              </button>
-              <button
-                onClick={() => setShowTransfer(false)}
-                className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-colors"
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
