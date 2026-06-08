@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { UserProfile, Asset, MembershipTier } from "@/types";
 import { storage } from "@/lib/storage";
+import { computePooledIncome, computePooledExpenses } from "@/lib/budgetTotals";
 import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, Shield, Crown, Building2, Gem, Check } from "lucide-react";
 import Link from "next/link";
 import {
@@ -62,7 +63,10 @@ export default function Dashboard() {
   }>({ income: [], expenses: [], assets: [], liabilities: [] });
 
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
-  const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; Income: number; Expenses: number; Surplus: number }[]>([]);
+  const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; Income: number; Expenses: number }[]>([]);
+  const [pooledIncome, setPooledIncome] = useState(0);
+  const [selectedIncomeMonthIndex, setSelectedIncomeMonthIndex] = useState(0);
+  const [incomeChartView, setIncomeChartView] = useState<"month" | "trend">("month");
   const [moodDates, setMoodDates] = useState<Set<string>>(new Set());
   const [budgetDates, setBudgetDates] = useState<Set<string>>(new Set());
   const [earnDates, setEarnDates] = useState<Set<string>>(new Set());
@@ -181,6 +185,10 @@ export default function Dashboard() {
         liabilities: liabilitiesForCharts,
       });
 
+      const monthlyIncomeTotal = computePooledIncome(incomeForCharts, userProfile);
+      const monthlyExpensesTotal = computePooledExpenses(expensesForCharts, userProfile);
+      setPooledIncome(monthlyIncomeTotal);
+
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
       const monthlyExpenses = expenses
@@ -263,24 +271,18 @@ export default function Dashboard() {
         .map((type) => ({ type: typeLabels[type] ?? type, total: typeTotals.get(type) ?? 0 }));
       setAccountTypeBalances(balances);
 
-      // Build last-6-months data for the Income Statement line chart
+      // Build last 6 months for the Income Statement chart (current month first)
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
       const now = new Date();
       const chartMonths = Array.from({ length: 6 }, (_, i) => {
-        const d = new Date(now.getFullYear(), now.getMonth() - (5 - i), 1);
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         return { year: d.getFullYear(), month: d.getMonth(), label: `${monthNames[d.getMonth()]} ${d.getFullYear()}` };
       });
-      // Prefer the live sum of all income-source rows; fall back to the profile cached value
-      const monthlyInc =
-        incomeRows.length > 0
-          ? incomeRows.reduce((sum, i) => sum + (i.personal || 0), 0)
-          : (userProfile.monthlyIncome || userProfile.lastIncome || 0);
-      const chartData = chartMonths.map(({ year, month: m, label }) => {
-        const exp = expenses
-          .filter(e => { const d = new Date(e.date); return d.getMonth() === m && d.getFullYear() === year; })
-          .reduce((s, e) => s + e.amount, 0);
-        return { month: label, Income: monthlyInc, Expenses: exp, Surplus: monthlyInc - exp };
-      });
+      const chartData = chartMonths.map(({ label }) => ({
+        month: label,
+        Income: monthlyIncomeTotal,
+        Expenses: monthlyExpensesTotal,
+      }));
       setMonthlyChartData(chartData);
 
       const totalDebtAmount = debts.reduce((sum, debt) => sum + debt.remainingAmount, 0);
@@ -352,7 +354,7 @@ export default function Dashboard() {
     );
   }
 
-  const monthlyIncome = profile.monthlyIncome || 0;
+  const monthlyIncome = pooledIncome;
   const availableAfterExpenses = monthlyIncome - totalExpenses - monthlyMinimumPayments;
   const savingsRate = monthlyIncome > 0 ? (availableAfterExpenses / monthlyIncome) * 100 : 0;
 
@@ -976,37 +978,87 @@ export default function Dashboard() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
 
-            {/* 1 — Monthly Income Statement Summary (Line Chart) */}
+            {/* 1 — Monthly Income Statement Summary */}
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-green-600" />
-                Monthly Income Statement Summary
-              </h3>
-              {/*<p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Income · Expenses · Surplus — last 6 months</p>*/}
-              {monthlyChartData.length > 0 ? (
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={monthlyChartData} margin={{ top: 10, right: 30, left: 20, bottom: 20 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                    <XAxis dataKey="month" tick={{ fontSize: 11, fill: '#6b7280' }} axisLine={false} tickLine={false} padding={{ left: 20, right: 20 }} />
-                    <YAxis
-                      tick={{ fontSize: 11, fill: '#6b7280' }}
-                      tickFormatter={(v) => `N$${Math.abs(v).toLocaleString()}`}
-                      axisLine={false}
-                      tickLine={false}
-                      padding={{ top: 20, bottom: 10 }}
-                    />
-                    <ReTooltip
-                      formatter={(value: number | undefined, name: string | undefined) => [
-                        `N$${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                        name ?? '',
-                      ]}
-                    />
-                    <ReLegend verticalAlign="bottom" />
-                    <Line type="monotone" dataKey="Income" stroke="#92d050" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="Expenses" stroke="#ff0000" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                    <Line type="monotone" dataKey="Surplus" stroke="#3b82f6" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} strokeDasharray="5 3" />
-                  </LineChart>
-                </ResponsiveContainer>
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                  Monthly Income Statement Summary
+                </h3>
+                {monthlyChartData.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="flex rounded-lg border border-gray-200 dark:border-gray-600 overflow-hidden">
+                      <button
+                        type="button"
+                        onClick={() => setIncomeChartView("month")}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          incomeChartView === "month"
+                            ? "bg-[#2f6064] text-white"
+                            : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        Single month
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setIncomeChartView("trend")}
+                        className={`px-3 py-1.5 text-xs font-medium transition-colors ${
+                          incomeChartView === "trend"
+                            ? "bg-[#2f6064] text-white"
+                            : "bg-white dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        6-month trend
+                      </button>
+                    </div>
+                    {incomeChartView === "month" && (
+                      <select
+                        value={selectedIncomeMonthIndex}
+                        onChange={(e) => setSelectedIncomeMonthIndex(Number(e.target.value))}
+                        className="px-3 py-1.5 text-xs font-medium border border-gray-200 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
+                      >
+                        {monthlyChartData.map((d, i) => (
+                          <option key={d.month} value={i}>
+                            {i === 0 ? `This month (${d.month})` : d.month}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
+                )}
+              </div>
+              {monthlyChartData.some((d) => d.Income > 0 || d.Expenses > 0) ? (
+                <div className="w-full min-h-[300px]">
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart
+                      data={
+                        incomeChartView === "month"
+                          ? [monthlyChartData[selectedIncomeMonthIndex] ?? monthlyChartData[0]]
+                          : [...monthlyChartData].reverse()
+                      }
+                      margin={{ top: 10, right: 30, left: 20, bottom: 20 }}
+                    >
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                      <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} padding={{ left: 20, right: 20 }} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: "#6b7280" }}
+                        tickFormatter={(v) => `N$${Math.abs(v).toLocaleString()}`}
+                        axisLine={false}
+                        tickLine={false}
+                        padding={{ top: 20, bottom: 10 }}
+                      />
+                      <ReTooltip
+                        formatter={(value: number | undefined, name: string | undefined) => [
+                          `N$${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                          name ?? "",
+                        ]}
+                      />
+                      <ReLegend verticalAlign="bottom" />
+                      <Line type="monotone" dataKey="Income" stroke="#92d050" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                      <Line type="monotone" dataKey="Expenses" stroke="#ff0000" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
               ) : (
                 <div className="h-[300px] flex items-center justify-center text-gray-400 dark:text-gray-500">
                   No data available yet

@@ -22,7 +22,6 @@ const NAVIGATE_ONLY: GamificationTaskId[] = [
   "expense-log",
   "monthly-budget-update",
   "monthly-expenses-update",
-  "connect-transunion-astute",
   "appoint-financial-advisor",
 ];
 

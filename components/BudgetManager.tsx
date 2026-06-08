@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { UserProfile, Income, RegistrationExpense } from "@/types";
 import { storage } from "@/lib/storage";
+import { computePooledIncome, computePooledExpenses } from "@/lib/budgetTotals";
 import {
   Wallet,
   AlertCircle,
@@ -753,14 +754,8 @@ export default function BudgetManager() {
     );
   }
 
-  const pooledIncome =
-    onboardingIncome.length > 0
-      ? onboardingIncome.reduce((sum, i) => sum + (Number(i.personal) || 0), 0)
-      : (profile?.monthlyIncome ?? 0);
-  const pooledExpenses =
-    onboardingExpenses.length > 0
-      ? onboardingExpenses.reduce((sum, e) => sum + (Number(e.personal) || 0), 0)
-      : (profile?.lastExpenses ?? 0);
+  const pooledIncome = computePooledIncome(onboardingIncome, profile);
+  const pooledExpenses = computePooledExpenses(onboardingExpenses, profile);
 
   const monthlyIncome = pooledIncome;
   const budgetTarget = monthlyIncome * 0.8;
