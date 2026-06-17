@@ -3,31 +3,9 @@
 import { useMemo, useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
-import {
-  Clock3,
-  MapPin,
-  Star,
-  Languages,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Clock3, ChevronLeft, ChevronRight } from "lucide-react";
 
-const COUNSELOR = {
-  id: "sarah-mitchell",
-  name: "Paul Gordon",
-  title: "Certified Financial Planner",
-  specialty: "Debt Management & Budgeting",
-  bio: "Practical debt payoff plans and realistic monthly budgeting support.",
-  about:
-    "Sarah helps clients reduce financial stress by creating simple debt and budget systems they can actually keep up with.",
-  experienceYears: 8,
-  languages: ["English"],
-  location: "Windhoek",
-  availability: ["Mon 09:00", "Wed 14:00", "Fri 10:30"],
-  rating: 4.8,
-  sessionsCompleted: 420,
-  image: "https://media.licdn.com/dms/image/v2/C4D03AQFQ7dKHbZ5X5Q/profile-displayphoto-shrink_400_400/profile-displayphoto-shrink_400_400/0/1623755417810?e=1781136000&v=beta&t=dqM0SWfFBdnT9kFMf8yUEXWQM67QYV4-8WDp5-8tkdI",
-};
+const AVAILABILITY = ["Mon 09:00", "Wed 14:00", "Fri 10:30"];
 
 const WEEKDAY_TO_INDEX: Record<string, number> = {
   Sun: 0,
@@ -68,8 +46,6 @@ const getNextDateForWeekday = (weekday: number) => {
 };
 
 export default function BookFinancialSessionPage() {
-  const counselor = COUNSELOR;
-
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const now = new Date();
     return new Date(now.getFullYear(), now.getMonth(), 1);
@@ -84,7 +60,7 @@ export default function BookFinancialSessionPage() {
 
   const availabilityByWeekday = useMemo(() => {
     const map = new Map<number, string[]>();
-    counselor.availability.forEach((slot) => {
+    AVAILABILITY.forEach((slot) => {
       const [dayLabel, time] = slot.split(" ");
       const weekday = WEEKDAY_TO_INDEX[dayLabel];
       if (weekday === undefined || !time) return;
@@ -92,7 +68,7 @@ export default function BookFinancialSessionPage() {
       map.set(weekday, [...existing, time]);
     });
     return map;
-  }, [counselor.availability]);
+  }, []);
 
   const monthDays = useMemo(() => {
     const year = visibleMonth.getFullYear();
@@ -123,29 +99,27 @@ export default function BookFinancialSessionPage() {
 
   const weeklySlots = useMemo(
     () =>
-      counselor.availability
-        .map((slot) => {
-          const [dayLabel, time] = slot.split(" ");
-          const weekday = WEEKDAY_TO_INDEX[dayLabel];
-          if (weekday === undefined || !time) return null;
-          const nextDate = getNextDateForWeekday(weekday);
-          return {
-            key: slot,
-            dayLabel,
-            time,
-            endTime: addMinutes(time, 20),
-            nextDate: toISODate(nextDate),
-          };
-        })
-        .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot)),
-    [counselor.availability],
+      AVAILABILITY.map((slot) => {
+        const [dayLabel, time] = slot.split(" ");
+        const weekday = WEEKDAY_TO_INDEX[dayLabel];
+        if (weekday === undefined || !time) return null;
+        const nextDate = getNextDateForWeekday(weekday);
+        return {
+          key: slot,
+          dayLabel,
+          time,
+          endTime: addMinutes(time, 20),
+          nextDate: toISODate(nextDate),
+        };
+      }).filter((slot): slot is NonNullable<typeof slot> => Boolean(slot)),
+    [],
   );
 
   const todayDayLabel = WEEKDAY_LABELS[new Date().getDay()];
   const todaySlots = weeklySlots.filter((slot) => slot.dayLabel === todayDayLabel);
 
   const openBookingPopup = (date: string, time: string) => {
-    const meetingId = `${counselor.id}-${date}-${time}`.replace(/[^a-zA-Z0-9]/g, "");
+    const meetingId = `financial-session-${date}-${time}`.replace(/[^a-zA-Z0-9]/g, "");
     const teamsLink = `https://teams.microsoft.com/l/meetup-join/${meetingId}`;
     setBookingPopup({ date, time, link: teamsLink });
   };
@@ -154,41 +128,23 @@ export default function BookFinancialSessionPage() {
     <ProtectedRoute>
       <AppLayout>
         <div className="space-y-6">
-          <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-            <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
-              <img
-                src={counselor.image}
-                alt={counselor.name}
-                className="h-20 w-20 rounded-full object-cover"
-              />
-              <div className="space-y-2">
-                <h1 className="text-2xl font-bold text-gray-900 dark:text-white">{counselor.name}</h1>
-                <p className="text-sm font-medium text-blue-600 dark:text-blue-400">{counselor.title}</p>
-                <p className="text-sm text-gray-600 dark:text-gray-300">{counselor.about}</p>
-                <div className="flex flex-wrap gap-2 text-xs text-gray-600 dark:text-gray-300">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 dark:bg-gray-700">
-                    <Star className="h-3.5 w-3.5" /> {counselor.rating}/5
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 dark:bg-gray-700">
-                    <MapPin className="h-3.5 w-3.5" /> {counselor.location}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 dark:bg-gray-700">
-                    <Languages className="h-3.5 w-3.5" /> {counselor.languages.join(", ")}
-                  </span>
-                  <span className="inline-flex items-center gap-1 rounded-full bg-gray-100 px-2.5 py-1 dark:bg-gray-700">
-                    {counselor.sessionsCompleted}+ sessions
-                  </span>
-                </div>
-              </div>
-            </div>
-          </section>
+          <div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+              Book Financial Planning Session
+            </h1>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              Choose an available time slot below.
+            </p>
+          </div>
 
           <section className="grid grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-1">
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Availability</h2>
 
               <div className="mt-4">
-                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Today ({todayDayLabel})</h3>
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">
+                  Today ({todayDayLabel})
+                </h3>
                 <div className="mt-2 space-y-2">
                   {todaySlots.length > 0 ? (
                     todaySlots.map((slot) => (
@@ -369,7 +325,7 @@ export default function BookFinancialSessionPage() {
               <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-800">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Session booked</h3>
                 <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
-                  Your 20-minute session with {counselor.name} is confirmed for {bookingPopup.date} at{" "}
+                  Your 20-minute financial planning session is confirmed for {bookingPopup.date} at{" "}
                   {bookingPopup.time}.
                 </p>
                 <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">

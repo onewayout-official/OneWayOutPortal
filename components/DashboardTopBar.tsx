@@ -113,7 +113,7 @@ export default function DashboardTopBar() {
           <div className="flex items-center gap-3">
             <div className="flex flex-col gap-0.5">
               <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">MY 1-Community Savings</span>
-              <span className="text-base font-bold text-white">N$ 3,000</span>
+              <span className="text-base font-bold text-white">R 3,000</span>
             </div>
             <Link
               href="/consent"
@@ -156,9 +156,9 @@ export default function DashboardTopBar() {
 
             <div className="flex flex-col items-end">
               <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">My 1-Wallet</span>
-              <span className="text-base font-bold text-white">Balance: N$ 3,000</span>
+              <span className="text-base font-bold text-white">Balance: R 3,000</span>
               <span className="text-base font-bold text-white/80">
-                Available: N${availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                Available: R{availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </span>
               <button
                 onClick={() => { setShowTransfer(true); setTransferMethod(""); setTransferInput(""); }}

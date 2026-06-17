@@ -164,7 +164,7 @@ export default function IncomeView() {
                             <div>
                                 <p className="text-sm text-blue-600 dark:text-blue-300 font-medium">Income by Type</p>
                                 <p className="text-xl font-bold text-blue-700 dark:text-blue-100 mt-1">
-                                    N${totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    R{totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                             </div>
                             <DollarSign className="h-8 w-8 text-blue-500 opacity-50" />
@@ -176,7 +176,7 @@ export default function IncomeView() {
                             <div>
                                 <p className="text-sm text-green-600 dark:text-green-300 font-medium">Combined Income</p>
                                 <p className="text-xl font-bold text-green-700 dark:text-green-100 mt-1">
-                                    N${totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                    R{totalIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                 </p>
                             </div>
                             <TrendingUp className="h-8 w-8 text-green-500 opacity-50" />
@@ -228,7 +228,7 @@ export default function IncomeView() {
                                             <span className="font-medium text-gray-900 dark:text-white">{item.name || "-"}</span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <span className="text-gray-900 dark:text-white font-semibold">N${(item.personal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                            <span className="text-gray-900 dark:text-white font-semibold">R{(item.personal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <span className="inline-flex items-center px-3 py-1 rounded-lg bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-200 font-bold">
@@ -256,7 +256,7 @@ export default function IncomeView() {
                                     </th>
                                     <td className="px-6 py-4 text-right">
                                         <span className="text-base font-bold text-blue-600 dark:text-blue-400">
-                                            N${totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            R{totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-right">
@@ -446,7 +446,7 @@ export default function IncomeView() {
                                         <p className="text-xs text-gray-500 dark:text-gray-400">{item.name || item.source}</p>
                                     </div>
                                     <div>
-                                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Amount (N$)</label>
+                                        <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Amount (R)</label>
                                         <input
                                             type="number"
                                             min={0}

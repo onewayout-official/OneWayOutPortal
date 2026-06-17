@@ -181,7 +181,7 @@ function IconCard({
   const Icon = ICONS[item.key] || Wallet;
   const title =
     item.amount != null
-      ? `${item.label}: N$${item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      ? `${item.label}: R${item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : item.label;
 
   return (
@@ -208,7 +208,7 @@ function IconCard({
       )}
       {item.amount != null && item.amount > 0 && (
         <span className="text-[10px] text-gray-500 dark:text-gray-400 font-medium mt-0.5">
-          N${item.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          R{item.amount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </span>
       )}
       {liveAmount != null && (
@@ -226,7 +226,7 @@ function IconCard({
           }`}
         >
           {liveAmountLabel ? `${liveAmountLabel}: ` : ""}
-          N${liveAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+          R{liveAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </span>
       )}
     </div>
@@ -836,7 +836,7 @@ export default function BudgetManager() {
                       <span className="text-xs font-semibold text-gray-900 dark:text-white">My 1-Wallet</span>
                       <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Available balance</span>
                       <span className={`text-sm font-bold ${c.text}`}>
-                        N${availableWalletBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        R{availableWalletBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                       </span>
                     </div>
                   </div>
@@ -895,32 +895,32 @@ export default function BudgetManager() {
                           </div>
                           {getAccountIncome(acc.id) > 0 && (
                             <span className={`text-[10px] font-medium ${c.text}`}>
-                              +N${getAccountIncome(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                              +R{getAccountIncome(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                             </span>
                           )}
                           {getAccountTransferIn(acc.id) > 0 && (
                             <span className="text-[10px] font-medium text-emerald-600">
-                              +N${getAccountTransferIn(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} transfer in
+                              +R{getAccountTransferIn(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} transfer in
                             </span>
                           )}
                           {getAccountTransferOut(acc.id) > 0 && (
                             <span className="text-[10px] font-medium text-amber-600">
-                              −N${getAccountTransferOut(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} transfer out
+                              −R{getAccountTransferOut(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} transfer out
                             </span>
                           )}
                           {getAccountExpenses(acc.id) > 0 && (
                             <span className="text-[10px] font-medium text-red-500">
-                              −N${getAccountExpenses(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} spent
+                              −R{getAccountExpenses(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} spent
                             </span>
                           )}
                           {getAccountAllocated(acc.id) > 0 && (
                             <span className="text-[10px] font-medium text-orange-500">
-                              −N${getAccountAllocated(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} 
+                              −R{getAccountAllocated(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} 
                             </span>
                           )}
                           {getAccountIncome(acc.id) > 0 && (
                             <span className={`text-[10px] font-bold border-t border-gray-200 dark:border-gray-600 pt-0.5 mt-0.5 ${total < 0 ? "text-red-600" : "text-gray-700 dark:text-gray-200"}`}>
-                              N${total.toLocaleString(undefined, { maximumFractionDigits: 0 })} left
+                              R{total.toLocaleString(undefined, { maximumFractionDigits: 0 })} left
                             </span>
                           )}
                         </div>
@@ -939,13 +939,13 @@ export default function BudgetManager() {
                             <div
                               key={inc.id}
                               className={`rounded-lg border px-2 py-1.5 text-center ${c.bg} ${c.border}`}
-                              title={`${inc.category ?? inc.label}: N$${getIncomeAmountForAccount(inc).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                              title={`${inc.category ?? inc.label}: R${getIncomeAmountForAccount(inc).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
                             >
                               <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight block truncate">
                                 {inc.category ?? inc.label}
                               </span>
                               <span className={`text-[12px] font-semibold ${c.text}`}>
-                                +N${getIncomeAmountForAccount(inc).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                +R{getIncomeAmountForAccount(inc).toLocaleString(undefined, { maximumFractionDigits: 0 })}
                               </span>
                             </div>
                           ))}
@@ -1004,7 +1004,7 @@ export default function BudgetManager() {
               <div className="flex items-center gap-3">
                 {pooledIncome > 0 && (
                   <span className="text-sm font-semibold text-[#2f6064]">
-                    Total: N${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    Total: R{pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 )}
                 <button
@@ -1048,7 +1048,7 @@ export default function BudgetManager() {
               <div className="flex items-center gap-3">
                 {pooledExpenses > 0 && (
                   <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
-                    Total: N${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    Total: R{pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 )}
                 <button
@@ -1112,25 +1112,25 @@ export default function BudgetManager() {
               <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
                 <div className="text-sm text-gray-500">Income (onboarding)</div>
                 <div className="text-xl font-bold text-[#2f6064]">
-                  N${pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  R{pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
               <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
                 <div className="text-sm text-gray-500">Planned expenses (onboarding)</div>
                 <div className="text-xl font-bold">
-                  N${pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  R{pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
               <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
                 <div className="text-sm text-gray-500">Spent this month</div>
                 <div className={`text-xl font-bold ${plannedBalance < 0 ? "text-red-600 dark:text-red-400" : ""}`}>
-                  N${totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  R{totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
               <div className="p-4 bg-gray-50 dark:bg-gray-900/20 rounded">
                 <div className="text-sm text-gray-500">Balance</div>
                 <div className={`text-xl font-bold ${plannedBalance < 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
-                  N${plannedBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  R{plannedBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
             </div>
@@ -1183,7 +1183,7 @@ export default function BudgetManager() {
             </p>
 
             <div className="relative mb-5">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">N$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">R</span>
               <input
                 autoFocus
                 type="number"
@@ -1199,7 +1199,7 @@ export default function BudgetManager() {
 
             {allocModal.existing > 0 && (
               <p className="text-xs text-gray-400 mb-4">
-                Currently budgeted: N${allocModal.existing.toLocaleString(undefined, { minimumFractionDigits: 2 })}. Enter 0 to remove.
+                Currently budgeted: R{allocModal.existing.toLocaleString(undefined, { minimumFractionDigits: 2 })}. Enter 0 to remove.
               </p>
             )}
 
@@ -1272,7 +1272,7 @@ export default function BudgetManager() {
                 Monthly Budget Amount
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">N$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">R</span>
                 <input
                   type="number"
                   min="0"
@@ -1356,7 +1356,7 @@ export default function BudgetManager() {
                 Monthly Budget Amount
               </label>
               <div className="relative">
-                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">N$</span>
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">R</span>
                 <input
                   type="number"
                   min="0"
@@ -1413,7 +1413,7 @@ export default function BudgetManager() {
             )}
 
             <div className="relative mb-5">
-              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">N$</span>
+              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-semibold text-gray-500">R</span>
               <input
                 autoFocus
                 type="number"
@@ -1429,7 +1429,7 @@ export default function BudgetManager() {
 
             {transferModal.existing > 0 && (
               <p className="text-xs text-gray-400 mb-4">
-                Current flow amount: N${transferModal.existing.toLocaleString(undefined, { minimumFractionDigits: 2 })}. Enter 0 to remove.
+                Current flow amount: R{transferModal.existing.toLocaleString(undefined, { minimumFractionDigits: 2 })}. Enter 0 to remove.
               </p>
             )}
 

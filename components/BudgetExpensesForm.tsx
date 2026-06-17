@@ -148,7 +148,7 @@ export default function BudgetExpensesForm({
                 <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Category</th>
                 <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Type</th>
                 <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Name</th>
-                <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Amount (N$)</th>
+                <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Amount (R)</th>
                 <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Total</th>
                 <th className="text-left py-2 px-2 text-sm font-bold text-gray-700 dark:text-gray-300">Points</th>
               </tr>
@@ -186,7 +186,7 @@ export default function BudgetExpensesForm({
                     />
                   </td>
                   <td className="py-2 px-2 text-sm text-gray-900 dark:text-white font-medium whitespace-normal">
-                    N$
+                    R
                     {(entry.personal || 0).toLocaleString(undefined, {
                       minimumFractionDigits: 2,
                       maximumFractionDigits: 2,
@@ -206,7 +206,7 @@ export default function BudgetExpensesForm({
             <div className="text-center">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Fixed</span>
               <div className="text-lg font-bold text-red-600 dark:text-red-400">
-                N$
+                R
                 {totalFixed.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
@@ -216,7 +216,7 @@ export default function BudgetExpensesForm({
             <div className="text-center">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Variable</span>
               <div className="text-lg font-bold text-orange-600 dark:text-orange-400">
-                N$
+                R
                 {totalVariable.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
@@ -230,7 +230,7 @@ export default function BudgetExpensesForm({
             <div className="text-center">
               <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Total Expenses</span>
               <div className="text-lg font-bold text-blue-600 dark:text-blue-400">
-                N$
+                R
                 {totalExpenses.toLocaleString(undefined, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
@@ -327,7 +327,7 @@ export default function BudgetExpensesForm({
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (N$)</label>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount (R)</label>
                 <input
                   type="number"
                   value={newExpense.personal || ""}

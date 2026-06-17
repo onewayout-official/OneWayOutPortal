@@ -299,7 +299,7 @@ export default function ExpenseList() {
                 <div>
                   <p className="text-sm text-blue-600 dark:text-blue-300 font-medium">Personal Expenses</p>
                   <p className="text-xl font-bold text-blue-700 dark:text-blue-100 mt-1">
-                    N${totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    R{totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <Wallet className="h-8 w-8 text-blue-500 opacity-50" />
@@ -311,7 +311,7 @@ export default function ExpenseList() {
                 <div>
                   <p className="text-sm text-red-600 dark:text-red-300 font-medium">Total Expenses</p>
                   <p className="text-xl font-bold text-red-700 dark:text-red-100 mt-1">
-                    N${totalOnboarding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    R{totalOnboarding.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <TrendingDown className="h-8 w-8 text-red-500 opacity-50" />
@@ -363,7 +363,7 @@ export default function ExpenseList() {
                           <span className="font-medium text-gray-900 dark:text-white">{item.name || "-"}</span>
                         </td>
                         <td className="px-6 py-4 text-right">
-                          <span className="text-gray-900 dark:text-white font-semibold">N${(item.personal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                          <span className="text-gray-900 dark:text-white font-semibold">R{(item.personal || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                         </td>
                         
                         <td className="px-6 py-4 text-right">
@@ -383,7 +383,7 @@ export default function ExpenseList() {
                       </th>
                       <td className="px-6 py-4 text-right">
                         <span className="text-base font-bold text-blue-600 dark:text-blue-400">
-                          N${totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          R{totalPersonal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </span>
                       </td>
                       <td className="px-6 py-4 text-right">
@@ -564,7 +564,7 @@ export default function ExpenseList() {
                     <p className="text-xs text-gray-500 dark:text-gray-400">{item.name || item.expenseType}</p>
                   </div>
                   <div>
-                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Amount (N$)</label>
+                    <label className="block text-xs text-gray-500 dark:text-gray-400 mb-1">Amount (R)</label>
                     <input
                       type="number"
                       min={0}

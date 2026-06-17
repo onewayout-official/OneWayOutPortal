@@ -490,7 +490,7 @@ export default function FinancialInsights() {
 
   const totalLiabilities = liabilityEntries.reduce((s, e) => s + (e.personal || 0), 0);
 
-  const fmt = (n: number) => `N$${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const fmt = (n: number) => `R${n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
   // ─── Landing screen (before start) ──────────────────────────────────
 

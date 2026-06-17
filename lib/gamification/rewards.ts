@@ -125,7 +125,7 @@ export const rewards = {
     return parseSpin(data as Record<string, unknown>);
   },
 
-  /** Wallet available balance (N$) — sum of earned reward points ÷ 100, same as DashboardTopBar. */
+  /** Wallet available balance (R) — sum of earned reward points ÷ 100, same as DashboardTopBar. */
   getAvailableWalletBalance: async (): Promise<number> => {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;

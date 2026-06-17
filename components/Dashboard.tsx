@@ -4,6 +4,8 @@ import { useState, useEffect } from "react";
 import { UserProfile, Asset, MembershipTier } from "@/types";
 import { storage } from "@/lib/storage";
 import { computePooledIncome, computePooledExpenses } from "@/lib/budgetTotals";
+import { computeAccountTypeBalances } from "@/lib/budgetAccountBalances";
+import { rewards } from "@/lib/gamification/rewards";
 import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, Shield, Crown, Building2, Gem, Check } from "lucide-react";
 import Link from "next/link";
 import {
@@ -217,58 +219,16 @@ export default function Dashboard() {
         setAccountBalance(null);
       }
 
-      // Mirror BudgetManager account balance math by account type:
-      // income + transfer in - transfer out - spent - budgeted
-      const incomeById = new Map(incomeRows.map((i) => [i.id, Number(i.personal) || 0]));
-      const incomeByAccount = new Map<string, number>();
-      for (const alloc of incomeAllocations) {
-        const baseAmount = incomeById.get(alloc.incomeId) ?? 0;
-        const flowAmount = alloc.amount > 0 ? alloc.amount : baseAmount;
-        incomeByAccount.set(alloc.accountId, (incomeByAccount.get(alloc.accountId) ?? 0) + flowAmount);
-      }
-
-      const budgetedByAccount = new Map<string, number>();
-      for (const alloc of accountExpenseAllocations) {
-        budgetedByAccount.set(alloc.accountId, (budgetedByAccount.get(alloc.accountId) ?? 0) + (alloc.amount || 0));
-      }
-
-      const spentByAccount = new Map<string, number>();
-      for (const exp of expenses) {
-        const d = new Date(exp.date);
-        if (d.getMonth() === currentMonth && d.getFullYear() === currentYear && exp.accountId) {
-          spentByAccount.set(exp.accountId, (spentByAccount.get(exp.accountId) ?? 0) + (exp.amount || 0));
-        }
-      }
-
-      const transferOutByAccount = new Map<string, number>();
-      const transferInByAccount = new Map<string, number>();
-      for (const t of accountTransfers) {
-        transferOutByAccount.set(t.fromAccountId, (transferOutByAccount.get(t.fromAccountId) ?? 0) + (t.amount || 0));
-        transferInByAccount.set(t.toAccountId, (transferInByAccount.get(t.toAccountId) ?? 0) + (t.amount || 0));
-      }
-
-      const typeTotals = new Map<string, number>();
-      for (const acc of loadedAccounts) {
-        const total =
-          (incomeByAccount.get(acc.id) ?? 0) +
-          (transferInByAccount.get(acc.id) ?? 0) -
-          (transferOutByAccount.get(acc.id) ?? 0) -
-          (spentByAccount.get(acc.id) ?? 0) -
-          (budgetedByAccount.get(acc.id) ?? 0);
-        typeTotals.set(acc.accountType, (typeTotals.get(acc.accountType) ?? 0) + total);
-      }
-
-      const orderedTypes = ["cash", "bank", "investment", "savings", "wallet"];
-      const typeLabels: Record<string, string> = {
-        cash: "Cash",
-        bank: "Bank",
-        investment: "Investment",
-        savings: "Savings",
-        wallet: "Wallet",
-      };
-      const balances = orderedTypes
-        .filter((type) => typeTotals.has(type))
-        .map((type) => ({ type: typeLabels[type] ?? type, total: typeTotals.get(type) ?? 0 }));
+      const walletBalance = await rewards.getAvailableWalletBalance();
+      const balances = computeAccountTypeBalances({
+        userAccounts: loadedAccounts,
+        income: incomeRows,
+        incomeAllocations,
+        accountExpenseAllocations,
+        accountTransfers,
+        expenses,
+        walletBalance,
+      });
       setAccountTypeBalances(balances);
 
       // Build last 6 months for the Income Statement chart (current month first)
@@ -936,7 +896,7 @@ export default function Dashboard() {
             >
               <p className="text-sm text-gray-600 dark:text-gray-400">{b.type}</p>
               <p className={`text-xl font-bold ${b.total < 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}>
-                N${b.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                R{b.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           ))}
@@ -947,7 +907,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Capital / Assets</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    N${(profile.capital || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    R{(profile.capital || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-green-600" />
@@ -961,7 +921,7 @@ export default function Dashboard() {
                 <div>
                   <p className="text-sm text-gray-600 dark:text-gray-400">Total Debts</p>
                   <p className="text-2xl font-bold text-orange-600">
-                    N${totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    R{totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <TrendingDown className="h-8 w-8 text-orange-600" />
@@ -1042,14 +1002,14 @@ export default function Dashboard() {
                       <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} padding={{ left: 20, right: 20 }} />
                       <YAxis
                         tick={{ fontSize: 11, fill: "#6b7280" }}
-                        tickFormatter={(v) => `N$${Math.abs(v).toLocaleString()}`}
+                        tickFormatter={(v) => `R${Math.abs(v).toLocaleString()}`}
                         axisLine={false}
                         tickLine={false}
                         padding={{ top: 20, bottom: 10 }}
                       />
                       <ReTooltip
                         formatter={(value: number | undefined, name: string | undefined) => [
-                          `N$${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                          `R${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
                           name ?? "",
                         ]}
                       />
@@ -1098,13 +1058,13 @@ export default function Dashboard() {
                       <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
                       <YAxis
                         tick={{ fontSize: 11, fill: '#6b7280' }}
-                        tickFormatter={(v) => `N$${Math.abs(v).toLocaleString()}`}
+                        tickFormatter={(v) => `R${Math.abs(v).toLocaleString()}`}
                         axisLine={false}
                         tickLine={false}
                       />
                       <ReTooltip
                         formatter={(value: number | undefined) =>
-                          [`N$${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, '']
+                          [`R${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, '']
                         }
                         cursor={{ fill: 'rgba(0,0,0,0.04)' }}
                       />
