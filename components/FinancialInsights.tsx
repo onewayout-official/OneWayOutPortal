@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { storage } from "@/lib/storage";
+import { rewards, tryAwardTask } from "@/lib/gamification/rewards";
 import {
   Income, IncomeCategory,
   RegistrationExpense, ExpenseCategory,
@@ -203,6 +204,46 @@ function mergeLiabilitiesWithDefaults(stored: Liability[]): AssetEntry[] {
   return [...defaults, ...extras];
 }
 
+// ─── Completion helpers ───────────────────────────────────────────────────
+
+const SPEND_CATS = ["Grocery", "Fuel", "Electricity", "Airtime", "Water", "Rent", "Transport", "Send to others"];
+const PLAN_SECTIONS = ["income", "expenses", "assets", "liabilities"] as const;
+
+function isMeaningfulEntry(personal: number, name?: string): boolean {
+  return personal > 0 || Boolean(name?.trim());
+}
+
+function hasMeaningfulPlanData(
+  income: Income[],
+  expenses: RegistrationExpense[],
+  assets: Asset[],
+  liabilities: Liability[]
+): boolean {
+  const planExpenses = expenses.filter((e) => !SPEND_CATS.includes(e.category));
+  const planLiabilities = liabilities.filter((l) => l.category !== "Equity");
+  return (
+    income.some((i) => isMeaningfulEntry(i.personal, i.name)) &&
+    planExpenses.some((e) => isMeaningfulEntry(e.personal, e.name)) &&
+    assets.some((a) => isMeaningfulEntry(a.personal, a.name)) &&
+    planLiabilities.some((l) => isMeaningfulEntry(l.personal, l.name))
+  );
+}
+
+function isFinancialPlanComplete(completedKeys: string[]): boolean {
+  if (completedKeys.includes("full-plan-complete")) return true;
+  return PLAN_SECTIONS.every((s) => completedKeys.includes(`plan-section-${s}`));
+}
+
+async function markSectionComplete(section: (typeof PLAN_SECTIONS)[number]): Promise<boolean> {
+  await tryAwardTask("plan-section-complete", { metadata: { section } });
+  const state = await rewards.getGamificationState();
+  if (isFinancialPlanComplete(state.completedTaskKeys)) {
+    await tryAwardTask("full-plan-complete");
+    return true;
+  }
+  return false;
+}
+
 // ─── Tab IDs ─────────────────────────────────────────────────────────────
 
 type TabId = "income" | "expenses" | "assets" | "liabilities";
@@ -218,8 +259,9 @@ const TABS: { id: TabId; label: string; icon: typeof DollarSign }[] = [
 
 export default function FinancialInsights() {
   const [started, setStarted] = useState(false);
+  const [isCompleted, setIsCompleted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>("income");
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   // ── Income state ──────────────────────────────────────────────────────
   const [incomeEntries, setIncomeEntries] = useState<IncomeEntry[]>(() =>
@@ -257,25 +299,38 @@ export default function FinancialInsights() {
   const [liabilitySaving, setLiabilitySaving] = useState(false);
   const [liabilitySaved, setLiabilitySaved] = useState(false);
 
-  // ── Load from Supabase when the user starts the plan ─────────────────
+  // ── Load from Supabase and detect whether the plan is already complete ─
   useEffect(() => {
-    if (!started) return;
+    let cancelled = false;
     async function load() {
       setLoading(true);
-      const [income, budgetExpenses, assets, liabilities] = await Promise.all([
+      const [income, budgetExpenses, assets, liabilities, gamState] = await Promise.all([
         storage.getIncome(),
         storage.getBudgetExpenses(),
         storage.getAssets(),
         storage.getLiabilities(),
+        rewards.getGamificationState(),
       ]);
-      if (income.length > 0)         setIncomeEntries(mergeIncomeWithDefaults(income));
+      if (cancelled) return;
+
+      if (income.length > 0) setIncomeEntries(mergeIncomeWithDefaults(income));
       if (budgetExpenses.length > 0) setExpenseEntries(mergeExpensesWithDefaults(budgetExpenses));
-      if (assets.length > 0)         setAssetEntries(mergeAssetsWithDefaults(assets));
-      if (liabilities.length > 0)    setLiabilityEntries(mergeLiabilitiesWithDefaults(liabilities));
+      if (assets.length > 0) setAssetEntries(mergeAssetsWithDefaults(assets));
+      if (liabilities.length > 0) setLiabilityEntries(mergeLiabilitiesWithDefaults(liabilities));
+
+      const completed =
+        isFinancialPlanComplete(gamState.completedTaskKeys) ||
+        hasMeaningfulPlanData(income, budgetExpenses, assets, liabilities);
+
+      if (completed) {
+        setIsCompleted(true);
+        setStarted(true);
+      }
       setLoading(false);
     }
     load();
-  }, [started]);
+    return () => { cancelled = true; };
+  }, []);
 
   // ─── Income handlers ──────────────────────────────────────────────────
 
@@ -296,6 +351,7 @@ export default function FinancialInsights() {
   };
 
   const handleSaveIncome = async () => {
+    if (isCompleted) return;
     setIncomeSaving(true);
     try {
       const toSave: Income[] = incomeEntries
@@ -311,6 +367,10 @@ export default function FinancialInsights() {
           editable: true,
         }));
       await storage.saveIncome(toSave);
+      if (toSave.length > 0) {
+        const planDone = await markSectionComplete("income");
+        if (planDone) setIsCompleted(true);
+      }
       setIncomeSaved(true);
       setTimeout(() => setIncomeSaved(false), 2500);
     } finally {
@@ -337,10 +397,10 @@ export default function FinancialInsights() {
   };
 
   const handleSaveExpenses = async () => {
+    if (isCompleted) return;
     setExpenseSaving(true);
     try {
       const existing = await storage.getBudgetExpenses();
-      const SPEND_CATS = ["Grocery", "Fuel", "Electricity", "Airtime", "Water", "Rent", "Transport", "Send to others"];
       const spendRows = existing.filter((e) => SPEND_CATS.includes(e.category));
       const planRows: RegistrationExpense[] = expenseEntries
         .filter((e) => e.personal > 0 || e.name.trim() !== "")
@@ -355,6 +415,10 @@ export default function FinancialInsights() {
           editable: true,
         }));
       await storage.saveBudgetExpenses([...planRows, ...spendRows]);
+      if (planRows.length > 0) {
+        const planDone = await markSectionComplete("expenses");
+        if (planDone) setIsCompleted(true);
+      }
       setExpenseSaved(true);
       setTimeout(() => setExpenseSaved(false), 2500);
     } finally {
@@ -381,6 +445,7 @@ export default function FinancialInsights() {
   };
 
   const handleSaveAssets = async () => {
+    if (isCompleted) return;
     setAssetSaving(true);
     try {
       const toSave: Asset[] = assetEntries
@@ -397,6 +462,10 @@ export default function FinancialInsights() {
           editable: true,
         }));
       await storage.saveAssets(toSave);
+      if (toSave.length > 0) {
+        const planDone = await markSectionComplete("assets");
+        if (planDone) setIsCompleted(true);
+      }
       setAssetSaved(true);
       setTimeout(() => setAssetSaved(false), 2500);
     } finally {
@@ -423,6 +492,7 @@ export default function FinancialInsights() {
   };
 
   const handleSaveLiabilities = async () => {
+    if (isCompleted) return;
     setLiabilitySaving(true);
     try {
       const toSave: Liability[] = liabilityEntries
@@ -439,6 +509,10 @@ export default function FinancialInsights() {
           editable: true,
         }));
       await storage.saveLiabilities(toSave);
+      if (toSave.length > 0) {
+        const planDone = await markSectionComplete("liabilities");
+        if (planDone) setIsCompleted(true);
+      }
       setLiabilitySaved(true);
       setTimeout(() => setLiabilitySaved(false), 2500);
     } finally {
@@ -449,6 +523,7 @@ export default function FinancialInsights() {
   // ─── Shared input styles ──────────────────────────────────────────────
 
   const inputCls = "w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded dark:bg-gray-700 dark:text-white text-sm";
+  const lockedInputCls = `${inputCls} bg-gray-100 dark:bg-gray-600 cursor-not-allowed`;
   const modalInputCls = "w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white";
   const modalLabelCls = "block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1";
   const readonlyCls = `${modalInputCls} bg-gray-100 dark:bg-gray-600 cursor-not-allowed`;
@@ -494,6 +569,14 @@ export default function FinancialInsights() {
 
   // ─── Landing screen (before start) ──────────────────────────────────
 
+  if (loading && !started) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <Loader2 className="h-8 w-8 animate-spin text-[#2f6064]" />
+      </div>
+    );
+  }
+
   if (!started) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center px-4">
@@ -534,9 +617,20 @@ export default function FinancialInsights() {
       <div>
         <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Financial Plan</h1>
         <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-          View and update your income, expenses, assets and liabilities.
+          {isCompleted
+            ? "Your submitted financial information is shown below."
+            : "Enter your income, expenses, assets and liabilities to build your financial plan."}
         </p>
       </div>
+
+      {isCompleted && (
+        <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-sm text-green-800 dark:text-green-200">
+          <Check className="h-5 w-5 shrink-0 mt-0.5" />
+          <p>
+            You have already completed your financial information. This is a one-time submission and can no longer be edited.
+          </p>
+        </div>
+      )}
 
       {/* Summary bar */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -597,10 +691,10 @@ export default function FinancialInsights() {
                         <td className="py-1.5 px-2 text-gray-900 dark:text-white whitespace-nowrap">{entry.incomeType}</td>
                         <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{entry.source}</td>
                         <td className="py-1.5 px-2">
-                          <input type="text" value={entry.name} onChange={(e) => updateIncomeEntry(i, "name", e.target.value)} className={inputCls} placeholder={entry.namePlaceholder} />
+                          <input type="text" value={entry.name} onChange={(e) => updateIncomeEntry(i, "name", e.target.value)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder={entry.namePlaceholder} />
                         </td>
                         <td className="py-1.5 px-2">
-                          <input type="number" value={entry.personal || ""} onChange={(e) => updateIncomeEntry(i, "personal", parseFloat(e.target.value) || 0)} className={inputCls} placeholder="0" min="0" step="0.01" />
+                          <input type="number" value={entry.personal || ""} onChange={(e) => updateIncomeEntry(i, "personal", parseFloat(e.target.value) || 0)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder="0" min="0" step="0.01" />
                         </td>
                         <td className="py-1.5 px-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">{fmt(entry.personal || 0)}</td>
                       </tr>
@@ -622,10 +716,12 @@ export default function FinancialInsights() {
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <button type="button" onClick={() => setIsAddIncomeOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-[#2f6064] text-[#2f6064] rounded-lg hover:bg-[#2f6064]/5 text-sm font-medium transition-colors">
-                  <Plus className="h-4 w-4" /> Add Income Source
-                </button>
-                <SaveBtn onClick={handleSaveIncome} saving={incomeSaving} saved={incomeSaved} />
+                {!isCompleted && (
+                  <button type="button" onClick={() => setIsAddIncomeOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-[#2f6064] text-[#2f6064] rounded-lg hover:bg-[#2f6064]/5 text-sm font-medium transition-colors">
+                    <Plus className="h-4 w-4" /> Add Income Source
+                  </button>
+                )}
+                {!isCompleted && <SaveBtn onClick={handleSaveIncome} saving={incomeSaving} saved={incomeSaved} />}
               </div>
             </div>
           )}
@@ -650,10 +746,10 @@ export default function FinancialInsights() {
                         <td className="py-1.5 px-2 text-gray-900 dark:text-white whitespace-nowrap">{entry.expenseCategory}</td>
                         <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{entry.expenseType}</td>
                         <td className="py-1.5 px-2">
-                          <input type="text" value={entry.name} onChange={(e) => updateExpenseEntry(i, "name", e.target.value)} className={inputCls} placeholder={entry.namePlaceholder} />
+                          <input type="text" value={entry.name} onChange={(e) => updateExpenseEntry(i, "name", e.target.value)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder={entry.namePlaceholder} />
                         </td>
                         <td className="py-1.5 px-2">
-                          <input type="number" value={entry.personal || ""} onChange={(e) => updateExpenseEntry(i, "personal", parseFloat(e.target.value) || 0)} className={inputCls} placeholder="0" min="0" step="0.01" />
+                          <input type="number" value={entry.personal || ""} onChange={(e) => updateExpenseEntry(i, "personal", parseFloat(e.target.value) || 0)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder="0" min="0" step="0.01" />
                         </td>
                         <td className="py-1.5 px-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">{fmt(entry.personal || 0)}</td>
                       </tr>
@@ -679,10 +775,12 @@ export default function FinancialInsights() {
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <button type="button" onClick={() => setIsAddExpenseOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-[#2f6064] text-[#2f6064] rounded-lg hover:bg-[#2f6064]/5 text-sm font-medium transition-colors">
-                  <Plus className="h-4 w-4" /> Add Expense
-                </button>
-                <SaveBtn onClick={handleSaveExpenses} saving={expenseSaving} saved={expenseSaved} />
+                {!isCompleted && (
+                  <button type="button" onClick={() => setIsAddExpenseOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-[#2f6064] text-[#2f6064] rounded-lg hover:bg-[#2f6064]/5 text-sm font-medium transition-colors">
+                    <Plus className="h-4 w-4" /> Add Expense
+                  </button>
+                )}
+                {!isCompleted && <SaveBtn onClick={handleSaveExpenses} saving={expenseSaving} saved={expenseSaved} />}
               </div>
             </div>
           )}
@@ -708,14 +806,14 @@ export default function FinancialInsights() {
                         <td className="py-1.5 px-2 text-gray-900 dark:text-white whitespace-nowrap">{entry.expenses}</td>
                         <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{entry.expenseType}</td>
                         <td className="py-1.5 px-2">
-                          <input type="text" value={entry.name} onChange={(e) => updateAssetEntry(i, "name", e.target.value)} className={inputCls} placeholder={entry.namePlaceholder} />
+                          <input type="text" value={entry.name} onChange={(e) => updateAssetEntry(i, "name", e.target.value)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder={entry.namePlaceholder} />
                         </td>
                         <td className="py-1.5 px-2">
-                          <input type="number" value={entry.personal || ""} onChange={(e) => updateAssetEntry(i, "personal", parseFloat(e.target.value) || 0)} className={inputCls} placeholder="0" step="0.01" />
+                          <input type="number" value={entry.personal || ""} onChange={(e) => updateAssetEntry(i, "personal", parseFloat(e.target.value) || 0)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder="0" step="0.01" />
                         </td>
                         <td className="py-1.5 px-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">{fmt(entry.personal || 0)}</td>
                         <td className="py-1.5 px-2">
-                          <input type="number" value={entry.interestRate || ""} onChange={(e) => updateAssetEntry(i, "interestRate", parseFloat(e.target.value) || 0)} className={inputCls} placeholder="0.00" min="0" step="0.01" />
+                          <input type="number" value={entry.interestRate || ""} onChange={(e) => updateAssetEntry(i, "interestRate", parseFloat(e.target.value) || 0)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder="0.00" min="0" step="0.01" />
                         </td>
                       </tr>
                     ))}
@@ -740,10 +838,12 @@ export default function FinancialInsights() {
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <button type="button" onClick={() => setIsAddAssetOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-[#2f6064] text-[#2f6064] rounded-lg hover:bg-[#2f6064]/5 text-sm font-medium transition-colors">
-                  <Plus className="h-4 w-4" /> Add Asset
-                </button>
-                <SaveBtn onClick={handleSaveAssets} saving={assetSaving} saved={assetSaved} />
+                {!isCompleted && (
+                  <button type="button" onClick={() => setIsAddAssetOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-[#2f6064] text-[#2f6064] rounded-lg hover:bg-[#2f6064]/5 text-sm font-medium transition-colors">
+                    <Plus className="h-4 w-4" /> Add Asset
+                  </button>
+                )}
+                {!isCompleted && <SaveBtn onClick={handleSaveAssets} saving={assetSaving} saved={assetSaved} />}
               </div>
             </div>
           )}
@@ -769,14 +869,14 @@ export default function FinancialInsights() {
                         <td className="py-1.5 px-2 text-gray-900 dark:text-white whitespace-nowrap">{entry.expenses}</td>
                         <td className="py-1.5 px-2 text-gray-600 dark:text-gray-400 whitespace-nowrap">{entry.expenseType}</td>
                         <td className="py-1.5 px-2">
-                          <input type="text" value={entry.name} onChange={(e) => updateLiabilityEntry(i, "name", e.target.value)} className={inputCls} placeholder={entry.namePlaceholder} />
+                          <input type="text" value={entry.name} onChange={(e) => updateLiabilityEntry(i, "name", e.target.value)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder={entry.namePlaceholder} />
                         </td>
                         <td className="py-1.5 px-2">
-                          <input type="number" value={entry.personal || ""} onChange={(e) => updateLiabilityEntry(i, "personal", parseFloat(e.target.value) || 0)} className={inputCls} placeholder="0" min="0" step="0.01" />
+                          <input type="number" value={entry.personal || ""} onChange={(e) => updateLiabilityEntry(i, "personal", parseFloat(e.target.value) || 0)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder="0" min="0" step="0.01" />
                         </td>
                         <td className="py-1.5 px-2 font-medium text-gray-900 dark:text-white whitespace-nowrap">{fmt(entry.personal || 0)}</td>
                         <td className="py-1.5 px-2">
-                          <input type="number" value={entry.interestRate || ""} onChange={(e) => updateLiabilityEntry(i, "interestRate", parseFloat(e.target.value) || 0)} className={inputCls} placeholder="0.00" min="0" step="0.01" />
+                          <input type="number" value={entry.interestRate || ""} onChange={(e) => updateLiabilityEntry(i, "interestRate", parseFloat(e.target.value) || 0)} readOnly={isCompleted} className={isCompleted ? lockedInputCls : inputCls} placeholder="0.00" min="0" step="0.01" />
                         </td>
                       </tr>
                     ))}
@@ -801,10 +901,12 @@ export default function FinancialInsights() {
               </div>
 
               <div className="flex items-center justify-between pt-2">
-                <button type="button" onClick={() => setIsAddLiabilityOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-[#2f6064] text-[#2f6064] rounded-lg hover:bg-[#2f6064]/5 text-sm font-medium transition-colors">
-                  <Plus className="h-4 w-4" /> Add Liability
-                </button>
-                <SaveBtn onClick={handleSaveLiabilities} saving={liabilitySaving} saved={liabilitySaved} />
+                {!isCompleted && (
+                  <button type="button" onClick={() => setIsAddLiabilityOpen(true)} className="flex items-center gap-2 px-4 py-2 border border-[#2f6064] text-[#2f6064] rounded-lg hover:bg-[#2f6064]/5 text-sm font-medium transition-colors">
+                    <Plus className="h-4 w-4" /> Add Liability
+                  </button>
+                )}
+                {!isCompleted && <SaveBtn onClick={handleSaveLiabilities} saving={liabilitySaving} saved={liabilitySaved} />}
               </div>
             </div>
           )}
@@ -814,7 +916,7 @@ export default function FinancialInsights() {
       {/* ══ MODALS ══════════════════════════════════════════════════════════ */}
 
       {/* Add Income Modal */}
-      {isAddIncomeOpen && (
+      {!isCompleted && isAddIncomeOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Add New Income Source</h3>
@@ -834,7 +936,7 @@ export default function FinancialInsights() {
       )}
 
       {/* Add Expense Modal */}
-      {isAddExpenseOpen && (
+      {!isCompleted && isAddExpenseOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Add New Expense</h3>
@@ -854,7 +956,7 @@ export default function FinancialInsights() {
       )}
 
       {/* Add Asset Modal */}
-      {isAddAssetOpen && (
+      {!isCompleted && isAddAssetOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Add New Asset</h3>
@@ -874,7 +976,7 @@ export default function FinancialInsights() {
       )}
 
       {/* Add Liability Modal */}
-      {isAddLiabilityOpen && (
+      {!isCompleted && isAddLiabilityOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white dark:bg-gray-800 rounded-xl p-6 w-full max-w-md shadow-xl">
             <h3 className="text-lg font-bold text-gray-900 dark:text-white mb-4">Add New Liability</h3>

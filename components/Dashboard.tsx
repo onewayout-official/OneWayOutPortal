@@ -1,12 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { UserProfile, Asset, MembershipTier } from "@/types";
+import { UserProfile, Asset } from "@/types";
 import { storage } from "@/lib/storage";
 import { computePooledIncome } from "@/lib/budgetTotals";
 import { computeAccountTypeBalances } from "@/lib/budgetAccountBalances";
+import { computeMembershipProgress } from "@/lib/membershipProgress";
 import { rewards } from "@/lib/gamification/rewards";
-import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, Shield, Crown, Building2, Gem, Check } from "lucide-react";
+import MembershipQuestMap from "@/components/MembershipQuestMap";
+import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile } from "lucide-react";
 import Link from "next/link";
 import {
   LineChart, Line, BarChart, Bar as ReBar, Cell,
@@ -27,25 +29,6 @@ const COUNSELORS = [
   { name: "Marcus Johnson", title: "Investment Coach", specialty: "Stocks, ETFs & Index Funds", bio: "Breaking down investment options into clear, actionable steps for first-time and seasoned investors.", img: 38 },
   { name: "Elena Petrov", title: "Estate Planner", specialty: "Estate & Inheritance Planning", bio: "Ensuring your assets are protected and distributed according to your wishes for generations to come.", img: 47 },
   { name: "Samuel Boateng", title: "Business Finance Advisor", specialty: "Entrepreneurship & SME Finance", bio: "Supporting small business owners with financial strategies to grow, sustain, and scale their ventures.", img: 12 },
-];
-
-const MEMBERSHIP_ORDER: MembershipTier[] = [
-  "Debt Crusher",
-  "Cash King",
-  "Wealth Creator",
-  "Legacy Builder",
-];
-
-const MEMBERSHIP_STEP_UI: Array<{
-  tier: MembershipTier;
-  title: string;
-  subtitle: string;
-  Icon: typeof Shield;
-}> = [
-  { tier: "Debt Crusher", title: "1. Debt Crusher", subtitle: "In Arrears", Icon: Shield },
-  { tier: "Cash King", title: "2. Cash King", subtitle: "Cash Savings", Icon: Crown },
-  { tier: "Wealth Creator", title: "3. Wealth Creator", subtitle: "Building", Icon: Building2 },
-  { tier: "Legacy Builder", title: "4. Legacy Builder", subtitle: "Freedom", Icon: Gem },
 ];
 
 export default function Dashboard() {
@@ -572,18 +555,23 @@ export default function Dashboard() {
     }
   };
 
-  const normalizedMembership: MembershipTier =
-    profile.membership && MEMBERSHIP_ORDER.includes(profile.membership as MembershipTier)
-      ? (profile.membership as MembershipTier)
-      : "Debt Crusher";
+  const totalSavings = accountTypeBalances
+    .filter((b) => ["Cash", "Savings", "Bank", "Wallet"].includes(b.type))
+    .reduce((sum, b) => sum + Math.max(0, b.total), 0);
 
-  let activeTierIndex = MEMBERSHIP_STEP_UI.findIndex((s) => s.tier === normalizedMembership);
-  if (activeTierIndex < 0) activeTierIndex = 0;
+  const investmentAssetTotal =
+    Math.max(0, accountTypeBalances.find((b) => b.type === "Investment")?.total ?? 0) +
+    (onboardingData.assets || [])
+      .filter((a: { expenseType?: string; expenses?: string }) =>
+        /invest/i.test(a.expenseType ?? a.expenses ?? "")
+      )
+      .reduce((sum: number, a: { personal?: number }) => sum + (a.personal ?? 0), 0);
 
-  const progressPercent = ((activeTierIndex + 1) / MEMBERSHIP_STEP_UI.length) * 100;
-  const memberSinceLabel = new Date(profile.createdAt).toLocaleDateString("en-US", {
-    month: "short",
-    year: "numeric",
+  const membershipProgress = computeMembershipProgress({
+    profile,
+    totalDebt,
+    totalSavings,
+    investmentAssetTotal,
   });
 
   return (
@@ -739,100 +727,7 @@ export default function Dashboard() {
 
 
 
-      {/* Membership Levels Timeline */}
-      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-2xl font-bold text-[#2f6064]">OneWayOut</h2>
-            <p className="text-sm text-gray-500 font-medium">Membership Levels</p>
-          </div>
-          <div className="hidden sm:block px-3 py-1 rounded-full bg-[#2f6064]/10 text-[#2f6064] text-xs font-bold uppercase tracking-wider">
-            Current Tier: {normalizedMembership}
-          </div>
-        </div>
-
-        <div className="relative pb-4 sm:pb-0">
-          {/* Mobile: same badge as desktop header */}
-          <div className="mb-6 sm:hidden">
-            <span className="inline-block px-3 py-1 rounded-full bg-[#2f6064]/10 text-[#2f6064] text-xs font-bold uppercase tracking-wider">
-              Current Tier: {normalizedMembership}
-            </span>
-          </div>
-
-          <div className="relative min-w-0 overflow-x-auto sm:overflow-visible">
-            {/* Timeline Connector Line */}
-            <div className="absolute top-10 left-0 h-1 w-full max-w-full bg-gray-100 dark:bg-gray-700 -z-0" />
-            <div
-              className="absolute top-10 left-0 h-1 max-w-full bg-emerald-500 -z-0 transition-all duration-300"
-              style={{ width: `${progressPercent}%` }}
-            />
-
-            <div className="grid min-w-[520px] grid-cols-4 gap-4 relative z-10 sm:min-w-0">
-              {MEMBERSHIP_STEP_UI.map((step, i) => {
-                const isCurrent = i === activeTierIndex;
-                const isPast = i < activeTierIndex;
-                const Icon = step.Icon;
-
-                const iconBg = isCurrent
-                  ? "bg-emerald-500 text-white shadow-lg ring-emerald-200 dark:ring-emerald-900/50"
-                  : isPast
-                    ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300"
-                    : "bg-gray-100 text-gray-400 dark:bg-gray-700 dark:text-gray-500";
-
-                const ring = "ring-4 ring-white dark:ring-gray-800";
-
-                return (
-                  <div key={step.tier} className="flex flex-col items-center text-center">
-                    <div
-                      className={`w-20 h-20 rounded-full flex items-center justify-center mb-4 shadow-md ${ring} ${iconBg} transition-all hover:scale-105`}
-                    >
-                      <Icon className="h-10 w-10" />
-                    </div>
-                    <h3
-                      className={`text-sm font-bold ${
-                        isCurrent
-                          ? "text-gray-900 dark:text-white"
-                          : isPast
-                            ? "text-emerald-800 dark:text-emerald-300"
-                            : "text-gray-500 dark:text-gray-400"
-                      }`}
-                    >
-                      {step.title}
-                    </h3>
-                    <p
-                      className={`text-xs font-medium mb-2 ${
-                        isCurrent
-                          ? "text-emerald-600 dark:text-emerald-400"
-                          : isPast
-                            ? "text-emerald-700/90 dark:text-emerald-400/90"
-                            : "text-gray-400 dark:text-gray-500"
-                      }`}
-                    >
-                      {step.subtitle}
-                    </p>
-                    {isCurrent && (
-                      <div className="px-2 py-1 rounded bg-emerald-50 dark:bg-emerald-900/30 text-[10px] text-emerald-700 dark:text-emerald-300 font-bold border border-emerald-100 dark:border-emerald-800 flex items-center gap-1 flex-wrap justify-center">
-                        <Check className="h-2.5 w-2.5 shrink-0" />
-                        Current tier · Member since {memberSinceLabel}
-                      </div>
-                    )}
-                    {isPast && !isCurrent && (
-                      <div className="text-[10px] font-semibold uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-                        Completed
-                      </div>
-                    )}
-                    {!isPast && !isCurrent && (
-                      <div className="text-[10px] text-gray-400 font-medium italic">
-                        Keep progressing
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        </div>
-      </div>
+      <MembershipQuestMap progress={membershipProgress} />
 
       {/* Mood Display — commented out, replaced by counselor slider below */}
       {/* {profile.onboardingCompleted && profile.mood && (
