@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { UserProfile, Asset, MembershipTier } from "@/types";
 import { storage } from "@/lib/storage";
-import { computePooledIncome, computePooledExpenses } from "@/lib/budgetTotals";
+import { computePooledIncome } from "@/lib/budgetTotals";
 import { computeAccountTypeBalances } from "@/lib/budgetAccountBalances";
 import { rewards } from "@/lib/gamification/rewards";
 import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile, Shield, Crown, Building2, Gem, Check } from "lucide-react";
@@ -11,7 +11,7 @@ import Link from "next/link";
 import {
   LineChart, Line, BarChart, Bar as ReBar, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
-  Legend as ReLegend, ResponsiveContainer,
+  Legend as ReLegend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
 
 const COUNSELORS = [
@@ -65,7 +65,13 @@ export default function Dashboard() {
   }>({ income: [], expenses: [], assets: [], liabilities: [] });
 
   const [isDashboardLoading, setIsDashboardLoading] = useState(true);
-  const [monthlyChartData, setMonthlyChartData] = useState<{ month: string; Income: number; Expenses: number }[]>([]);
+  const [monthlyChartData, setMonthlyChartData] = useState<{
+    month: string;
+    Income: number;
+    Expenses: number;
+    Surplus: number | null;
+    Deficit: number | null;
+  }[]>([]);
   const [pooledIncome, setPooledIncome] = useState(0);
   const [selectedIncomeMonthIndex, setSelectedIncomeMonthIndex] = useState(0);
   const [incomeChartView, setIncomeChartView] = useState<"month" | "trend">("month");
@@ -188,7 +194,6 @@ export default function Dashboard() {
       });
 
       const monthlyIncomeTotal = computePooledIncome(incomeForCharts, userProfile);
-      const monthlyExpensesTotal = computePooledExpenses(expensesForCharts, userProfile);
       setPooledIncome(monthlyIncomeTotal);
 
       const currentMonth = new Date().getMonth();
@@ -238,11 +243,22 @@ export default function Dashboard() {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         return { year: d.getFullYear(), month: d.getMonth(), label: `${monthNames[d.getMonth()]} ${d.getFullYear()}` };
       });
-      const chartData = chartMonths.map(({ label }) => ({
-        month: label,
-        Income: monthlyIncomeTotal,
-        Expenses: monthlyExpensesTotal,
-      }));
+      const chartData = chartMonths.map(({ year, month: m, label }) => {
+        const monthExpenses = expenses
+          .filter((e) => {
+            const d = new Date(e.date);
+            return d.getMonth() === m && d.getFullYear() === year;
+          })
+          .reduce((s, e) => s + e.amount, 0);
+        const diff = monthlyIncomeTotal - monthExpenses;
+        return {
+          month: label,
+          Income: monthlyIncomeTotal,
+          Expenses: monthExpenses,
+          Surplus: diff > 0 ? diff : null,
+          Deficit: diff < 0 ? diff : null,
+        };
+      });
       setMonthlyChartData(chartData);
 
       const totalDebtAmount = debts.reduce((sum, debt) => sum + debt.remainingAmount, 0);
@@ -987,7 +1003,7 @@ export default function Dashboard() {
                   </div>
                 )}
               </div>
-              {monthlyChartData.some((d) => d.Income > 0 || d.Expenses > 0) ? (
+              {monthlyChartData.some((d) => d.Income > 0 || d.Expenses > 0 || (d.Surplus ?? 0) > 0 || (d.Deficit ?? 0) < 0) ? (
                 <div className="w-full min-h-[300px]">
                   <ResponsiveContainer width="100%" height={300}>
                     <LineChart
@@ -996,26 +1012,62 @@ export default function Dashboard() {
                           ? [monthlyChartData[selectedIncomeMonthIndex] ?? monthlyChartData[0]]
                           : [...monthlyChartData].reverse()
                       }
-                      margin={{ top: 10, right: 30, left: 20, bottom: 20 }}
+                      margin={{ top: 10, right: 50, left: 20, bottom: 28 }}
                     >
                       <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
                       <XAxis dataKey="month" tick={{ fontSize: 11, fill: "#6b7280" }} axisLine={false} tickLine={false} padding={{ left: 20, right: 20 }} />
                       <YAxis
+                        yAxisId="main"
                         tick={{ fontSize: 11, fill: "#6b7280" }}
                         tickFormatter={(v) => `R${Math.abs(v).toLocaleString()}`}
                         axisLine={false}
                         tickLine={false}
                         padding={{ top: 20, bottom: 10 }}
                       />
-                      <ReTooltip
-                        formatter={(value: number | undefined, name: string | undefined) => [
-                          `R${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
-                          name ?? "",
-                        ]}
+                      <YAxis
+                        yAxisId="delta"
+                        orientation="right"
+                        tick={{ fontSize: 11, fill: "#3b82f6" }}
+                        tickFormatter={(v) => `R${Math.abs(v).toLocaleString()}`}
+                        axisLine={false}
+                        tickLine={false}
+                        width={52}
                       />
-                      <ReLegend verticalAlign="bottom" />
-                      <Line type="monotone" dataKey="Income" stroke="#92d050" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
-                      <Line type="monotone" dataKey="Expenses" stroke="#ff0000" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                      <ReferenceLine yAxisId="delta" y={0} stroke="#9ca3af" strokeDasharray="4 4" />
+                      <ReTooltip
+                        formatter={(value: number | undefined, name: string | undefined) => {
+                          if (value == null) return ["—", name ?? ""];
+                          return [
+                            `R${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`,
+                            name ?? "",
+                          ];
+                        }}
+                      />
+                      <ReLegend verticalAlign="bottom" wrapperStyle={{ paddingTop: 12 }} />
+                      <Line yAxisId="main" type="monotone" dataKey="Income" name="Income" stroke="#92d050" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                      <Line yAxisId="main" type="monotone" dataKey="Expenses" name="Expenses" stroke="#ff0000" strokeWidth={2.5} dot={{ r: 4 }} activeDot={{ r: 6 }} />
+                      <Line
+                        yAxisId="delta"
+                        type="monotone"
+                        dataKey="Surplus"
+                        name="Surplus"
+                        stroke="#3b82f6"
+                        strokeWidth={3}
+                        dot={{ r: 5, fill: "#3b82f6", strokeWidth: 0 }}
+                        activeDot={{ r: 7 }}
+                        connectNulls={false}
+                      />
+                      <Line
+                        yAxisId="delta"
+                        type="monotone"
+                        dataKey="Deficit"
+                        name="Deficit"
+                        stroke="#f59e0b"
+                        strokeWidth={3}
+                        dot={{ r: 5, fill: "#f59e0b", strokeWidth: 0 }}
+                        activeDot={{ r: 7 }}
+                        connectNulls={false}
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 </div>
