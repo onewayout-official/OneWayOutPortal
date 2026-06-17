@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { UserProfile, Income, RegistrationExpense } from "@/types";
 import { storage } from "@/lib/storage";
 import { computePooledIncome, computePooledExpenses } from "@/lib/budgetTotals";
+import { rewards } from "@/lib/gamification/rewards";
 import {
   Wallet,
   AlertCircle,
@@ -213,11 +214,15 @@ function IconCard({
       {liveAmount != null && (
         <span
           className={`text-[12px] font-semibold mt-0.5 ${
-            item.amount != null
-              ? liveAmount > item.amount
-                ? "text-red-600 dark:text-red-400"
-                : "text-green-600 dark:text-green-400"
-              : "text-gray-900 dark:text-gray-100"
+            liveAmountLabel === "Left"
+              ? liveAmount === 0
+                ? "text-gray-400 dark:text-gray-500"
+                : "text-[#2f6064] dark:text-[#5a9ea3]"
+              : item.amount != null
+                ? liveAmount > item.amount
+                  ? "text-red-600 dark:text-red-400"
+                  : "text-green-600 dark:text-green-400"
+                : "text-gray-900 dark:text-gray-100"
           }`}
         >
           {liveAmountLabel ? `${liveAmountLabel}: ` : ""}
@@ -278,6 +283,7 @@ export default function BudgetManager() {
   const [newExpenseCategory, setNewExpenseCategory] = useState("Groceries");
   const [newExpenseName, setNewExpenseName] = useState("");
   const [newExpenseAmount, setNewExpenseAmount] = useState("");
+  const [availableWalletBalance, setAvailableWalletBalance] = useState(0);
 
   useEffect(() => {
     loadData();
@@ -287,7 +293,7 @@ export default function BudgetManager() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const [userProfile, expenses, incomeList, budgetExpensesList, accounts, savedAllocations, expenseAllocs, budgetFlowState] =
+      const [userProfile, expenses, incomeList, budgetExpensesList, accounts, savedAllocations, expenseAllocs, budgetFlowState, walletBalance] =
         await Promise.all([
           storage.getProfile(),
           storage.getExpenses(),
@@ -297,6 +303,7 @@ export default function BudgetManager() {
           storage.getIncomeAllocations(),
           storage.getAccountExpenseAllocations(),
           storage.getBudgetFlowState(),
+          rewards.getAvailableWalletBalance(),
         ]);
 
       setProfile(userProfile);
@@ -376,13 +383,18 @@ export default function BudgetManager() {
         accountTransferMap.set(`${t.fromAccountId}::${t.toAccountId}`, t.amount);
       }
       setAccountTransfers(accountTransferMap);
+      setAvailableWalletBalance(walletBalance);
     } catch (err) {
       console.error(err);
     }
     setIsLoading(false);
   };
 
-  const unallocatedIncome = allIncomeIcons.filter((i) => !allocations.has(i.id));
+  const getAllocatedAmount = (incomeId: string): number =>
+    allocations.has(incomeId) ? (incomeTransferAmounts.get(incomeId) ?? 0) : 0;
+
+  const getRemainingIncome = (item: IconItem): number =>
+    Math.max(0, (item.amount ?? 0) - getAllocatedAmount(item.id));
 
   const getItemsForAccount = (accountId: string): IconItem[] =>
     allIncomeIcons.filter((i) => allocations.get(i.id) === accountId);
@@ -506,7 +518,7 @@ export default function BudgetManager() {
     if (incomeId) {
       const incomeItem = allIncomeIcons.find((i) => i.id === incomeId);
       const targetAccount = userAccounts.find((a) => a.id === accountId);
-      if (!incomeItem || !targetAccount) return;
+      if (!incomeItem || !targetAccount || targetAccount.accountType === "wallet") return;
       const existing =
         allocations.get(incomeId) === accountId
           ? (incomeTransferAmounts.get(incomeId) ?? incomeItem.amount ?? 0)
@@ -527,7 +539,7 @@ export default function BudgetManager() {
     if (sourceAccountId && sourceAccountId !== accountId) {
       const sourceAccount = userAccounts.find((a) => a.id === sourceAccountId);
       const targetAccount = userAccounts.find((a) => a.id === accountId);
-      if (!sourceAccount || !targetAccount) return;
+      if (!sourceAccount || !targetAccount || sourceAccount.accountType === "wallet" || targetAccount.accountType === "wallet") return;
       const existing = accountTransfers.get(`${sourceAccountId}::${accountId}`) ?? 0;
       setTransferAmount(existing > 0 ? String(existing) : "");
       setTransferModal({
@@ -790,6 +802,7 @@ export default function BudgetManager() {
           {ACCOUNT_TYPE_META.map(({ type, label, icon: TypeIcon, color }) => {
             const c = COLOR_MAP[color];
             const accountsOfType = userAccounts.filter((a) => a.accountType === type);
+            const isWalletType = type === "wallet";
 
             return (
               <div key={type} className="w-full space-y-2">
@@ -799,18 +812,36 @@ export default function BudgetManager() {
                     <TypeIcon className={`h-4 w-4 ${c.text}`} />
                     <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{label}</span>
                   </div>
-                  <button
-                    onClick={() => {
-                      setAddingAccountType(addingAccountType === type ? null : type);
-                      setNewAccountName("");
-                    }}
-                    className={`p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${c.text}`}
-                    title={`Add ${label} account`}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                  </button>
+                  {!isWalletType && (
+                    <button
+                      onClick={() => {
+                        setAddingAccountType(addingAccountType === type ? null : type);
+                        setNewAccountName("");
+                      }}
+                      className={`p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${c.text}`}
+                      title={`Add ${label} account`}
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </button>
+                  )}
                 </div>
 
+                {/* Wallet: read-only available balance (no drag and drop) */}
+                {isWalletType ? (
+                  <div
+                    className={`w-full rounded-xl border-2 p-3 border-gray-200 dark:border-gray-700 ${c.bg}`}
+                    title="My 1-Wallet available balance from rewards"
+                  >
+                    <div className="flex flex-col items-start gap-0.5">
+                      <span className="text-xs font-semibold text-gray-900 dark:text-white">My 1-Wallet</span>
+                      <span className="text-[10px] font-medium text-gray-500 dark:text-gray-400">Available balance</span>
+                      <span className={`text-sm font-bold ${c.text}`}>
+                        N${availableWalletBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </span>
+                    </div>
+                  </div>
+                ) : (
+                  <>
                 {/* Inline add form */}
                 {addingAccountType === type && (
                   <div className="flex gap-1 px-1">
@@ -903,19 +934,20 @@ export default function BudgetManager() {
                       </div>
 
                       {items.length > 0 ? (
-                        <div className="flex flex-col items-center gap-2">
+                        <div className="flex flex-col items-stretch gap-1.5 w-full">
                           {items.map((inc) => (
-                            <IconCard
+                            <div
                               key={inc.id}
-                              item={inc}
-                              draggable
-                              onDragStart={(e) => { e.stopPropagation(); handleDragStart(e, inc); }}
-                              colorClass={c.text}
-                              bgClass={`${c.bg} ${c.border}`}
-                              hoverRing={`hover:${c.ring}`}
-                              liveAmount={incomeTransferAmounts.get(inc.id)}
-                              liveAmountLabel="Flow"
-                            />
+                              className={`rounded-lg border px-2 py-1.5 text-center ${c.bg} ${c.border}`}
+                              title={`${inc.category ?? inc.label}: N$${getIncomeAmountForAccount(inc).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                            >
+                              <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight block truncate">
+                                {inc.category ?? inc.label}
+                              </span>
+                              <span className={`text-[12px] font-semibold ${c.text}`}>
+                                +N${getIncomeAmountForAccount(inc).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                              </span>
+                            </div>
                           ))}
                         </div>
                       ) : (
@@ -937,6 +969,8 @@ export default function BudgetManager() {
                       Add {label}
                     </button>
                   </div>
+                )}
+                  </>
                 )}
               </div>
             );
@@ -982,20 +1016,22 @@ export default function BudgetManager() {
                 </button>
               </div>
             </div>
-            {unallocatedIncome.length > 0 ? (
+            {allIncomeIcons.length > 0 ? (
               <div className="flex flex-wrap items-center gap-4">
-                {unallocatedIncome.map((inc) => (
-                  <IconCard
-                    key={inc.id}
-                    item={inc}
-                    draggable
-                    onDragStart={(e) => handleDragStart(e, inc)}
-                  />
-                ))}
-              </div>
-            ) : allIncomeIcons.length > 0 ? (
-              <div className="flex-1 min-w-[100px] h-20 flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg">
-                <span className="text-xs text-gray-400 text-center px-2">All income assigned to accounts.</span>
+                {allIncomeIcons.map((inc) => {
+                  const allocated = getAllocatedAmount(inc.id);
+                  const remaining = getRemainingIncome(inc);
+                  return (
+                    <IconCard
+                      key={inc.id}
+                      item={inc}
+                      draggable
+                      onDragStart={(e) => handleDragStart(e, inc)}
+                      liveAmount={allocated > 0 ? remaining : undefined}
+                      liveAmountLabel={allocated > 0 ? "Left" : undefined}
+                    />
+                  );
+                })}
               </div>
             ) : (
               <p className="text-sm text-gray-400 italic">No income items found from onboarding.</p>

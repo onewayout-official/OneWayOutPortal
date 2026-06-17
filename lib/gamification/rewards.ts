@@ -125,6 +125,27 @@ export const rewards = {
     return parseSpin(data as Record<string, unknown>);
   },
 
+  /** Wallet available balance (N$) — sum of earned reward points ÷ 100, same as DashboardTopBar. */
+  getAvailableWalletBalance: async (): Promise<number> => {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return 0;
+
+    const { data: txns, error } = await supabase
+      .from("reward_transactions")
+      .select("points_delta")
+      .eq("user_id", userId)
+      .gt("points_delta", 0);
+
+    if (error) {
+      console.error("[rewards] getAvailableWalletBalance:", error.message);
+      return 0;
+    }
+
+    const totalPoints = (txns ?? []).reduce((sum, row) => sum + Number(row.points_delta), 0);
+    return totalPoints / 100;
+  },
+
   getRewardHistory: async (limit = 20) => {
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
