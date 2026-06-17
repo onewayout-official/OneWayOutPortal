@@ -20,8 +20,10 @@ import SpinWheel from "@/components/SpinWheel";
 const NAVIGATE_ONLY: GamificationTaskId[] = [
   "daily-mood",
   "expense-log",
+  "video-quiz",
   "monthly-budget-update",
   "monthly-expenses-update",
+  "book-life-counseling",
   "appoint-financial-advisor",
 ];
 
@@ -29,6 +31,24 @@ const TASK_GROUPS: { key: TaskCategory; label: string; description: string }[] =
   { key: "daily", label: "Daily", description: "Resets every day" },
   { key: "monthly", label: "Monthly", description: "Resets every month" },
   { key: "as-required", label: "As Required", description: "Complete whenever needed" },
+];
+
+const UPCOMING_WEBINARS = [
+  {
+    id: "budget-reset",
+    title: "Monthly Budget Reset Workshop",
+    date: "Thursday, 26 June 2026 · 18:00 SAST",
+  },
+  {
+    id: "debt-strategies",
+    title: "Practical Debt Payoff Strategies",
+    date: "Tuesday, 8 July 2026 · 18:00 SAST",
+  },
+  {
+    id: "savings-habits",
+    title: "Building Consistent Savings Habits",
+    date: "Thursday, 17 July 2026 · 12:30 SAST",
+  },
 ];
 
 export default function EarnTracker() {
@@ -44,6 +64,16 @@ export default function EarnTracker() {
   const [feedbackHover, setFeedbackHover] = useState(0);
   const [feedbackComment, setFeedbackComment] = useState("");
   const [feedbackSuccess, setFeedbackSuccess] = useState(false);
+
+  // Webinar registration modal state
+  const [isWebinarModalOpen, setIsWebinarModalOpen] = useState(false);
+  const [webinarId, setWebinarId] = useState("");
+  const [webinarName, setWebinarName] = useState("");
+  const [webinarEmail, setWebinarEmail] = useState("");
+  const [webinarPhone, setWebinarPhone] = useState("");
+  const [webinarQuestions, setWebinarQuestions] = useState("");
+  const [webinarSuccess, setWebinarSuccess] = useState(false);
+  const [isWebinarSubmitting, setIsWebinarSubmitting] = useState(false);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -77,6 +107,19 @@ export default function EarnTracker() {
       setFeedbackSuccess(false);
       setFeedbackRating(0);
       setFeedbackComment("");
+      return;
+    }
+
+    if (task.id === "register-webinar") {
+      setIsWebinarModalOpen(true);
+      setWebinarSuccess(false);
+      setWebinarId("");
+      setWebinarQuestions("");
+      setIsWebinarSubmitting(false);
+      const profile = await storage.getProfile();
+      setWebinarName(profile?.name ?? "");
+      setWebinarEmail(profile?.email ?? "");
+      setWebinarPhone(profile?.phone ?? "");
       return;
     }
 
@@ -139,6 +182,24 @@ export default function EarnTracker() {
       setFeedbackSuccess(false);
     }, 1400);
   };
+
+  const handleWebinarSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsWebinarSubmitting(true);
+    setWebinarSuccess(true);
+    setIsWebinarSubmitting(false);
+    setTimeout(() => {
+      setIsWebinarModalOpen(false);
+      setWebinarSuccess(false);
+      setWebinarId("");
+      setWebinarName("");
+      setWebinarEmail("");
+      setWebinarPhone("");
+      setWebinarQuestions("");
+    }, 1600);
+  };
+
+  const selectedWebinar = UPCOMING_WEBINARS.find((w) => w.id === webinarId);
 
   if (isLoading || !gamification) {
     return (
@@ -258,7 +319,11 @@ export default function EarnTracker() {
         </Link>
       </div>
 
-      <SpinWheel state={gamification} onStateChange={handleGamificationUpdate} />
+      <SpinWheel
+        state={gamification}
+        onStateChange={handleGamificationUpdate}
+        hideTokenSpin
+      />
 
       {taskError && (
         <p className="text-sm text-red-600 dark:text-red-400">{taskError}</p>
@@ -279,6 +344,150 @@ export default function EarnTracker() {
           </div>
         );
       })}
+
+      {/* Webinar registration modal */}
+      {isWebinarModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl bg-white dark:bg-gray-800 p-6 shadow-2xl border border-gray-200 dark:border-gray-700 max-h-[90vh] overflow-y-auto">
+            <div className="flex items-start justify-between gap-3 mb-5">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Register for Webinar</h3>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  Tell us which session you&apos;d like to join and how we can reach you.
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsWebinarModalOpen(false)}
+                className="text-sm text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 shrink-0"
+              >
+                Close
+              </button>
+            </div>
+
+            <form onSubmit={handleWebinarSubmit} className="space-y-4">
+              <div>
+                <label
+                  htmlFor="webinar-select"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Webinar *
+                </label>
+                <select
+                  id="webinar-select"
+                  value={webinarId}
+                  onChange={(e) => setWebinarId(e.target.value)}
+                  required
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+                >
+                  <option value="">Select a webinar</option>
+                  {UPCOMING_WEBINARS.map((webinar) => (
+                    <option key={webinar.id} value={webinar.id}>
+                      {webinar.title}
+                    </option>
+                  ))}
+                </select>
+                {selectedWebinar && (
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{selectedWebinar.date}</p>
+                )}
+              </div>
+
+              <div>
+                <label
+                  htmlFor="webinar-name"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Full name *
+                </label>
+                <input
+                  id="webinar-name"
+                  type="text"
+                  value={webinarName}
+                  onChange={(e) => setWebinarName(e.target.value)}
+                  placeholder="Your full name"
+                  required
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="webinar-email"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Email address *
+                </label>
+                <input
+                  id="webinar-email"
+                  type="email"
+                  value={webinarEmail}
+                  onChange={(e) => setWebinarEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  required
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="webinar-phone"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Phone number
+                </label>
+                <input
+                  id="webinar-phone"
+                  type="tel"
+                  value={webinarPhone}
+                  onChange={(e) => setWebinarPhone(e.target.value)}
+                  placeholder="Optional"
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="webinar-questions"
+                  className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1"
+                >
+                  Questions or topics you&apos;d like covered
+                </label>
+                <textarea
+                  id="webinar-questions"
+                  value={webinarQuestions}
+                  onChange={(e) => setWebinarQuestions(e.target.value)}
+                  placeholder="Share what you hope to learn from this webinar..."
+                  rows={3}
+                  className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white resize-none focus:outline-none focus:ring-2 focus:ring-red-400"
+                />
+              </div>
+
+              <div className="flex items-center justify-end gap-2 pt-1">
+                <button
+                  type="button"
+                  onClick={() => setIsWebinarModalOpen(false)}
+                  className="px-4 py-2 rounded-lg text-sm border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isWebinarSubmitting || !webinarId}
+                  className="px-4 py-2 rounded-lg text-sm bg-red-600 hover:bg-red-700 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  Register
+                </button>
+              </div>
+
+              {webinarSuccess && (
+                <p className="text-sm text-green-600 dark:text-green-400 text-center">
+                  You&apos;re registered! We&apos;ll send details to {webinarEmail}.
+                </p>
+              )}
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Feedback modal — star rating + comment */}
       {isFeedbackModalOpen && (

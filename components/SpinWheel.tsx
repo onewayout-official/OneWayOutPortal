@@ -18,6 +18,8 @@ interface SpinWheelProps {
   variant?: "full" | "embedded";
   /** Hide token and paid spin buttons */
   freeSpinOnly?: boolean;
+  /** Hide the token spin button (paid spin still available) */
+  hideTokenSpin?: boolean;
   onFreeSpinComplete?: () => void;
 }
 
@@ -28,6 +30,7 @@ export default function SpinWheel({
   onStateChange,
   variant = "full",
   freeSpinOnly = false,
+  hideTokenSpin = false,
   onFreeSpinComplete,
 }: SpinWheelProps) {
   const [rotation, setRotation] = useState(0);
@@ -95,7 +98,10 @@ export default function SpinWheel({
         <>
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Spin the wheel</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Win 10–500 points. One free spin daily; use tokens or {state.spinCost} points for extras.
+            Win 10–500 points. One free spin daily
+            {hideTokenSpin
+              ? `; use ${state.spinCost} points for extras.`
+              : `; use tokens or ${state.spinCost} points for extras.`}
           </p>
         </>
       )}
@@ -169,15 +175,17 @@ export default function SpinWheel({
         </button>
         {!freeSpinOnly && (
           <>
-            <button
-              type="button"
-              disabled={spinning || !canToken}
-              onClick={() => handleSpin("token")}
-              className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-90 disabled:opacity-50 dark:hover:bg-[#2f6064]/20"
-              style={{ borderColor: SPIN_WHEEL_BRAND, color: SPIN_WHEEL_BRAND }}
-            >
-              Use token ({state.spinTokens})
-            </button>
+            {!hideTokenSpin && (
+              <button
+                type="button"
+                disabled={spinning || !canToken}
+                onClick={() => handleSpin("token")}
+                className="px-4 py-2 rounded-lg text-sm font-medium border hover:opacity-90 disabled:opacity-50 dark:hover:bg-[#2f6064]/20"
+                style={{ borderColor: SPIN_WHEEL_BRAND, color: SPIN_WHEEL_BRAND }}
+              >
+                Use token ({state.spinTokens})
+              </button>
+            )}
             <button
               type="button"
               disabled={spinning || !canPaid}

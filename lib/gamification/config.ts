@@ -303,7 +303,6 @@ export const GAMIFICATION_TASKS: GamificationTask[] = [
     label: "Register for Webinar",
     points: null,
     icon: Video,
-    href: "/course",
     showOnEarn: true,
     category: "as-required",
   },
