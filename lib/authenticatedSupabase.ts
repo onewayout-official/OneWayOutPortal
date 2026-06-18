@@ -1,11 +1,11 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 type AuthResult =
   | { client: SupabaseClient; token: string }
   | { error: NextResponse };
 
-export function getAuthenticatedSupabaseClient(request: NextRequest): AuthResult {
+export function getAuthenticatedSupabaseClient(request: Request): AuthResult {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
@@ -27,7 +27,7 @@ export function getAuthenticatedSupabaseClient(request: NextRequest): AuthResult
 }
 
 export async function requireAuthenticatedSupabaseClient(
-  request: NextRequest
+  request: Request
 ): Promise<AuthResult> {
   const auth = getAuthenticatedSupabaseClient(request);
   if ("error" in auth) return auth;
