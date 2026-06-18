@@ -3,17 +3,21 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
-import DailyLoginRewardsGate from "@/components/DailyLoginRewardsGate";
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+export default function CoachProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading, isCounselor } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
+    if (isLoading) return;
+    if (!isAuthenticated) {
       router.push("/login");
+      return;
     }
-  }, [isAuthenticated, isLoading, router]);
+    if (!isCounselor) {
+      router.push("/");
+    }
+  }, [isAuthenticated, isCounselor, isLoading, router]);
 
   if (isLoading) {
     return (
@@ -26,13 +30,9 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
     );
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !isCounselor) {
     return null;
   }
 
-  if (isCounselor) {
-    return <>{children}</>;
-  }
-
-  return <DailyLoginRewardsGate>{children}</DailyLoginRewardsGate>;
+  return <>{children}</>;
 }

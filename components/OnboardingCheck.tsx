@@ -12,6 +12,10 @@ export default function OnboardingCheck({ children }: { children: React.ReactNod
     let cancelled = false;
     storage.getProfile().then((profile) => {
       if (cancelled) return;
+      if (profile?.role === "counselor") {
+        setAllowed(true);
+        return;
+      }
       const ok = Boolean(
         profile &&
           (profile.onboardingCompleted || profile.onboardingSkipped)

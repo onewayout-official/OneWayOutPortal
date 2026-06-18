@@ -4,6 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
+import { storage } from "@/lib/storage";
 
 function GoogleIcon() {
   return (
@@ -122,7 +123,8 @@ export default function LoginForm() {
     const result = await login(form.email, form.password);
 
     if (result.success) {
-      router.push("/");
+      const profile = await storage.getProfile();
+      router.push(profile?.role === "counselor" ? "/coach" : "/");
     } else {
       setError(result.error || "Invalid email or password");
       setIsLoading(false);

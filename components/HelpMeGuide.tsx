@@ -1,12 +1,41 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { HelpCircle, MessageCircle, AlertTriangle, ArrowRight, Phone, MessageSquare, Clock, PhoneCall } from "lucide-react";
 import Link from "next/link";
+import { Counselor } from "@/lib/counselors";
 import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
+import { getAuthHeader } from "@/lib/authHeader";
 
 export default function HelpMeGuide() {
   const [isChatOpen, setIsChatOpen] = useState(false);
+  const [counselors, setCounselors] = useState<Counselor[]>(MOCK_COUNSELORS);
+  const [isLoadingCounselors, setIsLoadingCounselors] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCounselors() {
+      try {
+        const headers = await getAuthHeader();
+        const response = await fetch("/api/counselors", { method: "GET", headers });
+        if (!response.ok) return;
+        const json = (await response.json()) as { counselors?: Counselor[] };
+        if (!cancelled && json.counselors) {
+          setCounselors(json.counselors);
+        }
+      } catch {
+        // Keep mock fallback when API is unavailable.
+      } finally {
+        if (!cancelled) setIsLoadingCounselors(false);
+      }
+    }
+
+    loadCounselors();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -24,49 +53,55 @@ export default function HelpMeGuide() {
         <div className="flex items-center justify-between gap-3 mb-4">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Book Free Sessions with our Life Coaches/Counsellors below</h2>
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            {MOCK_COUNSELORS.length} counselors
+            {isLoadingCounselors ? "Loading..." : `${counselors.length} counselors`}
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
-          {MOCK_COUNSELORS.map((counselor) => (
-            <article
-              key={counselor.id}
-              className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/60 dark:bg-gray-700/20"
-            >
-              <div className="flex items-start gap-3">
-                <img
-                  src={counselor.image}
-                  alt={counselor.name}
-                  className="h-14 w-14 rounded-full object-cover"
-                />
-                <div className="min-w-0">
-                  <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{counselor.name}</h3>
-                  <p className="text-xs text-blue-600 dark:text-blue-400">Life Coach/Counsellor</p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    {counselor.experienceYears} yrs experience
-                  </p>
+        {counselors.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No coaches are available right now. Please check back soon.
+          </p>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+            {counselors.map((counselor) => (
+              <article
+                key={counselor.id}
+                className="rounded-xl border border-gray-200 dark:border-gray-700 p-4 bg-gray-50/60 dark:bg-gray-700/20"
+              >
+                <div className="flex items-start gap-3">
+                  <img
+                    src={counselor.image}
+                    alt={counselor.name}
+                    className="h-14 w-14 rounded-full object-cover"
+                  />
+                  <div className="min-w-0">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{counselor.name}</h3>
+                    <p className="text-xs text-blue-600 dark:text-blue-400">Life Coach/Counsellor</p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      {counselor.experienceYears} yrs experience
+                    </p>
+                  </div>
                 </div>
-              </div>
-              <p className="mt-3 text-xs text-gray-600 dark:text-gray-300">{counselor.specialty}</p>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 line-clamp-3">{counselor.bio}</p>
-              <div className="mt-4 flex flex-wrap gap-2">
-                <Link
-                  href={`/help-me/counselors/${counselor.id}?action=book`}
-                  className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
-                >
-                  Book appointment
-                </Link>
-                <Link
-                  href={`/help-me/counselors/${counselor.id}`}
-                  className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-700 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                >
-                  View details
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </Link>
-              </div>
-            </article>
-          ))}
-        </div>
+                <p className="mt-3 text-xs text-gray-600 dark:text-gray-300">{counselor.specialty}</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 line-clamp-3">{counselor.bio}</p>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <Link
+                    href={`/help-me/counselors/${counselor.id}?action=book`}
+                    className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                  >
+                    Book appointment
+                  </Link>
+                  <Link
+                    href={`/help-me/counselors/${counselor.id}`}
+                    className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-700 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                  >
+                    View details
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </Link>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Crisis Disclaimer */}

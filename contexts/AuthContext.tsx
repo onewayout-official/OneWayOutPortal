@@ -5,6 +5,7 @@ import { AuthSession } from "@/types";
 import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { storage } from "@/lib/storage";
+import { isCoachesAdminEmail } from "@/lib/coachesAdmin";
 
 export interface RegisterPayload {
   firstName: string;
@@ -29,6 +30,8 @@ interface AuthContextType {
   updatePassword: (password: string) => Promise<{ success: boolean; error?: string }>;
   isAuthenticated: boolean;
   isAdmin: boolean;
+  isCoachesAdmin: boolean;
+  isCounselor: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -46,26 +49,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthSession | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
+  const [isCoachesAdmin, setIsCoachesAdmin] = useState(false);
+  const [isCounselor, setIsCounselor] = useState(false);
   const router = useRouter();
 
-  const refreshAdminStatus = async () => {
+  const refreshAdminStatus = async (email?: string) => {
     const profile = await storage.getProfile();
     setIsAdmin(profile?.role === "admin");
+    setIsCounselor(profile?.role === "counselor");
+    setIsCoachesAdmin(isCoachesAdminEmail(email ?? profile?.email));
   };
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(toAuthSession(session));
       setIsLoading(false);
-      if (session) refreshAdminStatus();
+      if (session) refreshAdminStatus(session.user.email);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(toAuthSession(session));
       if (session) {
-        refreshAdminStatus();
+        refreshAdminStatus(session.user.email);
       } else {
         setIsAdmin(false);
+        setIsCoachesAdmin(false);
+        setIsCounselor(false);
       }
     });
 
@@ -308,6 +317,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updatePassword,
         isAuthenticated: !!user,
         isAdmin,
+        isCoachesAdmin,
+        isCounselor,
       }}
     >
       {children}

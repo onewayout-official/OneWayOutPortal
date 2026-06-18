@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap, CalendarCheck, ClipboardList } from "lucide-react";
+import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap, CalendarCheck, ClipboardList, UserCog } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navSections = [
@@ -71,12 +71,13 @@ function NavLink({ href, label, icon: Icon, isActive }: { href: string; label: s
 
 export default function Navigation() {
   const pathname = usePathname();
-  const { logout, isAdmin } = useAuth();
+  const { logout, isAdmin, isCoachesAdmin } = useAuth();
 
   const visibleSections = navSections.map((section) => {
     if (section.label !== "Account") return section;
     const items = [...section.items];
     if (isAdmin) items.push({ href: "/admin", label: "Admin", icon: Shield });
+    if (isCoachesAdmin) items.push({ href: "/admin/coaches", label: "Manage Coaches", icon: UserCog });
     return { ...section, items };
   });
 

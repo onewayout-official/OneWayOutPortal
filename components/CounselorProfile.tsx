@@ -10,7 +10,8 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { Counselor } from "@/lib/mockCounselors";
+import { Counselor } from "@/lib/counselors";
+import { getAuthHeader } from "@/lib/authHeader";
 
 const WEEKDAY_TO_INDEX: Record<string, number> = {
   Sun: 0,
@@ -62,6 +63,8 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
     time: string;
     link: string;
   } | null>(null);
+  const [isBooking, setIsBooking] = useState(false);
+  const [bookingError, setBookingError] = useState<string | null>(null);
 
   const availabilityByWeekday = useMemo(() => {
     const map = new Map<number, string[]>();
@@ -131,10 +134,36 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
   const todayDayLabel = WEEKDAY_LABELS[new Date().getDay()];
   const todaySlots = weeklySlots.filter((slot) => slot.dayLabel === todayDayLabel);
 
-  const openBookingPopup = (date: string, time: string) => {
+  const openBookingPopup = async (date: string, time: string) => {
     const meetingId = `${counselor.id}-${date}-${time}`.replace(/[^a-zA-Z0-9]/g, "");
     const teamsLink = `https://teams.microsoft.com/l/meetup-join/${meetingId}`;
-    setBookingPopup({ date, time, link: teamsLink });
+    setBookingError(null);
+    setIsBooking(true);
+
+    try {
+      const headers = await getAuthHeader();
+      const response = await fetch("/api/counselor-appointments", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          counselorId: counselor.id,
+          appointmentDate: date,
+          appointmentTime: time,
+          meetingLink: teamsLink,
+        }),
+      });
+
+      const json = (await response.json()) as { error?: string };
+      if (!response.ok) {
+        throw new Error(json.error ?? "Failed to book appointment.");
+      }
+
+      setBookingPopup({ date, time, link: teamsLink });
+    } catch (err) {
+      setBookingError(err instanceof Error ? err.message : "Failed to book appointment.");
+    } finally {
+      setIsBooking(false);
+    }
   };
 
   return (
@@ -345,12 +374,15 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
 
               <button
                 type="button"
-                disabled={!selectedDate || !selectedTime}
+                disabled={!selectedDate || !selectedTime || isBooking}
                 onClick={() => openBookingPopup(selectedDate, selectedTime)}
                 className="mt-3 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Book selected 20 min session
+                {isBooking ? "Booking..." : "Book selected 20 min session"}
               </button>
+              {bookingError && (
+                <p className="mt-2 text-xs text-red-600 dark:text-red-400">{bookingError}</p>
+              )}
             </div>
           </div>
         </div>

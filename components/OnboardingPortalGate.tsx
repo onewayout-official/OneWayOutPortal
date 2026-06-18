@@ -16,9 +16,13 @@ export default function OnboardingPortalGate({ children }: { children: React.Rea
 
   useEffect(() => {
     let cancelled = false;
-    storage.getProfile().then((p) => {
+    storage.getProfile().then((profile) => {
       if (cancelled) return;
-      setBlocked(Boolean(p?.onboardingSkipped && !p?.onboardingCompleted));
+      if (profile?.role === "counselor") {
+        setBlocked(false);
+        return;
+      }
+      setBlocked(Boolean(profile?.onboardingSkipped && !profile?.onboardingCompleted));
     });
     return () => {
       cancelled = true;
