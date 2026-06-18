@@ -1,3 +1,11 @@
+export const DEFAULT_COUNSELOR_IMAGE =
+  "https://pixabay.com/get/g93a39adb6c5f5f1072cdbc268efb023d82e6b704281f66a6e63c5f09f7b7df1edc9ed568f0ea2eda731be63ca9d37af01e7217fb389b11d5e8fd6b4bb3642aea233905aed946de22d8c78e878f23802c.svg?attachment=";
+
+export function resolveCounselorImage(image?: string | null): string {
+  const trimmed = (image ?? "").trim();
+  return trimmed || DEFAULT_COUNSELOR_IMAGE;
+}
+
 export type Counselor = {
   id: string;
   name: string;
@@ -76,7 +84,7 @@ export function counselorFromRow(row: CounselorRow): Counselor {
     availability: row.availability ?? [],
     rating: Number(row.rating ?? 0),
     sessionsCompleted: Number(row.sessions_completed ?? 0),
-    image: row.image ?? "",
+    image: resolveCounselorImage(row.image),
     isActive: Boolean(row.is_active),
     linkedUserId: row.linked_user_id ?? null,
   };
@@ -109,4 +117,41 @@ export function slugifyCounselorId(name: string): string {
     .replace(/^-+|-+$/g, "");
   const suffix = Date.now().toString(36).slice(-4);
   return base ? `${base}-${suffix}` : `coach-${suffix}`;
+}
+
+export function splitCounselorName(name: string): { firstName: string; lastName: string } {
+  const trimmed = name.trim();
+  const spaceIndex = trimmed.indexOf(" ");
+  if (spaceIndex === -1) {
+    return { firstName: trimmed, lastName: "" };
+  }
+  return {
+    firstName: trimmed.slice(0, spaceIndex),
+    lastName: trimmed.slice(spaceIndex + 1).trim(),
+  };
+}
+
+export function combineCounselorName(firstName: string, lastName: string): string {
+  return `${firstName.trim()} ${lastName.trim()}`.trim();
+}
+
+export function counselorNameFromBody(body: Record<string, unknown>):
+  | { name: string }
+  | { error: string } {
+  const firstName = String(body.firstName ?? "").trim();
+  const lastName = String(body.lastName ?? "").trim();
+  const legacyName = String(body.name ?? "").trim();
+
+  if (firstName || lastName) {
+    if (!firstName) {
+      return { error: "First name is required." };
+    }
+    return { name: combineCounselorName(firstName, lastName) };
+  }
+
+  if (legacyName) {
+    return { name: legacyName };
+  }
+
+  return { error: "First name is required." };
 }

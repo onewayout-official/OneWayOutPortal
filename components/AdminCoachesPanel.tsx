@@ -12,12 +12,12 @@ import {
   ToggleLeft,
   ToggleRight,
 } from "lucide-react";
-import { Counselor } from "@/lib/counselors";
+import { Counselor, resolveCounselorImage, splitCounselorName } from "@/lib/counselors";
 import { getAuthHeader } from "@/lib/authHeader";
 
 interface CoachFormState {
-  name: string;
-  title: string;
+  firstName: string;
+  lastName: string;
   specialty: string;
   bio: string;
   about: string;
@@ -25,34 +25,31 @@ interface CoachFormState {
   languages: string;
   location: string;
   availability: string;
-  rating: string;
-  sessionsCompleted: string;
   image: string;
   isActive: boolean;
   linkedUserEmail: string;
 }
 
 const EMPTY_FORM: CoachFormState = {
-  name: "",
-  title: "Life Coach/Counsellor",
+  firstName: "",
+  lastName: "",
   specialty: "",
   bio: "",
   about: "",
-  experienceYears: "0",
+  experienceYears: "",
   languages: "English",
   location: "",
   availability: "",
-  rating: "0",
-  sessionsCompleted: "0",
   image: "",
-  isActive: false,
+  isActive: true,
   linkedUserEmail: "",
 };
 
 function coachToForm(coach: Counselor): CoachFormState {
+  const { firstName, lastName } = splitCounselorName(coach.name);
   return {
-    name: coach.name,
-    title: coach.title,
+    firstName,
+    lastName,
     specialty: coach.specialty,
     bio: coach.bio,
     about: coach.about,
@@ -60,18 +57,36 @@ function coachToForm(coach: Counselor): CoachFormState {
     languages: coach.languages.join(", "),
     location: coach.location,
     availability: coach.availability.join(", "),
-    rating: String(coach.rating),
-    sessionsCompleted: String(coach.sessionsCompleted),
     image: coach.image,
     isActive: Boolean(coach.isActive),
     linkedUserEmail: coach.linkedUserEmail ?? "",
   };
 }
 
+function FormField({
+  label,
+  hint,
+  className,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className={className}>
+      <span className="mb-1 block text-xs font-medium text-gray-600 dark:text-gray-300">{label}</span>
+      {children}
+      {hint ? <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{hint}</p> : null}
+    </div>
+  );
+}
+
 function formToPayload(form: CoachFormState) {
   return {
-    name: form.name.trim(),
-    title: form.title.trim(),
+    firstName: form.firstName.trim(),
+    lastName: form.lastName.trim(),
     specialty: form.specialty.trim(),
     bio: form.bio.trim(),
     about: form.about.trim(),
@@ -79,8 +94,6 @@ function formToPayload(form: CoachFormState) {
     languages: form.languages,
     location: form.location.trim(),
     availability: form.availability,
-    rating: Number(form.rating || 0),
-    sessionsCompleted: Number(form.sessionsCompleted || 0),
     image: form.image.trim(),
     isActive: form.isActive,
     linkedUserEmail: form.linkedUserEmail.trim() || null,
@@ -146,13 +159,21 @@ export default function AdminCoachesPanel() {
         headers,
         body: JSON.stringify(formToPayload(createForm)),
       });
-      const json = (await response.json()) as { coach?: Counselor; error?: string };
+      const json = (await response.json()) as {
+        coach?: Counselor;
+        error?: string;
+        accountCreated?: boolean;
+      };
       if (response.status === 403) {
         setIsForbidden(true);
         return;
       }
       if (!response.ok) throw new Error(json.error ?? "Failed to add coach.");
-      setSuccess("Coach added successfully.");
+      setSuccess(
+        json.accountCreated
+          ? "Coach added and a new counselor login was created. The coach can use Forgot password on the login page to set their password."
+          : "Coach added successfully."
+      );
       setCreateForm(EMPTY_FORM);
       await loadCoaches();
     } catch (err) {
@@ -185,13 +206,21 @@ export default function AdminCoachesPanel() {
         headers,
         body: JSON.stringify(formToPayload(editForm)),
       });
-      const json = (await response.json()) as { coach?: Counselor; error?: string };
+      const json = (await response.json()) as {
+        coach?: Counselor;
+        error?: string;
+        accountCreated?: boolean;
+      };
       if (response.status === 403) {
         setIsForbidden(true);
         return;
       }
       if (!response.ok) throw new Error(json.error ?? "Failed to update coach.");
-      setSuccess("Coach updated successfully.");
+      setSuccess(
+        json.accountCreated
+          ? "Coach updated and a new counselor login was created. The coach can use Forgot password on the login page to set their password."
+          : "Coach updated successfully."
+      );
       cancelEdit();
       await loadCoaches();
     } catch (err) {
@@ -260,16 +289,16 @@ export default function AdminCoachesPanel() {
       <input
         required
         type="text"
-        placeholder="Full name"
-        value={form.name}
-        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+        placeholder="First name"
+        value={form.firstName}
+        onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
         className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
       />
       <input
         type="text"
-        placeholder="Title"
-        value={form.title}
-        onChange={(e) => setForm((prev) => ({ ...prev, title: e.target.value }))}
+        placeholder="Last name"
+        value={form.lastName}
+        onChange={(e) => setForm((prev) => ({ ...prev, lastName: e.target.value }))}
         className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
       />
       <input
@@ -288,44 +317,36 @@ export default function AdminCoachesPanel() {
       />
       <input
         type="url"
-        placeholder="Image URL"
+        placeholder="Image URL (optional — default avatar used if empty)"
         value={form.image}
         onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
         className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:col-span-2"
       />
-      <input
-        type="email"
-        placeholder="Linked coach login email (counselor role)"
-        value={form.linkedUserEmail}
-        onChange={(e) => setForm((prev) => ({ ...prev, linkedUserEmail: e.target.value }))}
-        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:col-span-2"
-      />
+      <FormField
+        label="Coach login email"
+        hint="Optional. Creates a counselor portal account if it does not exist yet. The coach signs in at /login and uses Forgot password to set their password."
+        className="sm:col-span-2"
+      >
+        <input
+          type="text"
+          inputMode="email"
+          autoComplete="off"
+          placeholder="coach@example.com"
+          value={form.linkedUserEmail}
+          onChange={(e) => setForm((prev) => ({ ...prev, linkedUserEmail: e.target.value }))}
+          className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        />
+      </FormField>
+      <FormField label="Years of experience" hint="Shown on the Help Me coach card">
       <input
         type="number"
         min={0}
-        placeholder="Years of experience"
+        placeholder="e.g. 8"
         value={form.experienceYears}
         onChange={(e) => setForm((prev) => ({ ...prev, experienceYears: e.target.value }))}
-        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+        className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
       />
-      <input
-        type="number"
-        min={0}
-        max={5}
-        step="0.1"
-        placeholder="Rating"
-        value={form.rating}
-        onChange={(e) => setForm((prev) => ({ ...prev, rating: e.target.value }))}
-        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-      />
-      <input
-        type="number"
-        min={0}
-        placeholder="Sessions completed"
-        value={form.sessionsCompleted}
-        onChange={(e) => setForm((prev) => ({ ...prev, sessionsCompleted: e.target.value }))}
-        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-      />
+      </FormField>
       <input
         type="text"
         placeholder="Languages (comma-separated)"
@@ -477,17 +498,11 @@ export default function AdminCoachesPanel() {
                 className="flex flex-col gap-3 rounded-lg border border-gray-200 p-4 dark:border-gray-700 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="flex items-start gap-3 min-w-0">
-                  {coach.image ? (
-                    <img
-                      src={coach.image}
-                      alt={coach.name}
-                      className="h-12 w-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-gray-200 text-sm font-semibold text-gray-600 dark:bg-gray-700 dark:text-gray-300">
-                      {coach.name.charAt(0)}
-                    </div>
-                  )}
+                  <img
+                    src={resolveCounselorImage(coach.image)}
+                    alt={coach.name}
+                    className="h-12 w-12 rounded-full object-cover"
+                  />
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-semibold text-gray-900 dark:text-white">{coach.name}</h3>

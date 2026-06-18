@@ -1,37 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { counselorFromRow, slugifyCounselorId, type CounselorRow } from "@/lib/counselors";
+import type { SupabaseClient } from "@supabase/supabase-js";
+import { counselorFromRow, counselorNameFromBody, resolveCounselorImage, slugifyCounselorId, type CounselorRow } from "@/lib/counselors";
 import { getCoachesAdminContext } from "@/lib/coachesAdminApi";
-
-async function resolveLinkedUserId(
-  adminClient: SupabaseClient,
-  linkedUserEmail: unknown
-): Promise<{ linkedUserId: string | null } | { error: string }> {
-  const email = String(linkedUserEmail ?? "").trim().toLowerCase();
-  if (!email) {
-    return { linkedUserId: null };
-  }
-
-  const { data: profile, error } = await adminClient
-    .from("profiles")
-    .select("id, role")
-    .eq("email", email)
-    .maybeSingle();
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  if (!profile) {
-    return { error: "No user found with that email." };
-  }
-
-  if ((profile as { role?: string }).role !== "counselor") {
-    return { error: "That user must have the counselor role before linking." };
-  }
-
-  return { linkedUserId: (profile as { id: string }).id };
-}
+import { resolveOrCreateCounselorUser } from "@/lib/resolveCounselorUser";
 
 async function enrichCoachesWithEmails(
   adminClient: SupabaseClient,
@@ -63,8 +34,9 @@ async function enrichCoachesWithEmails(
 }
 
 function toRowPayload(body: Record<string, unknown>, id?: string) {
-  const name = String(body.name ?? "").trim();
-  if (!name) return { error: "Name is required." };
+  const nameResult = counselorNameFromBody(body);
+  if ("error" in nameResult) return { error: nameResult.error };
+  const name = nameResult.name;
 
   const languages = Array.isArray(body.languages)
     ? body.languages.map((entry) => String(entry).trim()).filter(Boolean)
@@ -84,7 +56,7 @@ function toRowPayload(body: Record<string, unknown>, id?: string) {
     row: {
       id: id ?? slugifyCounselorId(name),
       name,
-      title: String(body.title ?? "Life Coach/Counsellor").trim() || "Life Coach/Counsellor",
+      title: "Life Coach/Counsellor",
       specialty: String(body.specialty ?? "").trim(),
       bio: String(body.bio ?? "").trim(),
       about: String(body.about ?? "").trim(),
@@ -94,7 +66,7 @@ function toRowPayload(body: Record<string, unknown>, id?: string) {
       availability,
       rating: Number(body.rating ?? 0),
       sessions_completed: Number(body.sessionsCompleted ?? 0),
-      image: String(body.image ?? "").trim(),
+      image: resolveCounselorImage(String(body.image ?? "")),
       is_active: Boolean(body.isActive),
       updated_at: new Date().toISOString(),
     },
@@ -128,14 +100,18 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: payload.error }, { status: 400 });
   }
 
-  const linked = await resolveLinkedUserId(context.adminClient, body.linkedUserEmail);
+  const linked = await resolveOrCreateCounselorUser(
+    context.adminClient,
+    body.linkedUserEmail,
+    payload.row.name
+  );
   if ("error" in linked) {
     return NextResponse.json({ error: linked.error }, { status: 400 });
   }
 
   const row = {
     ...payload.row,
-    linked_user_id: linked.linkedUserId,
+    linked_user_id: "linkedUserId" in linked ? linked.linkedUserId : null,
     created_at: new Date().toISOString(),
   };
 
@@ -149,10 +125,15 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  return NextResponse.json({
-    coach: {
-      ...counselorFromRow(data as CounselorRow),
-      linkedUserEmail: body.linkedUserEmail ? String(body.linkedUserEmail).trim().toLowerCase() : null,
+  return NextResponse.json(
+    {
+      coach: {
+        ...counselorFromRow(data as CounselorRow),
+        linkedUserEmail:
+          "email" in linked && linked.email ? linked.email : null,
+      },
+      accountCreated: "accountCreated" in linked ? linked.accountCreated : false,
     },
-  }, { status: 201 });
+    { status: 201 }
+  );
 }

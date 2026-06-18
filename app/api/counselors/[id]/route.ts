@@ -1,44 +1,17 @@
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
 import { counselorFromRow, type CounselorRow } from "@/lib/counselors";
-
-async function getAuthenticatedUser(request: NextRequest) {
-  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
-  const anonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-
-  if (!supabaseUrl || !anonKey) {
-    return { error: NextResponse.json({ error: "Supabase not configured." }, { status: 500 }) };
-  }
-
-  const authHeader = request.headers.get("authorization");
-  const token = authHeader?.startsWith("Bearer ") ? authHeader.slice(7) : "";
-  if (!token) {
-    return { error: NextResponse.json({ error: "Missing auth token." }, { status: 401 }) };
-  }
-
-  const client = createClient(supabaseUrl, anonKey);
-  const {
-    data: { user },
-    error,
-  } = await client.auth.getUser(token);
-
-  if (error || !user) {
-    return { error: NextResponse.json({ error: "Unauthorized." }, { status: 401 }) };
-  }
-
-  return { client };
-}
+import { requireAuthenticatedSupabaseClient } from "@/lib/authenticatedSupabase";
 
 export async function GET(
-  request: NextRequest,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const auth = await getAuthenticatedUser(request);
-  if ("error" in auth && auth.error) return auth.error;
+  const auth = await requireAuthenticatedSupabaseClient(request);
+  if ("error" in auth) return auth.error;
 
   const { id } = await params;
 
-  const { data, error } = await auth.client!
+  const { data, error } = await auth.client
     .from("counselors")
     .select("*")
     .eq("id", id)

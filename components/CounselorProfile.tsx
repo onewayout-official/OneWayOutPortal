@@ -10,7 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { Counselor } from "@/lib/counselors";
+import { Counselor, resolveCounselorImage } from "@/lib/counselors";
 import { getAuthHeader } from "@/lib/authHeader";
 
 const WEEKDAY_TO_INDEX: Record<string, number> = {
@@ -178,7 +178,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <img
-            src={counselor.image}
+            src={resolveCounselorImage(counselor.image)}
             alt={counselor.name}
             className="h-20 w-20 rounded-full object-cover"
           />

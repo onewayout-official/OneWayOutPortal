@@ -8,6 +8,9 @@ import { computeAccountTypeBalances } from "@/lib/budgetAccountBalances";
 import { computeMembershipProgress } from "@/lib/membershipProgress";
 import { rewards } from "@/lib/gamification/rewards";
 import MembershipQuestMap from "@/components/MembershipQuestMap";
+import { Counselor, resolveCounselorImage } from "@/lib/counselors";
+import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
+import { getAuthHeader } from "@/lib/authHeader";
 import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile } from "lucide-react";
 import Link from "next/link";
 import {
@@ -15,21 +18,6 @@ import {
   XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   Legend as ReLegend, ResponsiveContainer, ReferenceLine,
 } from 'recharts';
-
-const COUNSELORS = [
-  { name: "Sarah Mitchell", title: "Financial Counselor", specialty: "Debt Management & Budgeting", bio: "Expert guidance on eliminating debt and building healthy spending habits tailored to your lifestyle.", img: 5 },
-  { name: "James Okonkwo", title: "Investment Advisor", specialty: "Wealth Building & Investments", bio: "Helping clients grow long-term wealth through diversified investment strategies and financial planning.", img: 11 },
-  { name: "Priya Sharma", title: "Savings Strategist", specialty: "Emergency Funds & Savings", bio: "Specialising in building safety nets and achieving short-term savings goals that last.", img: 44 },
-  { name: "Michael Torres", title: "Retirement Planner", specialty: "Retirement & Legacy Planning", bio: "Focused on securing your future with smart retirement strategies and long-term legacy building.", img: 15 },
-  { name: "Amara Diallo", title: "Budget Coach", specialty: "Income Optimisation", bio: "Helping you stretch every dollar further with practical budgeting techniques that actually work.", img: 21 },
-  { name: "David Chen", title: "Tax Consultant", specialty: "Tax Planning & Efficiency", bio: "Reducing your tax burden legally while maximising the money that stays in your pocket.", img: 25 },
-  { name: "Natasha Williams", title: "Wealth Manager", specialty: "High Net Worth Planning", bio: "Tailored strategies for growing and protecting significant wealth across multiple asset classes.", img: 48 },
-  { name: "Robert Nakamura", title: "Credit Advisor", specialty: "Credit Repair & Building", bio: "Rebuilding credit scores and establishing healthy credit habits for a stronger financial future.", img: 32 },
-  { name: "Fatima Al-Hassan", title: "Financial Educator", specialty: "Financial Literacy", bio: "Empowering clients with foundational knowledge to make confident, informed financial decisions.", img: 64 },
-  { name: "Marcus Johnson", title: "Investment Coach", specialty: "Stocks, ETFs & Index Funds", bio: "Breaking down investment options into clear, actionable steps for first-time and seasoned investors.", img: 38 },
-  { name: "Elena Petrov", title: "Estate Planner", specialty: "Estate & Inheritance Planning", bio: "Ensuring your assets are protected and distributed according to your wishes for generations to come.", img: 47 },
-  { name: "Samuel Boateng", title: "Business Finance Advisor", specialty: "Entrepreneurship & SME Finance", bio: "Supporting small business owners with financial strategies to grow, sustain, and scale their ventures.", img: 12 },
-];
 
 export default function Dashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -64,6 +52,34 @@ export default function Dashboard() {
   const [accountBalance, setAccountBalance] = useState<{ allocated: number; budgeted: number; spent: number } | null>(null);
   const [userAccounts, setUserAccounts] = useState<{ id: string; accountType: string; name: string }[]>([]);
   const [accountTypeBalances, setAccountTypeBalances] = useState<{ type: string; total: number }[]>([]);
+  const [counselors, setCounselors] = useState<Counselor[]>(MOCK_COUNSELORS);
+  const [isLoadingCounselors, setIsLoadingCounselors] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCounselors() {
+      try {
+        const headers = await getAuthHeader();
+        const response = await fetch("/api/counselors", { method: "GET", headers });
+        if (!response.ok) return;
+        const json = (await response.json()) as { counselors?: Counselor[] };
+        if (!cancelled && json.counselors && json.counselors.length > 0) {
+          setCounselors(json.counselors);
+        }
+      } catch {
+        // Keep mock fallback when API is unavailable.
+      } finally {
+        if (!cancelled) setIsLoadingCounselors(false);
+      }
+    }
+
+    loadCounselors();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -754,44 +770,54 @@ export default function Dashboard() {
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Browse our growing pool of expert advisors</p>
           </div>
           <span className="text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-800">
-            Bookings Opening Soon
+            {isLoadingCounselors ? "Loading..." : `${counselors.length} counselors`}
           </span>
         </div>
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
-          {COUNSELORS.slice(0, 3).map((counselor, idx) => (
-            <div
-              key={idx}
-              className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4 flex flex-col items-center text-center gap-3"
-            >
-              <img
-                src={`https://i.pravatar.cc/150?img=${counselor.img}`}
-                alt={counselor.name}
-                className="w-14 h-14 rounded-full object-cover shadow-md ring-2 ring-white dark:ring-gray-600"
-              />
-              <div>
-                <p className="font-semibold text-gray-900 dark:text-white text-sm">{counselor.name}</p>
-                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">{counselor.title}</p>
-              </div>
-              <span className="text-[10px] font-medium bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-700">
-                {counselor.specialty}
-              </span>
-              <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed">{counselor.bio}</p>
-              <button
-                disabled
-                className="mt-auto w-full text-xs font-medium py-1.5 px-3 rounded-lg bg-gray-200 dark:bg-gray-600 text-gray-400 dark:text-gray-500 cursor-not-allowed"
+        {isLoadingCounselors ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-500" />
+          </div>
+        ) : counselors.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No counselors are available right now. Please check back soon.
+          </p>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
+            {counselors.slice(0, 3).map((counselor) => (
+              <div
+                key={counselor.id}
+                className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4 flex flex-col items-center text-center gap-3"
               >
-                Book Free Session
-              </button>
-            </div>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="mt-4 w-full sm:w-auto text-sm font-medium py-2 px-4 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors"
+                <img
+                  src={resolveCounselorImage(counselor.image)}
+                  alt={counselor.name}
+                  className="w-14 h-14 rounded-full object-cover shadow-md ring-2 ring-white dark:ring-gray-600"
+                />
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-white text-sm">{counselor.name}</p>
+                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">{counselor.title}</p>
+                </div>
+                <span className="text-[10px] font-medium bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-700">
+                  {counselor.specialty}
+                </span>
+                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-3">{counselor.bio}</p>
+                <Link
+                  href={`/help-me/counselors/${counselor.id}?action=book`}
+                  className="mt-auto w-full text-xs font-medium py-1.5 px-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-center"
+                >
+                  Book Free Session
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+        <Link
+          href="/help-me"
+          className="mt-4 inline-block w-full sm:w-auto text-sm font-medium py-2 px-4 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors text-center"
         >
           View other counsellors
-        </button>
+        </Link>
       </div>
 
       {/* Cash is king Heading */}

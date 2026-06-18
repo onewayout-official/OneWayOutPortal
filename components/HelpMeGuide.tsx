@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { HelpCircle, MessageCircle, AlertTriangle, ArrowRight, Phone, MessageSquare, Clock, PhoneCall } from "lucide-react";
 import Link from "next/link";
-import { Counselor } from "@/lib/counselors";
+import { Counselor, resolveCounselorImage } from "@/lib/counselors";
 import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
 import { getAuthHeader } from "@/lib/authHeader";
 
 export default function HelpMeGuide() {
   const [isChatOpen, setIsChatOpen] = useState(false);
-  const [counselors, setCounselors] = useState<Counselor[]>(MOCK_COUNSELORS);
+  const [counselors, setCounselors] = useState<Counselor[]>([]);
   const [isLoadingCounselors, setIsLoadingCounselors] = useState(true);
 
   useEffect(() => {
@@ -25,7 +25,7 @@ export default function HelpMeGuide() {
           setCounselors(json.counselors);
         }
       } catch {
-        // Keep mock fallback when API is unavailable.
+        if (!cancelled) setCounselors(MOCK_COUNSELORS);
       } finally {
         if (!cancelled) setIsLoadingCounselors(false);
       }
@@ -56,7 +56,11 @@ export default function HelpMeGuide() {
             {isLoadingCounselors ? "Loading..." : `${counselors.length} counselors`}
           </span>
         </div>
-        {counselors.length === 0 ? (
+        {isLoadingCounselors ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-500" />
+          </div>
+        ) : counselors.length === 0 ? (
           <p className="text-sm text-gray-500 dark:text-gray-400">
             No coaches are available right now. Please check back soon.
           </p>
@@ -69,7 +73,7 @@ export default function HelpMeGuide() {
               >
                 <div className="flex items-start gap-3">
                   <img
-                    src={counselor.image}
+                    src={resolveCounselorImage(counselor.image)}
                     alt={counselor.name}
                     className="h-14 w-14 rounded-full object-cover"
                   />

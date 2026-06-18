@@ -1,37 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import type { SupabaseClient } from "@supabase/supabase-js";
-import { counselorFromRow, type CounselorRow } from "@/lib/counselors";
+import { counselorFromRow, counselorNameFromBody, resolveCounselorImage, type CounselorRow } from "@/lib/counselors";
 import { getCoachesAdminContext } from "@/lib/coachesAdminApi";
-
-async function resolveLinkedUserId(
-  adminClient: SupabaseClient,
-  linkedUserEmail: unknown
-): Promise<{ linkedUserId: string | null } | { error: string }> {
-  const email = String(linkedUserEmail ?? "").trim().toLowerCase();
-  if (!email) {
-    return { linkedUserId: null };
-  }
-
-  const { data: profile, error } = await adminClient
-    .from("profiles")
-    .select("id, role")
-    .eq("email", email)
-    .maybeSingle();
-
-  if (error) {
-    return { error: error.message };
-  }
-
-  if (!profile) {
-    return { error: "No user found with that email." };
-  }
-
-  if ((profile as { role?: string }).role !== "counselor") {
-    return { error: "That user must have the counselor role before linking." };
-  }
-
-  return { linkedUserId: (profile as { id: string }).id };
-}
+import { resolveOrCreateCounselorUser } from "@/lib/resolveCounselorUser";
 
 export async function PATCH(
   request: NextRequest,
@@ -46,9 +16,15 @@ export async function PATCH(
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
   };
+  let accountCreated = false;
 
-  if (body.name !== undefined) updates.name = String(body.name).trim();
-  if (body.title !== undefined) updates.title = String(body.title).trim();
+  if (body.firstName !== undefined || body.lastName !== undefined || body.name !== undefined) {
+    const nameResult = counselorNameFromBody(body);
+    if ("error" in nameResult) {
+      return NextResponse.json({ error: nameResult.error }, { status: 400 });
+    }
+    updates.name = nameResult.name;
+  }
   if (body.specialty !== undefined) updates.specialty = String(body.specialty).trim();
   if (body.bio !== undefined) updates.bio = String(body.bio).trim();
   if (body.about !== undefined) updates.about = String(body.about).trim();
@@ -58,15 +34,27 @@ export async function PATCH(
   if (body.sessionsCompleted !== undefined) {
     updates.sessions_completed = Number(body.sessionsCompleted);
   }
-  if (body.image !== undefined) updates.image = String(body.image).trim();
+  if (body.image !== undefined) updates.image = resolveCounselorImage(String(body.image));
   if (body.isActive !== undefined) updates.is_active = Boolean(body.isActive);
 
   if (body.linkedUserEmail !== undefined) {
-    const linked = await resolveLinkedUserId(context.adminClient, body.linkedUserEmail);
+    const coachName =
+      typeof updates.name === "string"
+        ? updates.name
+        : ((
+            await context.adminClient.from("counselors").select("name").eq("id", id).maybeSingle()
+          ).data as { name?: string } | null)?.name ?? "";
+
+    const linked = await resolveOrCreateCounselorUser(
+      context.adminClient,
+      body.linkedUserEmail,
+      coachName
+    );
     if ("error" in linked) {
       return NextResponse.json({ error: linked.error }, { status: 400 });
     }
-    updates.linked_user_id = linked.linkedUserId;
+    updates.linked_user_id = "linkedUserId" in linked ? linked.linkedUserId : null;
+    accountCreated = "accountCreated" in linked ? linked.accountCreated : false;
   }
 
   if (body.languages !== undefined) {
@@ -102,7 +90,10 @@ export async function PATCH(
     return NextResponse.json({ error: "Coach not found." }, { status: 404 });
   }
 
-  return NextResponse.json({ coach: counselorFromRow(data as CounselorRow) });
+  return NextResponse.json({
+    coach: counselorFromRow(data as CounselorRow),
+    accountCreated,
+  });
 }
 
 export async function DELETE(
