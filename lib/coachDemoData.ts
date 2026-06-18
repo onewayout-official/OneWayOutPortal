@@ -1,0 +1,58 @@
+import { CounselorAppointment } from "@/lib/counselors";
+
+export const DEMO_COACH_NAME = "Sarah Mitchell";
+
+export const DEMO_COACH_APPOINTMENTS: CounselorAppointment[] = [
+  {
+    id: "demo-appt-1",
+    counselorId: "demo-coach",
+    userId: "demo-user-1",
+    appointmentDate: "2026-06-20",
+    appointmentTime: "10:00",
+    meetingLink: "https://meet.google.com/demo-onewayout-1",
+    status: "scheduled",
+    createdAt: "2026-06-15T08:00:00.000Z",
+    userName: "Maria Nghidinwa",
+    userEmail: "maria.n@example.com",
+    userPhone: "+264 81 234 5678",
+  },
+  {
+    id: "demo-appt-2",
+    counselorId: "demo-coach",
+    userId: "demo-user-2",
+    appointmentDate: "2026-06-22",
+    appointmentTime: "14:30",
+    meetingLink: "https://meet.google.com/demo-onewayout-2",
+    status: "scheduled",
+    createdAt: "2026-06-16T11:30:00.000Z",
+    userName: "Johannes Shikongo",
+    userEmail: "johannes.s@example.com",
+    userPhone: "+264 85 987 6543",
+  },
+  {
+    id: "demo-appt-3",
+    counselorId: "demo-coach",
+    userId: "demo-user-3",
+    appointmentDate: "2026-06-10",
+    appointmentTime: "09:00",
+    meetingLink: "https://meet.google.com/demo-onewayout-3",
+    status: "completed",
+    createdAt: "2026-06-05T09:15:00.000Z",
+    userName: "Linda Amutenya",
+    userEmail: "linda.a@example.com",
+    userPhone: "+264 81 555 1234",
+  },
+  {
+    id: "demo-appt-4",
+    counselorId: "demo-coach",
+    userId: "demo-user-4",
+    appointmentDate: "2026-05-28",
+    appointmentTime: "16:00",
+    meetingLink: "https://meet.google.com/demo-onewayout-4",
+    status: "completed",
+    createdAt: "2026-05-20T14:00:00.000Z",
+    userName: "Petrus Iipinge",
+    userEmail: "petrus.i@example.com",
+    userPhone: "+264 81 777 8899",
+  },
+];

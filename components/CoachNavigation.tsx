@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarCheck, LogOut } from "lucide-react";
+import { CalendarCheck, Eye, Home, LogOut } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const coachNavItems = [
   { href: "/coach", label: "My Appointments", icon: CalendarCheck },
+  { href: "/coach/demo", label: "Demo preview", icon: Eye, coachesAdminOnly: true },
 ];
 
 function CoachNavLink({
@@ -37,7 +38,11 @@ function CoachNavLink({
 
 export default function CoachNavigation() {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { logout, isCoachesAdmin } = useAuth();
+
+  const visibleNavItems = coachNavItems.filter(
+    (item) => !item.coachesAdminOnly || isCoachesAdmin
+  );
 
   return (
     <nav
@@ -53,7 +58,7 @@ export default function CoachNavigation() {
             Coach Portal
           </h3>
           <div className="flex flex-col gap-0.5 mt-1">
-            {coachNavItems.map((item) => (
+            {visibleNavItems.map((item) => (
               <CoachNavLink
                 key={item.href}
                 href={item.href}
@@ -62,6 +67,15 @@ export default function CoachNavigation() {
                 isActive={pathname === item.href}
               />
             ))}
+            {isCoachesAdmin && (
+              <Link
+                href="/"
+                className="flex flex-row items-center gap-3 px-4 py-2.5 rounded-lg transition-colors text-white/70 hover:text-white hover:bg-white/10"
+              >
+                <Home className="h-5 w-5 flex-shrink-0" />
+                <span className="text-sm font-medium">Back to portal</span>
+              </Link>
+            )}
           </div>
         </div>
 
@@ -77,7 +91,7 @@ export default function CoachNavigation() {
       </div>
 
       <div className="flex md:hidden justify-around w-full py-1">
-        {coachNavItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <Link
             key={item.href}
             href={item.href}

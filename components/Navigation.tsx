@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap, CalendarCheck, ClipboardList, UserCog } from "lucide-react";
+import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap, CalendarCheck, ClipboardList, UserCog, Eye } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navSections = [
@@ -77,7 +77,10 @@ export default function Navigation() {
     if (section.label !== "Account") return section;
     const items = [...section.items];
     if (isAdmin) items.push({ href: "/admin", label: "Admin", icon: Shield });
-    if (isCoachesAdmin) items.push({ href: "/admin/coaches", label: "Manage Coaches", icon: UserCog });
+    if (isCoachesAdmin) {
+      items.push({ href: "/admin/coaches", label: "Manage Coaches", icon: UserCog });
+      items.push({ href: "/coach/demo", label: "Coach Demo", icon: Eye });
+    }
     return { ...section, items };
   });
 
