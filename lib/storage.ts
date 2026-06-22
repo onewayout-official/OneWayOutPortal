@@ -49,6 +49,14 @@ function splitNameParts(name: string): { firstName: string; lastName: string } {
   return { firstName, lastName: rest.join(" ") };
 }
 
+function readCrmProfileData(value: unknown): UserProfile["crmProfileData"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const entries = Object.entries(value as Record<string, unknown>).filter(([, item]) =>
+    typeof item === "string" || typeof item === "number" || typeof item === "boolean"
+  );
+  return entries.length > 0 ? Object.fromEntries(entries) as UserProfile["crmProfileData"] : undefined;
+}
+
 type BudgetManagerData = {
   profile: UserProfile | null;
   expenses: Expense[];
@@ -188,6 +196,7 @@ export const storage = {
       name: fullName,
       first_name: firstName,
       last_name: lastName,
+      initials: profile.initials ?? null,
       email: profile.email,
       phone: profile.phone ?? null,
       monthly_income: profile.monthlyIncome,
@@ -211,6 +220,27 @@ export const storage = {
       income_stability: profile.incomeStability ?? null,
       emergency_resilience: profile.emergencyResilience ?? null,
       primary_goal: profile.primaryGoal ?? null,
+      work_number: profile.workNumber ?? null,
+      home_number: profile.homeNumber ?? null,
+      work_email: profile.workEmail ?? null,
+      date_of_birth: profile.dateOfBirth ?? null,
+      date_of_marriage: profile.dateOfMarriage ?? null,
+      id_number: profile.idNumber ?? null,
+      tax_number: profile.taxNumber ?? null,
+      occupation: profile.occupation ?? null,
+      employer: profile.employer ?? null,
+      highest_qualification: profile.highestQualification ?? null,
+      gender: profile.gender ?? null,
+      marital_status: profile.maritalStatus ?? "unknown",
+      source_of_wealth: profile.sourceOfWealth ?? null,
+      industry_classification: profile.industryClassification ?? null,
+      bank_account_holder: profile.bankAccountHolder ?? null,
+      bank_code: profile.bankCode ?? null,
+      bank_name: profile.bankName ?? null,
+      bank_branch_code: profile.bankBranchCode ?? null,
+      bank_account_type: profile.bankAccountType ?? null,
+      bank_account_number: profile.bankAccountNumber ?? null,
+      crm_profile_data: profile.crmProfileData ?? {},
     });
     if (error) console.error("[storage] saveProfile error:", error.message);
   },
@@ -1228,6 +1258,28 @@ function mapRowToProfile(r: Record<string, unknown>): UserProfile {
     incomeStability: (r.income_stability as UserProfile["incomeStability"]) ?? undefined,
     emergencyResilience: (r.emergency_resilience as UserProfile["emergencyResilience"]) ?? undefined,
     primaryGoal: (r.primary_goal as UserProfile["primaryGoal"]) ?? undefined,
+    initials: (r.initials as string) ?? undefined,
+    workNumber: (r.work_number as string) ?? undefined,
+    homeNumber: (r.home_number as string) ?? undefined,
+    workEmail: (r.work_email as string) ?? undefined,
+    dateOfBirth: (r.date_of_birth as string) ?? undefined,
+    dateOfMarriage: (r.date_of_marriage as string) ?? undefined,
+    idNumber: (r.id_number as string) ?? undefined,
+    taxNumber: (r.tax_number as string) ?? undefined,
+    occupation: (r.occupation as string) ?? undefined,
+    employer: (r.employer as string) ?? undefined,
+    highestQualification: (r.highest_qualification as string) ?? undefined,
+    gender: (r.gender as UserProfile["gender"]) ?? undefined,
+    maritalStatus: (r.marital_status as UserProfile["maritalStatus"]) ?? "unknown",
+    sourceOfWealth: (r.source_of_wealth as UserProfile["sourceOfWealth"]) ?? undefined,
+    industryClassification: (r.industry_classification as UserProfile["industryClassification"]) ?? undefined,
+    bankAccountHolder: (r.bank_account_holder as string) ?? undefined,
+    bankCode: r.bank_code != null ? Number(r.bank_code) : undefined,
+    bankName: (r.bank_name as string) ?? undefined,
+    bankBranchCode: (r.bank_branch_code as string) ?? undefined,
+    bankAccountType: (r.bank_account_type as string) ?? undefined,
+    bankAccountNumber: (r.bank_account_number as string) ?? undefined,
+    crmProfileData: readCrmProfileData(r.crm_profile_data),
   };
 }
 

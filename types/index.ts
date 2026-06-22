@@ -1,13 +1,71 @@
+export type CrmProfileExtraValue = string | number | boolean;
+
 export interface UserProfile {
   id: string;
   name: string;
   firstName?: string;
   lastName?: string;
+  initials?: string;
   email: string;
   phone?: string;
   monthlyIncome: number;
   savingsGoal?: number;
   createdAt: string;
+  // CRM Phase 2 Fields
+  workNumber?: string;
+  homeNumber?: string;
+  workEmail?: string;
+  dateOfBirth?: string;
+  dateOfMarriage?: string;
+  idNumber?: string;
+  taxNumber?: string;
+  occupation?: string;
+  employer?: string;
+  highestQualification?: string;
+  gender?: "Male" | "Female" | "Other";
+  maritalStatus?:
+    | "unknown"
+    | "unmarried"
+    | "married_in_cop"
+    | "married_out_cop_w_accrual"
+    | "married_out_cop"
+    | "common_law"
+    | "divorced"
+    | "widowed"
+    | "married_unknown";
+  sourceOfWealth?:
+    | "accumulated_savings"
+    | "sale_of_assets"
+    | "investment_returns"
+    | "inheritance_donations"
+    | "court_orders_settlements"
+    | "legitimate_winnings";
+  industryClassification?:
+    | "accounting_auditing"
+    | "agriculture_farming"
+    | "cash_forex_crypto"
+    | "charitable_religious"
+    | "construction_real_estate"
+    | "education"
+    | "engineering"
+    | "financial_services"
+    | "government_military"
+    | "hospitality_sport_entertainment"
+    | "legal_practitioners"
+    | "medical_healthcare"
+    | "retail_manufacturing_industrial"
+    | "retiree"
+    | "technology"
+    | "transport_logistics"
+    | "unemployed";
+  // Banking Fields
+  bankAccountHolder?: string;
+  bankCode?: number;
+  bankName?: string;
+  bankBranchCode?: string;
+  bankAccountType?: string;
+  bankAccountNumber?: string;
+  crmProfileData?: Record<string, CrmProfileExtraValue>;
   // Onboarding fields
   mood?: "😊" | "😐" | "😔";
   capital?: number;

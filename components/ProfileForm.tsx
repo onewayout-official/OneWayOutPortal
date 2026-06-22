@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { UserProfile } from "@/types";
 import { storage } from "@/lib/storage";
+import { syncClientToCrm } from "@/lib/crmSync";
 import { useAuth } from "@/contexts/AuthContext";
 import { Save, User, Mail, Phone, CheckCircle, AlertCircle } from "lucide-react";
 
@@ -11,6 +12,7 @@ export default function ProfileForm() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [syncWarning, setSyncWarning] = useState<string | null>(null);
   const { user } = useAuth();
 
   useEffect(() => {
@@ -40,7 +42,65 @@ export default function ProfileForm() {
     if (!profile) return;
 
     setIsSaving(true);
+    setSyncWarning(null);
     await storage.saveProfile(profile);
+
+      // CRM Sync
+    try {
+      console.log('[ProfileForm] Calling syncClientToCrm (profile-only)...');
+      const crmSyncResult = await syncClientToCrm(
+        ({
+          syncStage: "onboarding",
+          profile: {
+            id: profile.id,
+            name: profile.name,
+            email: profile.email,
+            phone: profile.phone,
+            workNumber: profile.workNumber,
+            homeNumber: profile.homeNumber,
+            workEmail: profile.workEmail,
+            monthlyIncome: profile.monthlyIncome,
+            savingsGoal: profile.savingsGoal,
+            capital: profile.capital,
+            debts: profile.debts,
+            lastIncome: profile.lastIncome,
+            lastExpenses: profile.lastExpenses,
+            createdAt: profile.createdAt,
+            dateOfBirth: profile.dateOfBirth,
+            dateOfMarriage: profile.dateOfMarriage,
+            idNumber: profile.idNumber,
+            taxNumber: profile.taxNumber,
+            occupation: profile.occupation,
+            employer: profile.employer,
+            highestQualification: profile.highestQualification,
+            gender: profile.gender,
+            maritalStatus: profile.maritalStatus,
+            sourceOfWealth: profile.sourceOfWealth,
+            industryClassification: profile.industryClassification,
+            bankAccountHolder: profile.bankAccountHolder,
+            bankCode: profile.bankCode,
+            bankName: profile.bankName,
+            bankBranchCode: profile.bankBranchCode,
+            bankAccountType: profile.bankAccountType,
+            bankAccountNumber: profile.bankAccountNumber,
+          },
+        } as any),
+        { force: true, profileOnly: true }
+      );
+
+      console.log('[ProfileForm] CRM sync result:', crmSyncResult);
+
+      if (!crmSyncResult.success) {
+        console.warn('[ProfileForm] CRM sync failed:', crmSyncResult.message);
+        setSyncWarning(crmSyncResult.message || "Profile saved, but CRM sync failed.");
+      } else {
+        console.log('[ProfileForm] CRM sync successful!');
+      }
+    } catch (error) {
+      console.error('[ProfileForm] CRM sync error:', error);
+      setSyncWarning("Profile saved, but CRM sync failed.");
+    }
+
     setIsSaving(false);
     setSaveSuccess(true);
     setTimeout(() => setSaveSuccess(false), 3000);
@@ -78,6 +138,12 @@ export default function ProfileForm() {
         <div className="flex items-center gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg animate-in fade-in">
           <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
           <p className="text-green-800 dark:text-green-200 font-medium">Profile saved successfully!</p>
+        </div>
+      )}
+      {syncWarning && (
+        <div className="flex items-center gap-3 p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+          <AlertCircle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+          <p className="text-amber-800 dark:text-amber-200 font-medium">{syncWarning}</p>
         </div>
       )}
 
