@@ -13,6 +13,7 @@ import {
 import { supabase } from "@/lib/supabase";
 import { SIGNUP_BONUS_POINTS } from "@/lib/gamification/config";
 import { tryAwardTask } from "@/lib/gamification/rewards";
+import { computeAccountTypeBalances } from "@/lib/budgetAccountBalances";
 
 /** Get current Supabase user id (async). */
 export async function getCurrentUserId(): Promise<string | null> {
@@ -46,6 +47,76 @@ function splitNameParts(name: string): { firstName: string; lastName: string } {
   if (!trimmed) return { firstName: "", lastName: "" };
   const [firstName, ...rest] = trimmed.split(/\s+/);
   return { firstName, lastName: rest.join(" ") };
+}
+
+type BudgetManagerData = {
+  profile: UserProfile | null;
+  expenses: Expense[];
+  income: Income[];
+  budgetExpenses: RegistrationExpense[];
+  userAccounts: { id: string; accountType: string; name: string; sortOrder: number }[];
+  incomeAllocations: { incomeId: string; accountId: string; amount: number }[];
+  accountExpenseAllocations: { accountId: string; expenseId: string; amount: number }[];
+  accountTransfers: { fromAccountId: string; toAccountId: string; amount: number }[];
+  availableWalletBalance: number;
+  accountTypeBalances: { type: string; total: number }[];
+  fromCache?: boolean;
+};
+
+const BUDGET_MANAGER_CACHE_TTL_MS = 2 * 60 * 1000;
+const BUDGET_MANAGER_CACHE_PREFIX = "onewayout:budget-manager:v2:";
+
+function getBudgetManagerCacheKey(userId: string): string {
+  return `${BUDGET_MANAGER_CACHE_PREFIX}${userId}`;
+}
+
+function readBudgetManagerCache(userId: string): BudgetManagerData | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(getBudgetManagerCacheKey(userId));
+    if (!raw) return null;
+
+    const cached = JSON.parse(raw) as { cachedAt?: unknown; data?: unknown };
+    if (typeof cached.cachedAt !== "number" || Date.now() - cached.cachedAt > BUDGET_MANAGER_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(getBudgetManagerCacheKey(userId));
+      return null;
+    }
+
+    if (!cached.data || typeof cached.data !== "object") return null;
+    return { ...(cached.data as BudgetManagerData), fromCache: true };
+  } catch {
+    window.sessionStorage.removeItem(getBudgetManagerCacheKey(userId));
+    return null;
+  }
+}
+
+function writeBudgetManagerCache(userId: string, data: BudgetManagerData): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      getBudgetManagerCacheKey(userId),
+      JSON.stringify({
+        cachedAt: Date.now(),
+        data: { ...data, fromCache: false },
+      })
+    );
+  } catch {
+    // Ignore storage quota/private mode failures; network data has already loaded.
+  }
+}
+
+function clearBudgetManagerCache(): void {
+  if (typeof window === "undefined") return;
+  try {
+    for (let i = window.sessionStorage.length - 1; i >= 0; i -= 1) {
+      const key = window.sessionStorage.key(i);
+      if (key?.startsWith(BUDGET_MANAGER_CACHE_PREFIX)) {
+        window.sessionStorage.removeItem(key);
+      }
+    }
+  } catch {
+    // Cache invalidation should never block the user's budget action.
+  }
 }
 
 export const storage = {
@@ -627,11 +698,11 @@ export const storage = {
     }));
   },
 
-  saveIncomeAllocation: async (incomeId: string, accountId: string): Promise<void> => {
+  saveIncomeAllocation: async (incomeId: string, accountId: string, amount: number): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error("You must be signed in.");
     const { error } = await supabase.from("income_allocations").upsert(
-      { user_id: userId, income_id: incomeId, account_id: accountId },
+      { user_id: userId, income_id: incomeId, account_id: accountId, amount },
       { onConflict: "user_id,income_id" }
     );
     if (error) {
@@ -856,6 +927,138 @@ export const storage = {
   },
 
   /**
+   * Load the Budget page in one auth pass.
+   * Keeps the read set narrower than getDashboardData: only current-month expenses
+   * and one combined income allocation query.
+   */
+  getBudgetManagerData: async (options?: { bypassCache?: boolean; writeCache?: boolean }): Promise<BudgetManagerData | null> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+
+    if (!options?.bypassCache) {
+      const cachedData = readBudgetManagerCache(userId);
+      if (cachedData) return cachedData;
+    }
+
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
+    const monthStart = `${year}-${String(month + 1).padStart(2, "0")}-01`;
+    const nextMonthStart = `${month === 11 ? year + 1 : year}-${String(month === 11 ? 1 : month + 2).padStart(2, "0")}-01`;
+    const today = `${year}-${String(month + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+
+    const [
+      profileRow,
+      expensesData,
+      incomeData,
+      budgetExpensesData,
+      userAccountsData,
+      incomeAllocationsData,
+      accountExpenseAllocationsData,
+      accountTransfersData,
+      rewardTransactionsData,
+      budgetActivityWrite,
+    ] = await Promise.all([
+      supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
+      supabase
+        .from("expenses")
+        .select("*")
+        .eq("user_id", userId)
+        .gte("date", monthStart)
+        .lt("date", nextMonthStart)
+        .order("date", { ascending: false }),
+      supabase.from("income").select("*").eq("user_id", userId),
+      supabase.from("budget_expenses").select("*").eq("user_id", userId),
+      supabase.from("user_accounts").select("id, account_type, name, sort_order").eq("user_id", userId).order("sort_order").order("created_at"),
+      supabase.from("income_allocations").select("income_id, account_id, amount").eq("user_id", userId),
+      supabase.from("account_expense_allocations").select("account_id, expense_id, amount").eq("user_id", userId),
+      supabase.from("account_transfers").select("from_account_id, to_account_id, amount").eq("user_id", userId),
+      supabase.from("reward_transactions").select("points_delta").eq("user_id", userId).gt("points_delta", 0),
+      supabase.from("budget_activities").upsert({ user_id: userId, date: today }, { onConflict: "user_id,date" }),
+    ]);
+
+    if (budgetActivityWrite.error) console.error("[logBudgetActivity]", budgetActivityWrite.error.message);
+    if (expensesData.error) console.error("[storage] getBudgetManagerData expenses error:", expensesData.error.message);
+    if (incomeData.error) console.error("[storage] getBudgetManagerData income error:", incomeData.error.message);
+    if (budgetExpensesData.error) console.error("[storage] getBudgetManagerData budget expenses error:", budgetExpensesData.error.message);
+    if (userAccountsData.error) console.error("[storage] getBudgetManagerData accounts error:", userAccountsData.error.message);
+    if (incomeAllocationsData.error) console.error("[storage] getBudgetManagerData income allocations error:", incomeAllocationsData.error.message);
+    if (accountExpenseAllocationsData.error) console.error("[storage] getBudgetManagerData expense allocations error:", accountExpenseAllocationsData.error.message);
+    if (accountTransfersData.error) console.error("[storage] getBudgetManagerData account transfers error:", accountTransfersData.error.message);
+    if (rewardTransactionsData.error) console.error("[storage] getBudgetManagerData wallet balance error:", rewardTransactionsData.error.message);
+
+    const profile =
+      profileRow.data && !profileRow.error
+        ? mapRowToProfile(profileRow.data as Record<string, unknown>)
+        : null;
+    const totalRewardPoints = (rewardTransactionsData.data ?? []).reduce(
+      (sum: number, row: { points_delta: number }) => sum + Number(row.points_delta),
+      0
+    );
+
+    const expenses = (expensesData.data ?? []).map((r) => mapRowToExpense(r as Record<string, unknown>));
+    const income = (incomeData.data ?? []).map((r) => mapRowToIncome(r as Record<string, unknown>));
+    const userAccounts = (userAccountsData.data ?? []).map((r: { id: string; account_type: string; name: string; sort_order: number }) => ({
+      id: r.id,
+      accountType: r.account_type,
+      name: r.name,
+      sortOrder: r.sort_order,
+    }));
+    const incomeAllocations = (incomeAllocationsData.data ?? []).map((r: { income_id: string; account_id: string; amount: number }) => ({
+      incomeId: r.income_id,
+      accountId: r.account_id,
+      amount: Number(r.amount) || 0,
+    }));
+    const accountExpenseAllocations = (accountExpenseAllocationsData.data ?? []).map((r: { account_id: string; expense_id: string; amount: number }) => ({
+      accountId: r.account_id,
+      expenseId: r.expense_id,
+      amount: Number(r.amount),
+    }));
+    const accountTransfers = (accountTransfersData.data ?? []).map((r: { from_account_id: string; to_account_id: string; amount: number }) => ({
+      fromAccountId: r.from_account_id,
+      toAccountId: r.to_account_id,
+      amount: Number(r.amount) || 0,
+    }));
+    const availableWalletBalance = totalRewardPoints / 100;
+
+    const budgetData: BudgetManagerData = {
+      profile,
+      expenses,
+      income,
+      budgetExpenses: (budgetExpensesData.data ?? []).map((r) => mapRowToRegistrationExpense(r as Record<string, unknown>)),
+      userAccounts,
+      incomeAllocations,
+      accountExpenseAllocations,
+      accountTransfers,
+      availableWalletBalance,
+      accountTypeBalances: computeAccountTypeBalances({
+        userAccounts,
+        income,
+        incomeAllocations,
+        accountExpenseAllocations,
+        accountTransfers,
+        expenses,
+        walletBalance: availableWalletBalance,
+      }),
+    };
+
+    const shouldWriteCache = options?.writeCache ?? !options?.bypassCache;
+    if (shouldWriteCache) {
+      writeBudgetManagerCache(userId, budgetData);
+    }
+    return budgetData;
+  },
+
+  /** Refresh session cache after a successful background revalidation load. */
+  persistBudgetManagerCache: async (data: Omit<BudgetManagerData, "fromCache">): Promise<void> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return;
+    writeBudgetManagerCache(userId, data);
+  },
+
+  clearBudgetManagerCache,
+
+  /**
    * Load all dashboard data in one go: one auth check + 8 parallel table reads.
    * Use this instead of calling getProfile, getExpenses, getDebts, etc. separately for faster load.
    */
@@ -875,6 +1078,7 @@ export const storage = {
     incomeAllocations: { incomeId: string; accountId: string; amount: number }[];
     accountExpenseAllocations: { accountId: string; expenseId: string; amount: number }[];
     accountTransfers: { fromAccountId: string; toAccountId: string; amount: number }[];
+    accountTypeBalances: { type: string; total: number }[];
   } | null> => {
     const userId = await getCurrentUserId();
     if (!userId) return null;
@@ -895,6 +1099,7 @@ export const storage = {
       incomeAllocationsData,
       accountExpenseAllocationsData,
       accountTransfersData,
+      rewardTransactionsData,
     ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
       supabase.from("expenses").select("*").eq("user_id", userId).order("date", { ascending: false }),
@@ -911,19 +1116,47 @@ export const storage = {
       supabase.from("income_allocations").select("income_id, account_id, amount").eq("user_id", userId),
       supabase.from("account_expense_allocations").select("account_id, expense_id, amount").eq("user_id", userId),
       supabase.from("account_transfers").select("from_account_id, to_account_id, amount").eq("user_id", userId),
+      supabase.from("reward_transactions").select("points_delta").eq("user_id", userId).gt("points_delta", 0),
     ]);
 
     const profile =
       profileRow.data && !profileRow.error
         ? mapRowToProfile(profileRow.data as Record<string, unknown>)
         : null;
+    const expenses = (expensesData.data ?? []).map((r) => mapRowToExpense(r as Record<string, unknown>));
+    const income = (incomeData.data ?? []).map((r) => mapRowToIncome(r as Record<string, unknown>));
+    const userAccounts = (userAccountsData.data ?? []).map((r: { id: string; account_type: string; name: string }) => ({
+      id: r.id,
+      accountType: r.account_type,
+      name: r.name,
+    }));
+    const incomeAllocations = (incomeAllocationsData.data ?? []).map((r: { income_id: string; account_id: string; amount: number }) => ({
+      incomeId: r.income_id,
+      accountId: r.account_id,
+      amount: Number(r.amount) || 0,
+    }));
+    const accountExpenseAllocations = (accountExpenseAllocationsData.data ?? []).map((r: { account_id: string; expense_id: string; amount: number }) => ({
+      accountId: r.account_id,
+      expenseId: r.expense_id,
+      amount: Number(r.amount),
+    }));
+    const accountTransfers = (accountTransfersData.data ?? []).map((r: { from_account_id: string; to_account_id: string; amount: number }) => ({
+      fromAccountId: r.from_account_id,
+      toAccountId: r.to_account_id,
+      amount: Number(r.amount) || 0,
+    }));
+    const walletBalance =
+      (rewardTransactionsData.data ?? []).reduce(
+        (sum: number, row: { points_delta: number }) => sum + Number(row.points_delta),
+        0
+      ) / 100;
 
     return {
       profile,
-      expenses: (expensesData.data ?? []).map((r) => mapRowToExpense(r as Record<string, unknown>)),
+      expenses,
       debts: (debtsData.data ?? []).map((r) => mapRowToDebt(r as Record<string, unknown>)),
       assets: (assetsData.data ?? []).map((r) => mapRowToAsset(r as Record<string, unknown>)),
-      income: (incomeData.data ?? []).map((r) => mapRowToIncome(r as Record<string, unknown>)),
+      income,
       budgetExpenses: (budgetExpensesData.data ?? []).map((r) => mapRowToRegistrationExpense(r as Record<string, unknown>)),
       liabilities: (liabilitiesData.data ?? []).map((r) => mapRowToLiability(r as Record<string, unknown>)),
       dailyMoods: (dailyMoodsData.data ?? []).map((r: { date: string; mood: string }) => ({
@@ -941,26 +1174,19 @@ export const storage = {
             liabilities: ((onboardingData.data as any).liabilities as any[]) ?? [],
           }
           : { income: [], expenses: [], assets: [], liabilities: [] },
-      userAccounts: (userAccountsData.data ?? []).map((r: { id: string; account_type: string; name: string }) => ({
-        id: r.id,
-        accountType: r.account_type,
-        name: r.name,
-      })),
-      incomeAllocations: (incomeAllocationsData.data ?? []).map((r: { income_id: string; account_id: string; amount: number }) => ({
-        incomeId: r.income_id,
-        accountId: r.account_id,
-        amount: Number(r.amount) || 0,
-      })),
-      accountExpenseAllocations: (accountExpenseAllocationsData.data ?? []).map((r: { account_id: string; expense_id: string; amount: number }) => ({
-        accountId: r.account_id,
-        expenseId: r.expense_id,
-        amount: Number(r.amount),
-      })),
-      accountTransfers: (accountTransfersData.data ?? []).map((r: { from_account_id: string; to_account_id: string; amount: number }) => ({
-        fromAccountId: r.from_account_id,
-        toAccountId: r.to_account_id,
-        amount: Number(r.amount) || 0,
-      })),
+      userAccounts,
+      incomeAllocations,
+      accountExpenseAllocations,
+      accountTransfers,
+      accountTypeBalances: computeAccountTypeBalances({
+        userAccounts,
+        income,
+        incomeAllocations,
+        accountExpenseAllocations,
+        accountTransfers,
+        expenses,
+        walletBalance,
+      }),
     };
   },
 };

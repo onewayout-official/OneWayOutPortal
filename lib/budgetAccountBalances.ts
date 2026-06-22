@@ -27,12 +27,10 @@ export function computeAccountBalancesById(input: BudgetAccountBalanceInput): Ma
   const currentMonth = new Date().getMonth();
   const currentYear = new Date().getFullYear();
 
-  const incomeById = new Map(input.income.map((i) => [i.id, Number(i.personal) || 0]));
-
   const incomeByAccount = new Map<string, number>();
   for (const alloc of input.incomeAllocations) {
-    const baseAmount = incomeById.get(alloc.incomeId) ?? 0;
-    const flowAmount = alloc.amount > 0 ? alloc.amount : baseAmount;
+    const flowAmount = Number(alloc.amount) || 0;
+    if (flowAmount <= 0) continue;
     incomeByAccount.set(alloc.accountId, (incomeByAccount.get(alloc.accountId) ?? 0) + flowAmount);
   }
 

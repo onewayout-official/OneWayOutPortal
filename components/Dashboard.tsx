@@ -4,9 +4,7 @@ import { useState, useEffect } from "react";
 import { UserProfile, Asset } from "@/types";
 import { storage } from "@/lib/storage";
 import { computePooledIncome } from "@/lib/budgetTotals";
-import { computeAccountTypeBalances } from "@/lib/budgetAccountBalances";
 import { computeMembershipProgress } from "@/lib/membershipProgress";
-import { rewards } from "@/lib/gamification/rewards";
 import MembershipQuestMap from "@/components/MembershipQuestMap";
 import { Counselor, resolveCounselorImage } from "@/lib/counselors";
 import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
@@ -87,7 +85,7 @@ export default function Dashboard() {
       const data = await storage.getDashboardData();
       if (!data) return;
 
-      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, earnDates: earnDatesArr, budgetActivityDates, onboarding, incomeAllocations, accountExpenseAllocations, accountTransfers, userAccounts: loadedAccounts } = data;
+      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, earnDates: earnDatesArr, budgetActivityDates, onboarding, incomeAllocations, accountExpenseAllocations, userAccounts: loadedAccounts, accountTypeBalances: loadedAccountTypeBalances } = data;
       setUserAccounts(loadedAccounts);
 
       // If profile missing (e.g. new user), ensure it exists via normal getProfile (upsert)
@@ -223,17 +221,7 @@ export default function Dashboard() {
         setAccountBalance(null);
       }
 
-      const walletBalance = await rewards.getAvailableWalletBalance();
-      const balances = computeAccountTypeBalances({
-        userAccounts: loadedAccounts,
-        income: incomeRows,
-        incomeAllocations,
-        accountExpenseAllocations,
-        accountTransfers,
-        expenses,
-        walletBalance,
-      });
-      setAccountTypeBalances(balances);
+      setAccountTypeBalances(loadedAccountTypeBalances);
 
       // Build last 6 months for the Income Statement chart (current month first)
       const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
