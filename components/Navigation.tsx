@@ -11,7 +11,7 @@ const navSections = [
     items: [
       { href: "/", label: "Dashboard", icon: Home },
       { href: "/financial-plan", label: "Financial Information", icon: BarChart3 },
-      { href: "/my-1-plan", label: "My 1-Plan", icon: ClipboardList },
+      { href: "/my-1-plan", label: "FNA", icon: ClipboardList },
       { href: "/book-financial-session", label: "Book Financial Planning Session", icon: CalendarCheck },
     ],
   },

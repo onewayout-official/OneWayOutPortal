@@ -7,57 +7,162 @@ import { usePathname } from "next/navigation";
 import { User, ChevronDown, LogOut } from "lucide-react";
 import { storage } from "@/lib/storage";
 import { supabase } from "@/lib/supabase";
+import { rewards } from "@/lib/gamification/rewards";
+import { getLocalDateString, isTaskCompleted } from "@/lib/gamification/config";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserProfile } from "@/types";
 
+const financialAdvisorAppointmentKey = (userId: string) =>
+  `onewayout-financial-advisor-appointed:${userId}`;
+
+interface TopBarData {
+  profile: UserProfile | null;
+  rewardTotalPoints: number;
+  rewardTodayPoints: number;
+  hasAppointedFinancialAdvisor: boolean;
+}
+
+interface CachedTopBarData {
+  userId: string;
+  dateKey: string;
+  loadedAt: number;
+  data: TopBarData;
+}
+
+const defaultTopBarData: TopBarData = {
+  profile: null,
+  rewardTotalPoints: 0,
+  rewardTodayPoints: 0,
+  hasAppointedFinancialAdvisor: false,
+};
+
+let topBarDataCache: CachedTopBarData | null = null;
+
+const ROUTE_REFRESH_MS = 60 * 1000;
+const POLL_MS = 5 * 60 * 1000;
+const topBarDataCacheKey = (userId: string) => `onewayout-dashboard-topbar:${userId}`;
+
+function getCachedTopBarEntry(userId?: string): CachedTopBarData | null {
+  if (!userId) return null;
+
+  const today = getLocalDateString();
+  if (topBarDataCache?.userId === userId && topBarDataCache.dateKey === today) {
+    return topBarDataCache;
+  }
+
+  if (typeof window === "undefined") return null;
+
+  try {
+    const raw = sessionStorage.getItem(topBarDataCacheKey(userId));
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw) as CachedTopBarData;
+    if (parsed.userId !== userId || parsed.dateKey !== today) return null;
+
+    topBarDataCache = {
+      ...parsed,
+      loadedAt: Number(parsed.loadedAt ?? 0),
+    };
+    return topBarDataCache;
+  } catch {
+    return null;
+  }
+}
+
+function getCachedTopBarData(userId?: string): TopBarData | null {
+  return getCachedTopBarEntry(userId)?.data ?? null;
+}
+
+function shouldRefreshTopBarData(userId: string, maxAgeMs: number) {
+  const cached = getCachedTopBarEntry(userId);
+  return !cached || Date.now() - cached.loadedAt >= maxAgeMs;
+}
+
+function setCachedTopBarData(userId: string, data: TopBarData) {
+  const cacheEntry: CachedTopBarData = {
+    userId,
+    dateKey: getLocalDateString(),
+    loadedAt: Date.now(),
+    data,
+  };
+
+  topBarDataCache = cacheEntry;
+
+  if (typeof window === "undefined") return;
+
+  try {
+    sessionStorage.setItem(topBarDataCacheKey(userId), JSON.stringify(cacheEntry));
+  } catch {
+    // Cache failures should not block rendering fresh data.
+  }
+}
+
 export default function DashboardTopBar() {
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { logout, user: authUser } = useAuth();
+  const cachedTopBarData = getCachedTopBarData(authUser?.userId);
 
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [topBarData, setTopBarData] = useState<TopBarData>(
+    cachedTopBarData ?? defaultTopBarData
+  );
   const [profileDropdownOpen, setProfileDropdownOpen] = useState(false);
   const [showTransfer, setShowTransfer] = useState(false);
   const [transferMethod, setTransferMethod] = useState("");
   const [transferInput, setTransferInput] = useState("");
-  const [rewardTotalPoints, setRewardTotalPoints] = useState(0);
-  const [rewardTodayPoints, setRewardTodayPoints] = useState(0);
   const profileDropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!authUser?.userId) return;
+
     let cancelled = false;
+    const userId = authUser.userId;
+    const cached = getCachedTopBarData(userId);
+    if (cached) setTopBarData(cached);
 
     const loadTopBarData = async () => {
       try {
-        const userProfile = await storage.getProfile();
+        const localAppointmentRecorded =
+          typeof window !== "undefined" &&
+          localStorage.getItem(financialAdvisorAppointmentKey(userId)) === "1";
+
+        const todayStr = getLocalDateString();
+        const [userProfile, gamification, txnsResult] = await Promise.all([
+          storage.getProfile(),
+          rewards.getGamificationState(todayStr),
+          supabase
+            .from("reward_transactions")
+            .select("points_delta, created_at")
+            .eq("user_id", userId)
+            .gt("points_delta", 0),
+        ]);
+
         if (cancelled) return;
-        setProfile(userProfile);
 
-        const { data: { user } } = await supabase.auth.getUser();
-        if (!user || cancelled) return;
-
-        const todayStr = new Date().toISOString().slice(0, 10);
-        const { data: txns } = await supabase
-          .from("reward_transactions")
-          .select("points_delta, created_at")
-          .eq("user_id", user.id)
-          .gt("points_delta", 0);
-
-        if (cancelled || !txns) return;
-
+        const txns = txnsResult.data ?? [];
         const total = txns.reduce((s, r) => s + Number(r.points_delta), 0);
         const today = txns
           .filter((r) => r.created_at.slice(0, 10) === todayStr)
           .reduce((s, r) => s + Number(r.points_delta), 0);
-        setRewardTotalPoints(total);
-        setRewardTodayPoints(today);
+        const nextTopBarData = {
+          profile: userProfile,
+          rewardTotalPoints: total,
+          rewardTodayPoints: today,
+          hasAppointedFinancialAdvisor:
+            localAppointmentRecorded ||
+            isTaskCompleted("appoint-financial-advisor", gamification.completedTaskKeys),
+        };
+
+        setTopBarData(nextTopBarData);
+        setCachedTopBarData(userId, nextTopBarData);
       } catch (error) {
         console.error("Failed to load top bar data:", error);
       }
     };
 
-    loadTopBarData();
+    if (shouldRefreshTopBarData(userId, ROUTE_REFRESH_MS)) {
+      loadTopBarData();
+    }
 
-    const POLL_MS = 5 * 60 * 1000;
     let intervalId: ReturnType<typeof setInterval> | null = null;
 
     const schedulePoll = () => {
@@ -69,7 +174,9 @@ export default function DashboardTopBar() {
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        loadTopBarData();
+        if (shouldRefreshTopBarData(userId, ROUTE_REFRESH_MS)) {
+          loadTopBarData();
+        }
         schedulePoll();
       } else if (intervalId) {
         clearInterval(intervalId);
@@ -85,7 +192,7 @@ export default function DashboardTopBar() {
       if (intervalId) clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibility);
     };
-  }, [pathname]);
+  }, [authUser?.userId, pathname]);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -97,6 +204,7 @@ export default function DashboardTopBar() {
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  const { profile, rewardTotalPoints, rewardTodayPoints, hasAppointedFinancialAdvisor } = topBarData;
   const firstName = profile?.name?.split(" ")[0] || "there";
   const availableBalance = rewardTotalPoints / 100;
   const todayFormatted = new Date().toLocaleDateString("en-US", {
@@ -116,18 +224,25 @@ export default function DashboardTopBar() {
               <span className="text-base font-bold text-white">R 0.00</span>
               <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Updated Quarterly</span>
             </div>
-            <Link
-              href="/consent"
-              className="flex flex-col items-start gap-0.5 px-2.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 transition-colors text-left shrink-0"
-            >
-              <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">Sign-up</span>
-              <span className="text-[11px] font-bold text-white leading-snug whitespace-nowrap">
-                &ldquo;OneWayOut&rdquo; as your
-              </span>
-              <span className="text-[10px] font-medium text-white/90 leading-snug whitespace-nowrap">
-                Financial Adviser
-              </span>
-            </Link>
+            {!hasAppointedFinancialAdvisor && (
+              <div className="flex flex-col items-start gap-1">
+                <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">
+                  Supercharge your points
+                </span>
+                <Link
+                  href="/consent"
+                  className="flex flex-col items-start gap-0.5 px-2.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 transition-colors text-left shrink-0"
+                >
+                  <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">Appoint</span>
+                  <span className="text-[11px] font-bold text-white leading-snug whitespace-nowrap">
+                    &ldquo;OneWayOut&rdquo; as your
+                  </span>
+                  <span className="text-[10px] font-medium text-white/90 leading-snug whitespace-nowrap">
+                    Financial Adviser
+                  </span>
+                </Link>
+              </div>
+            )}
           </div>
 
           <div className="flex flex-col items-center justify-center">

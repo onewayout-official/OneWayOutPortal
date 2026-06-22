@@ -2,6 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
+import { rewards } from "@/lib/gamification/rewards";
 
 type View = "idle" | "document" | "success";
 
@@ -10,6 +12,9 @@ const CONSENT_DATE = new Date().toLocaleDateString("en-ZA", {
   month: "long",
   day: "numeric",
 });
+
+const financialAdvisorAppointmentKey = (userId: string) =>
+  `onewayout-financial-advisor-appointed:${userId}`;
 
 export default function Consent() {
   const router = useRouter();
@@ -91,8 +96,21 @@ export default function Consent() {
     canvas.height = height;
   }, [view]);
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     if (!canSubmit) return;
+    const { data: { user } } = await supabase.auth.getUser();
+
+    await rewards.awardTask("appoint-financial-advisor", {
+      metadata: {
+        consentDate: CONSENT_DATE,
+        points: 10000,
+      },
+    });
+
+    if (user) {
+      localStorage.setItem(financialAdvisorAppointmentKey(user.id), "1");
+    }
+
     setView("success");
     setTimeout(() => {
       router.push("/");

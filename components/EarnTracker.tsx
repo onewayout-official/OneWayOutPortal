@@ -322,7 +322,7 @@ export default function EarnTracker() {
       <SpinWheel
         state={gamification}
         onStateChange={handleGamificationUpdate}
-        hideTokenSpin
+        freeSpinOnly
       />
 
       {taskError && (

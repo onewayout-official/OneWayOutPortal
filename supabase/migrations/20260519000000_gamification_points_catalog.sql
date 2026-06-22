@@ -53,6 +53,7 @@ begin
         when 'Legacy Builder' then 10000
         else 2000
       end
+    when 'appoint-financial-advisor' then 10000
     when 'transunion-connection' then 1500
     when 'astute-connection' then 3000
     when 'buddy-mentor-session' then 200
@@ -170,7 +171,8 @@ begin
     'plan-section-complete', 'full-plan-complete', 'monthly-budget-update',
     'update-budget', 'monthly-review-complete', 'month-ended-green',
     'month-ended-red-logged', 'tier-promotion', 'transunion-connection',
-    'astute-connection', 'buddy-mentor-session', 'onboarding-complete'
+    'astute-connection', 'buddy-mentor-session', 'appoint-financial-advisor',
+    'onboarding-complete'
   ) then
     return jsonb_build_object('ok', false, 'error', 'unknown_task', 'balance', 0);
   end if;

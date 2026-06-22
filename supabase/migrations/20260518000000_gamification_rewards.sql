@@ -281,7 +281,10 @@ $$;
 -- RPC: redeem_points
 -- ---------------------------------------------------------------------------
 
-create or replace function public.redeem_points(p_amount numeric)
+create or replace function public.redeem_points(
+  p_amount numeric,
+  p_metadata jsonb default '{}'
+)
 returns jsonb
 language plpgsql
 security definer
@@ -308,7 +311,7 @@ begin
 
   v_balance := public.gamification_apply_points(
     v_user_id, -v_amount, 'redeem', 'spend_redeem',
-    jsonb_build_object('amount', v_amount)
+    jsonb_build_object('amount', v_amount) || coalesce(p_metadata, '{}'::jsonb)
   );
 
   return jsonb_build_object('ok', true, 'balance', v_balance, 'redeemed', v_amount);
@@ -432,6 +435,6 @@ end;
 $$;
 
 grant execute on function public.award_task_points(text, text) to authenticated;
-grant execute on function public.redeem_points(numeric) to authenticated;
+grant execute on function public.redeem_points(numeric, jsonb) to authenticated;
 grant execute on function public.spin_wheel(text, text) to authenticated;
 grant execute on function public.get_gamification_state(text) to authenticated;

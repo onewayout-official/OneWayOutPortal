@@ -169,6 +169,7 @@ export const rewards = {
       source: r.source as string,
       pointsDelta: Number(r.points_delta),
       createdAt: r.created_at as string,
+      metadata: (r.metadata ?? {}) as Record<string, unknown>,
     }));
   },
 };

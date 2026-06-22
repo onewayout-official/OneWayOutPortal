@@ -94,6 +94,7 @@ export interface RewardTransaction {
   source: string;
   pointsDelta: number;
   createdAt: string;
+  metadata?: Record<string, unknown>;
 }
 
 export interface DailyMood {

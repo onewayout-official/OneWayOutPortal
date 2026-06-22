@@ -37,7 +37,9 @@ async function tryIssue(body: IssueGiftcardBody) {
     (!isYoyoSuccess(result.data) || !result.data.giftcard?.id) &&
     (result.status >= 400 || !result.ok)
   ) {
-    const { mobileNumber: _m, sendSMS: _s, ...withoutMobile } = body;
+    const withoutMobile = { ...body };
+    delete withoutMobile.mobileNumber;
+    delete withoutMobile.sendSMS;
     result = await issueGiftcardWithRetry(withoutMobile, true);
   }
   return result;
@@ -148,6 +150,17 @@ export async function POST(request: NextRequest) {
 
   const { data: redeemData, error: redeemError } = await client.rpc("redeem_points", {
     p_amount: pointsRequired,
+    p_metadata: {
+      giftcard_id: giftcard.id,
+      wi_code: giftcard.wiCode ?? null,
+      store_id: body.storeId,
+      store_name: storeName,
+      tab_id: body.tabId,
+      amount_rand: amountRand,
+      campaign_id: campaignId,
+      campaign_name: campaignName,
+      mobile_number: mobileNumber ?? null,
+    },
   });
 
   if (redeemError) {

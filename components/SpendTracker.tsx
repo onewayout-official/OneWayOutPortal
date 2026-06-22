@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { SpendCategory, UserProfile } from "@/types";
+import { useCallback, useState, useEffect } from "react";
+import { RewardTransaction, SpendCategory, UserProfile } from "@/types";
 import { storage } from "@/lib/storage";
 import { rewards } from "@/lib/gamification/rewards";
-import { ShoppingCart, Settings2, Coins } from "lucide-react";
+import { Clock3, Copy, ShoppingCart, Settings2, Coins } from "lucide-react";
 import Link from "next/link";
 import PointsGiftCardSpend from "@/components/PointsGiftCardSpend";
 
@@ -19,8 +19,33 @@ const SPEND_CATEGORIES: { id: SpendCategory; label: string }[] = [
   { id: "Send to others", label: "Send to others" },
 ];
 
+function getMetadataString(
+  metadata: Record<string, unknown> | undefined,
+  keys: string[]
+): string {
+  for (const key of keys) {
+    const value = metadata?.[key];
+    if (typeof value === "string" && value.trim()) return value.trim();
+    if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  }
+  return "";
+}
+
+function getMetadataNumber(
+  metadata: Record<string, unknown> | undefined,
+  keys: string[]
+): number | null {
+  for (const key of keys) {
+    const value = metadata?.[key];
+    const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+    if (Number.isFinite(parsed)) return parsed;
+  }
+  return null;
+}
+
 export default function SpendTracker() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [spendingHistory, setSpendingHistory] = useState<RewardTransaction[]>([]);
   const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [editBudgets, setEditBudgets] = useState<Record<SpendCategory, number>>({
     Grocery: 0,
@@ -34,15 +59,12 @@ export default function SpendTracker() {
   });
   const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setIsLoading(true);
-    const [userProfile, budgetMap] = await Promise.all([
+    const [userProfile, budgetMap, rewardHistory] = await Promise.all([
       storage.getProfile(),
       storage.getSpendBudgets(),
+      rewards.getRewardHistory(30),
     ]);
     const gamification = await rewards.getGamificationState();
     if (userProfile) {
@@ -50,7 +72,25 @@ export default function SpendTracker() {
     }
     setProfile(userProfile);
     setEditBudgets(budgetMap);
+    setSpendingHistory(rewardHistory.filter((transaction) => transaction.pointsDelta < 0));
     setIsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    void Promise.resolve().then(loadData);
+  }, [loadData]);
+
+  const refreshSpendingHistory = async () => {
+    const rewardHistory = await rewards.getRewardHistory(30);
+    setSpendingHistory(rewardHistory.filter((transaction) => transaction.pointsDelta < 0));
+  };
+
+  const copyRedeemCode = async (code: string) => {
+    try {
+      await navigator.clipboard.writeText(code);
+    } catch {
+      /* ignore clipboard failures */
+    }
   };
 
   const handleSaveBudgets = async () => {
@@ -114,7 +154,81 @@ export default function SpendTracker() {
         onPointsChange={(balance) => {
           if (profile) setProfile({ ...profile, userPoints: balance });
         }}
+        onSpendComplete={refreshSpendingHistory}
       />
+
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+              <Clock3 className="h-5 w-5 text-rose-600 dark:text-rose-400" />
+              Spending history
+            </h2>
+            <p className="text-sm text-gray-600 dark:text-gray-400">
+              Recent points spent from your rewards balance.
+            </p>
+          </div>
+        </div>
+
+        {spendingHistory.length > 0 ? (
+          <div className="divide-y divide-gray-200 dark:divide-gray-700">
+            {spendingHistory.map((transaction) => {
+              const storeName = getMetadataString(transaction.metadata, ["store_name", "storeName"]);
+              const campaignName = getMetadataString(transaction.metadata, ["campaign_name", "campaignName"]);
+              const redeemCode = getMetadataString(transaction.metadata, ["wi_code", "wiCode", "wicode"]);
+              const amountRand = getMetadataNumber(transaction.metadata, ["amount_rand", "amountRand"]);
+              const title = storeName || campaignName || (transaction.kind === "redeem" ? "Points redeemed" : transaction.source || "Points spent");
+
+              return (
+                <div
+                  key={transaction.id}
+                  className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
+                >
+                  <div className="min-w-0">
+                    <p className="font-medium text-gray-900 dark:text-white">
+                      {title}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">
+                      {new Date(transaction.createdAt).toLocaleString(undefined, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      })}
+                      {amountRand != null ? ` · R ${amountRand.toFixed(2)}` : ""}
+                    </p>
+                    {redeemCode && (
+                      <div className="mt-2 flex flex-wrap items-center gap-2">
+                        <span className="rounded-md bg-gray-100 dark:bg-gray-900 px-2 py-1 font-mono text-xs text-gray-900 dark:text-white">
+                          {redeemCode}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => copyRedeemCode(redeemCode)}
+                          className="inline-flex items-center gap-1 text-xs font-medium text-rose-600 dark:text-rose-400 hover:underline"
+                        >
+                          <Copy className="h-3 w-3" />
+                          Copy code
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                  <p className="font-semibold text-rose-600 dark:text-rose-400 whitespace-nowrap">
+                    {transaction.pointsDelta.toLocaleString()} pts
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-6 text-center">
+            <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
+              No spending history yet.
+            </p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Gift card redemptions will appear here after you spend points.
+            </p>
+          </div>
+        )}
+      </div>
 
       <div className="flex justify-end">
         <Link

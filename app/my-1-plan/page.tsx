@@ -5,7 +5,11 @@ export default function My1PlanPage() {
   return (
     <ProtectedRoute>
       <AppLayout>
-        <div />
+        <div className="flex min-h-[60vh] items-center justify-center">
+          <p className="text-lg font-semibold text-gray-600 dark:text-gray-300">
+            Coming soon
+          </p>
+        </div>
       </AppLayout>
     </ProtectedRoute>
   );

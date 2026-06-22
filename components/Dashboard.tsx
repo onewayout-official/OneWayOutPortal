@@ -592,6 +592,8 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-8">
+      <MembershipQuestMap progress={membershipProgress} />
+
       {/* Calendar */}
       <div className="flex justify-center">
         <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 w-full">
@@ -742,8 +744,6 @@ export default function Dashboard() {
 
 
 
-
-      <MembershipQuestMap progress={membershipProgress} />
 
       {/* Mood Display — commented out, replaced by counselor slider below */}
       {/* {profile.onboardingCompleted && profile.mood && (

@@ -99,7 +99,9 @@ export default function SpinWheel({
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">Spin the wheel</h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Win 10–500 points. One free spin daily
-            {hideTokenSpin
+            {freeSpinOnly
+              ? "."
+              : hideTokenSpin
               ? `; use ${state.spinCost} points for extras.`
               : `; use tokens or ${state.spinCost} points for extras.`}
           </p>

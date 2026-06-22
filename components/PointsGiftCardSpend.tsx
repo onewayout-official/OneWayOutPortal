@@ -28,11 +28,13 @@ type Step = "browse" | "confirm" | "success";
 interface PointsGiftCardSpendProps {
   pointsBalance: number;
   onPointsChange: (balance: number) => void;
+  onSpendComplete?: () => void | Promise<void>;
 }
 
 export default function PointsGiftCardSpend({
   pointsBalance,
   onPointsChange,
+  onSpendComplete,
 }: PointsGiftCardSpendProps) {
   const [activeTabId, setActiveTabId] = useState(RETAIL_FOOTPRINT_TABS[0].id);
   const [selectedStore, setSelectedStore] = useState<RetailStore | null>(null);
@@ -79,7 +81,7 @@ export default function PointsGiftCardSpend({
   }, []);
 
   useEffect(() => {
-    loadCampaigns();
+    void Promise.resolve().then(loadCampaigns);
   }, [loadCampaigns]);
 
   useEffect(() => {
@@ -148,6 +150,9 @@ export default function PointsGiftCardSpend({
     if (result.pointsBalance != null) {
       onPointsChange(result.pointsBalance);
     }
+    void Promise.resolve(onSpendComplete?.()).catch((err) => {
+      console.error("[PointsGiftCardSpend] refresh spending history:", err);
+    });
     setIssued(result.giftcard ?? null);
     setCampaignLabel(result.campaignName ?? matchedCampaign?.name ?? "");
     setStep("success");
