@@ -104,6 +104,7 @@ export default function AdminCoachesPanel() {
   const [coaches, setCoaches] = useState<Counselor[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isForbidden, setIsForbidden] = useState(false);
@@ -192,6 +193,50 @@ export default function AdminCoachesPanel() {
   const cancelEdit = () => {
     setEditingCoachId(null);
     setEditForm(EMPTY_FORM);
+  };
+
+  const handleImageUpload = async (
+    file: File | null,
+    setForm: React.Dispatch<React.SetStateAction<CoachFormState>>
+  ) => {
+    if (!file) return;
+    clearMessages();
+
+    if (file.type !== "image/jpeg") {
+      setError("Please choose a JPEG image (.jpg or .jpeg).");
+      return;
+    }
+
+    setIsUploadingImage(true);
+    try {
+      const headers = await getAuthHeader();
+      delete headers["Content-Type"];
+
+      const formData = new FormData();
+      formData.append("image", file);
+
+      const response = await fetch("/api/admin/coaches/images", {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+      const json = (await response.json()) as { url?: string; error?: string };
+
+      if (response.status === 403) {
+        setIsForbidden(true);
+        return;
+      }
+      if (!response.ok || !json.url) {
+        throw new Error(json.error ?? "Failed to upload coach image.");
+      }
+
+      setForm((prev) => ({ ...prev, image: json.url ?? prev.image }));
+      setSuccess("Profile image attached. Save the coach to keep it.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upload coach image.");
+    } finally {
+      setIsUploadingImage(false);
+    }
   };
 
   const handleEditSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -315,13 +360,31 @@ export default function AdminCoachesPanel() {
         onChange={(e) => setForm((prev) => ({ ...prev, location: e.target.value }))}
         className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
       />
-      <input
-        type="url"
-        placeholder="Image URL (optional — default avatar used if empty)"
-        value={form.image}
-        onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
-        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:col-span-2"
-      />
+      <FormField
+        label="Profile image"
+        hint="Paste an image URL or attach a JPEG file from your computer."
+        className="sm:col-span-2"
+      >
+        <div className="grid gap-2 sm:grid-cols-[1fr_auto]">
+          <input
+            type="url"
+            placeholder="Image URL (optional - default avatar used if empty)"
+            value={form.image}
+            onChange={(e) => setForm((prev) => ({ ...prev, image: e.target.value }))}
+            className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+          />
+          <label className="inline-flex cursor-pointer items-center justify-center rounded-lg border border-teal-200 px-3 py-2 text-sm font-medium text-teal-700 hover:bg-teal-50 dark:border-teal-800 dark:text-teal-300 dark:hover:bg-teal-900/20">
+            {isUploadingImage ? "Uploading..." : "Attach JPEG"}
+            <input
+              type="file"
+              accept="image/jpeg,.jpg,.jpeg"
+              disabled={isUploadingImage}
+              onChange={(e) => handleImageUpload(e.target.files?.[0] ?? null, setForm)}
+              className="sr-only"
+            />
+          </label>
+        </div>
+      </FormField>
       <FormField
         label="Coach login email"
         hint="Optional. Creates a counselor portal account if it does not exist yet. The coach signs in at /login and uses Forgot password to set their password."
@@ -439,7 +502,7 @@ export default function AdminCoachesPanel() {
           <div className="sm:col-span-2">
             <button
               type="submit"
-              disabled={isSubmitting}
+              disabled={isSubmitting || isUploadingImage}
               className="rounded-lg bg-teal-600 px-4 py-2 text-sm font-medium text-white hover:bg-teal-700 disabled:opacity-60"
             >
               Add coach
@@ -471,7 +534,7 @@ export default function AdminCoachesPanel() {
             <div className="sm:col-span-2">
               <button
                 type="submit"
-                disabled={isSubmitting}
+                disabled={isSubmitting || isUploadingImage}
                 className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-60"
               >
                 <Save className="h-4 w-4" />

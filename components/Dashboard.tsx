@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { UserProfile, Asset } from "@/types";
 import { storage } from "@/lib/storage";
-import { computePooledIncome } from "@/lib/budgetTotals";
+import { computePooledExpenses, computePooledIncome } from "@/lib/budgetTotals";
 import { computeMembershipProgress } from "@/lib/membershipProgress";
 import MembershipQuestMap from "@/components/MembershipQuestMap";
 import { Counselor, resolveCounselorImage } from "@/lib/counselors";
@@ -42,6 +42,7 @@ export default function Dashboard() {
     Deficit: number | null;
   }[]>([]);
   const [pooledIncome, setPooledIncome] = useState(0);
+  const [pooledExpenses, setPooledExpenses] = useState(0);
   const [selectedIncomeMonthIndex, setSelectedIncomeMonthIndex] = useState(0);
   const [incomeChartView, setIncomeChartView] = useState<"month" | "trend">("month");
   const [moodDates, setMoodDates] = useState<Set<string>>(new Set());
@@ -192,6 +193,7 @@ export default function Dashboard() {
 
       const monthlyIncomeTotal = computePooledIncome(incomeForCharts, userProfile);
       setPooledIncome(monthlyIncomeTotal);
+      setPooledExpenses(computePooledExpenses(expensesForCharts, userProfile));
 
       const currentMonth = new Date().getMonth();
       const currentYear = new Date().getFullYear();
@@ -821,7 +823,7 @@ export default function Dashboard() {
             >
               <p className="text-sm text-gray-600 dark:text-gray-400">{b.type}</p>
               <p className={`text-xl font-bold ${b.total < 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}>
-                R{b.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                R {b.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
               </p>
             </div>
           ))}
@@ -830,9 +832,9 @@ export default function Dashboard() {
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Capital / Assets</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Income</p>
                   <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    R{(profile.capital || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    R {pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <TrendingUp className="h-8 w-8 text-green-600" />
@@ -844,9 +846,9 @@ export default function Dashboard() {
             <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Total Debts</p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Expenses</p>
                   <p className="text-2xl font-bold text-orange-600">
-                    R{totalDebt.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    R {pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <TrendingDown className="h-8 w-8 text-orange-600" />
