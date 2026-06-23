@@ -20,13 +20,42 @@ async function findAuthUserByEmail(adminClient: SupabaseClient, email: string) {
 
 export type ResolveCounselorUserResult =
   | { linkedUserId: null }
-  | { linkedUserId: string; email: string; accountCreated: boolean }
+  | {
+      linkedUserId: string;
+      email: string;
+      accountCreated: boolean;
+      passwordUpdated?: boolean;
+      setupEmailSent?: boolean;
+    }
   | { error: string };
+
+async function updatePasswordAndSendSetupEmail(
+  adminClient: SupabaseClient,
+  userId: string,
+  email: string,
+  password: string
+): Promise<{ passwordUpdated: boolean; setupEmailSent?: boolean } | { error: string }> {
+  if (!password) {
+    return { passwordUpdated: false };
+  }
+
+  const { error: passwordError } = await adminClient.auth.admin.updateUserById(userId, {
+    password,
+  });
+  if (passwordError) {
+    return { error: passwordError.message };
+  }
+
+  const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email);
+
+  return { passwordUpdated: true, setupEmailSent: !emailError };
+}
 
 export async function resolveOrCreateCounselorUser(
   adminClient: SupabaseClient,
   linkedUserEmail: unknown,
-  coachName: string
+  coachName: string,
+  initialPassword?: unknown
 ): Promise<ResolveCounselorUserResult> {
   const email = String(linkedUserEmail ?? "").trim().toLowerCase();
   if (!email) {
@@ -34,6 +63,11 @@ export async function resolveOrCreateCounselorUser(
   }
 
   const name = coachName.trim() || email.split("@")[0];
+  const password = String(initialPassword ?? "").trim();
+
+  if (password && password.length < 6) {
+    return { error: "Password must be at least 6 characters long." };
+  }
 
   const { data: existingProfiles, error: profileError } = await adminClient
     .from("profiles")
@@ -61,16 +95,28 @@ export async function resolveOrCreateCounselorUser(
       }
     }
 
+    const passwordUpdate = await updatePasswordAndSendSetupEmail(
+      adminClient,
+      existingProfile.id,
+      email,
+      password
+    );
+    if ("error" in passwordUpdate) {
+      return { error: passwordUpdate.error };
+    }
+
     return {
       linkedUserId: existingProfile.id,
       email,
       accountCreated: false,
+      passwordUpdated: passwordUpdate.passwordUpdated,
+      setupEmailSent: passwordUpdate.setupEmailSent,
     };
   }
 
   const { data: createdUser, error: createError } = await adminClient.auth.admin.createUser({
     email,
-    password: randomPassword(),
+    password: password || randomPassword(),
     email_confirm: true,
     user_metadata: { name, role: "counselor" },
   });
@@ -93,12 +139,13 @@ export async function resolveOrCreateCounselorUser(
       return { error: upsertError.message };
     }
 
-    await adminClient.auth.admin.generateLink({ type: "recovery", email }).catch(() => undefined);
+    const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email);
 
     return {
       linkedUserId: createdUser.user.id,
       email,
       accountCreated: true,
+      setupEmailSent: !emailError,
     };
   }
 
@@ -128,10 +175,22 @@ export async function resolveOrCreateCounselorUser(
       return { error: upsertError.message };
     }
 
+    const passwordUpdate = await updatePasswordAndSendSetupEmail(
+      adminClient,
+      authUser.id,
+      email,
+      password
+    );
+    if ("error" in passwordUpdate) {
+      return { error: passwordUpdate.error };
+    }
+
     return {
       linkedUserId: authUser.id,
       email,
       accountCreated: false,
+      passwordUpdated: passwordUpdate.passwordUpdated,
+      setupEmailSent: passwordUpdate.setupEmailSent,
     };
   }
 

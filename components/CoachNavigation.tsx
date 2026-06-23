@@ -2,11 +2,12 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { CalendarCheck, Eye, Home, LogOut } from "lucide-react";
+import { CalendarCheck, Eye, Home, LogOut, UserCog } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 
 const coachNavItems = [
   { href: "/coach", label: "My Appointments", icon: CalendarCheck },
+  { href: "/coach/profile", label: "Edit Profile", icon: UserCog },
   { href: "/coach/demo", label: "Demo preview", icon: Eye, coachesAdminOnly: true },
 ];
 

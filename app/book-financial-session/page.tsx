@@ -55,7 +55,6 @@ export default function BookFinancialSessionPage() {
   const [bookingPopup, setBookingPopup] = useState<{
     date: string;
     time: string;
-    link: string;
   } | null>(null);
 
   const availabilityByWeekday = useMemo(() => {
@@ -119,9 +118,7 @@ export default function BookFinancialSessionPage() {
   const todaySlots = weeklySlots.filter((slot) => slot.dayLabel === todayDayLabel);
 
   const openBookingPopup = (date: string, time: string) => {
-    const meetingId = `financial-session-${date}-${time}`.replace(/[^a-zA-Z0-9]/g, "");
-    const teamsLink = `https://teams.microsoft.com/l/meetup-join/${meetingId}`;
-    setBookingPopup({ date, time, link: teamsLink });
+    setBookingPopup({ date, time });
   };
 
   return (
@@ -329,15 +326,10 @@ export default function BookFinancialSessionPage() {
                   {bookingPopup.time}.
                 </p>
                 <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-                  <p className="font-medium">MS Teams link</p>
-                  <a
-                    href={bookingPopup.link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="mt-1 block break-all underline"
-                  >
-                    {bookingPopup.link}
-                  </a>
+                  <p className="font-medium">Meeting room coming soon</p>
+                  <p className="mt-1">
+                    We will add the in-portal meeting room before video sessions go live.
+                  </p>
                 </div>
                 <div className="mt-4 flex justify-end gap-2">
                   <button

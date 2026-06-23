@@ -17,6 +17,8 @@ export async function PATCH(
     updated_at: new Date().toISOString(),
   };
   let accountCreated = false;
+  let passwordUpdated = false;
+  let setupEmailSent = false;
 
   if (body.firstName !== undefined || body.lastName !== undefined || body.name !== undefined) {
     const nameResult = counselorNameFromBody(body);
@@ -48,13 +50,16 @@ export async function PATCH(
     const linked = await resolveOrCreateCounselorUser(
       context.adminClient,
       body.linkedUserEmail,
-      coachName
+      coachName,
+      body.password
     );
     if ("error" in linked) {
       return NextResponse.json({ error: linked.error }, { status: 400 });
     }
     updates.linked_user_id = "linkedUserId" in linked ? linked.linkedUserId : null;
     accountCreated = "accountCreated" in linked ? linked.accountCreated : false;
+    passwordUpdated = "passwordUpdated" in linked ? Boolean(linked.passwordUpdated) : false;
+    setupEmailSent = "setupEmailSent" in linked ? Boolean(linked.setupEmailSent) : false;
   }
 
   if (body.languages !== undefined) {
@@ -93,6 +98,8 @@ export async function PATCH(
   return NextResponse.json({
     coach: counselorFromRow(data as CounselorRow),
     accountCreated,
+    passwordUpdated,
+    setupEmailSent,
   });
 }
 

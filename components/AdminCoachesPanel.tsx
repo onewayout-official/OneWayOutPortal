@@ -28,6 +28,7 @@ interface CoachFormState {
   image: string;
   isActive: boolean;
   linkedUserEmail: string;
+  password: string;
 }
 
 const EMPTY_FORM: CoachFormState = {
@@ -43,6 +44,7 @@ const EMPTY_FORM: CoachFormState = {
   image: "",
   isActive: true,
   linkedUserEmail: "",
+  password: "",
 };
 
 function coachToForm(coach: Counselor): CoachFormState {
@@ -60,6 +62,7 @@ function coachToForm(coach: Counselor): CoachFormState {
     image: coach.image,
     isActive: Boolean(coach.isActive),
     linkedUserEmail: coach.linkedUserEmail ?? "",
+    password: "",
   };
 }
 
@@ -83,8 +86,8 @@ function FormField({
   );
 }
 
-function formToPayload(form: CoachFormState) {
-  return {
+function formToPayload(form: CoachFormState, includePassword = false) {
+  const payload: Record<string, string | number | boolean | null> = {
     firstName: form.firstName.trim(),
     lastName: form.lastName.trim(),
     specialty: form.specialty.trim(),
@@ -98,6 +101,12 @@ function formToPayload(form: CoachFormState) {
     isActive: form.isActive,
     linkedUserEmail: form.linkedUserEmail.trim() || null,
   };
+
+  if (includePassword) {
+    payload.password = form.password;
+  }
+
+  return payload;
 }
 
 export default function AdminCoachesPanel() {
@@ -158,12 +167,14 @@ export default function AdminCoachesPanel() {
       const response = await fetch("/api/admin/coaches", {
         method: "POST",
         headers,
-        body: JSON.stringify(formToPayload(createForm)),
+        body: JSON.stringify(formToPayload(createForm, true)),
       });
       const json = (await response.json()) as {
         coach?: Counselor;
         error?: string;
         accountCreated?: boolean;
+        passwordUpdated?: boolean;
+        setupEmailSent?: boolean;
       };
       if (response.status === 403) {
         setIsForbidden(true);
@@ -172,7 +183,13 @@ export default function AdminCoachesPanel() {
       if (!response.ok) throw new Error(json.error ?? "Failed to add coach.");
       setSuccess(
         json.accountCreated
-          ? "Coach added and a new counselor login was created. The coach can use Forgot password on the login page to set their password."
+          ? json.setupEmailSent
+            ? "Coach added and a new counselor login was created. A secure password setup email was sent to the coach."
+            : "Coach added and a new counselor login was created. The password was set, but Supabase did not send the setup email."
+          : json.passwordUpdated
+            ? json.setupEmailSent
+              ? "Coach added successfully. The linked coach password was reset and a secure setup email was sent."
+              : "Coach added successfully. The linked coach password was reset, but Supabase did not send the setup email."
           : "Coach added successfully."
       );
       setCreateForm(EMPTY_FORM);
@@ -249,12 +266,14 @@ export default function AdminCoachesPanel() {
       const response = await fetch(`/api/admin/coaches/${editingCoachId}`, {
         method: "PATCH",
         headers,
-        body: JSON.stringify(formToPayload(editForm)),
+        body: JSON.stringify(formToPayload(editForm, true)),
       });
       const json = (await response.json()) as {
         coach?: Counselor;
         error?: string;
         accountCreated?: boolean;
+        passwordUpdated?: boolean;
+        setupEmailSent?: boolean;
       };
       if (response.status === 403) {
         setIsForbidden(true);
@@ -263,7 +282,13 @@ export default function AdminCoachesPanel() {
       if (!response.ok) throw new Error(json.error ?? "Failed to update coach.");
       setSuccess(
         json.accountCreated
-          ? "Coach updated and a new counselor login was created. The coach can use Forgot password on the login page to set their password."
+          ? json.setupEmailSent
+            ? "Coach updated and a new counselor login was created. A secure password setup email was sent to the coach."
+            : "Coach updated and a new counselor login was created. The password was set, but Supabase did not send the setup email."
+          : json.passwordUpdated
+            ? json.setupEmailSent
+              ? "Coach updated successfully. The coach password was reset and a secure setup email was sent."
+              : "Coach updated successfully. The coach password was reset, but Supabase did not send the setup email."
           : "Coach updated successfully."
       );
       cancelEdit();
@@ -328,7 +353,13 @@ export default function AdminCoachesPanel() {
 
   const renderFormFields = (
     form: CoachFormState,
-    setForm: React.Dispatch<React.SetStateAction<CoachFormState>>
+    setForm: React.Dispatch<React.SetStateAction<CoachFormState>>,
+    options: {
+      includePassword?: boolean;
+      passwordLabel?: string;
+      passwordHint?: string;
+      passwordPlaceholder?: string;
+    } = {}
   ) => (
     <>
       <input
@@ -387,7 +418,7 @@ export default function AdminCoachesPanel() {
       </FormField>
       <FormField
         label="Coach login email"
-        hint="Optional. Creates a counselor portal account if it does not exist yet. The coach signs in at /login and uses Forgot password to set their password."
+        hint="Optional. Creates a counselor portal account if it does not exist yet."
         className="sm:col-span-2"
       >
         <input
@@ -400,6 +431,25 @@ export default function AdminCoachesPanel() {
           className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
         />
       </FormField>
+      {options.includePassword && (
+        <FormField
+          label={options.passwordLabel ?? "Initial password"}
+          hint={
+            options.passwordHint ??
+            "Optional. Used only when creating a new coach login. The coach will also receive a secure password setup email."
+          }
+          className="sm:col-span-2"
+        >
+          <input
+            type="password"
+            autoComplete="new-password"
+            placeholder={options.passwordPlaceholder ?? "Leave blank to generate one"}
+            value={form.password}
+            onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+            className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+          />
+        </FormField>
+      )}
       <FormField label="Years of experience" hint="Shown on the Help Me coach card">
       <input
         type="number"
@@ -498,7 +548,7 @@ export default function AdminCoachesPanel() {
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Add Coach</h2>
         </div>
         <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={handleCreateSubmit}>
-          {renderFormFields(createForm, setCreateForm)}
+          {renderFormFields(createForm, setCreateForm, { includePassword: true })}
           <div className="sm:col-span-2">
             <button
               type="submit"
@@ -530,7 +580,13 @@ export default function AdminCoachesPanel() {
             </button>
           </div>
           <form className="grid grid-cols-1 gap-3 sm:grid-cols-2" onSubmit={handleEditSubmit}>
-            {renderFormFields(editForm, setEditForm)}
+            {renderFormFields(editForm, setEditForm, {
+              includePassword: true,
+              passwordLabel: "Reset password",
+              passwordHint:
+                "Optional. Leave blank to keep the current coach password. Enter a new password to reset it and send a secure setup email.",
+              passwordPlaceholder: "Leave blank to keep current password",
+            })}
             <div className="sm:col-span-2">
               <button
                 type="submit"

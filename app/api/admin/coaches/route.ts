@@ -103,7 +103,8 @@ export async function POST(request: NextRequest) {
   const linked = await resolveOrCreateCounselorUser(
     context.adminClient,
     body.linkedUserEmail,
-    payload.row.name
+    payload.row.name,
+    body.password
   );
   if ("error" in linked) {
     return NextResponse.json({ error: linked.error }, { status: 400 });
@@ -133,6 +134,7 @@ export async function POST(request: NextRequest) {
           "email" in linked && linked.email ? linked.email : null,
       },
       accountCreated: "accountCreated" in linked ? linked.accountCreated : false,
+      setupEmailSent: "setupEmailSent" in linked ? Boolean(linked.setupEmailSent) : false,
     },
     { status: 201 }
   );

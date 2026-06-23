@@ -61,7 +61,6 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
   const [bookingPopup, setBookingPopup] = useState<{
     date: string;
     time: string;
-    link: string;
   } | null>(null);
   const [isBooking, setIsBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -135,8 +134,6 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
   const todaySlots = weeklySlots.filter((slot) => slot.dayLabel === todayDayLabel);
 
   const openBookingPopup = async (date: string, time: string) => {
-    const meetingId = `${counselor.id}-${date}-${time}`.replace(/[^a-zA-Z0-9]/g, "");
-    const teamsLink = `https://teams.microsoft.com/l/meetup-join/${meetingId}`;
     setBookingError(null);
     setIsBooking(true);
 
@@ -149,7 +146,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
           counselorId: counselor.id,
           appointmentDate: date,
           appointmentTime: time,
-          meetingLink: teamsLink,
+          meetingLink: "",
         }),
       });
 
@@ -158,7 +155,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
         throw new Error(json.error ?? "Failed to book appointment.");
       }
 
-      setBookingPopup({ date, time, link: teamsLink });
+      setBookingPopup({ date, time });
     } catch (err) {
       setBookingError(err instanceof Error ? err.message : "Failed to book appointment.");
     } finally {
@@ -397,15 +394,10 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
               {bookingPopup.time}.
             </p>
             <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-              <p className="font-medium">MS Teams link</p>
-              <a
-                href={bookingPopup.link}
-                target="_blank"
-                rel="noreferrer"
-                className="mt-1 block break-all underline"
-              >
-                {bookingPopup.link}
-              </a>
+              <p className="font-medium">Meeting room coming soon</p>
+              <p className="mt-1">
+                We will add the in-portal meeting room before video sessions go live.
+              </p>
             </div>
             <div className="mt-4 flex justify-end gap-2">
               <button

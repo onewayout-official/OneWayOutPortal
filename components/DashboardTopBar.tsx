@@ -99,7 +99,7 @@ function setCachedTopBarData(userId: string, data: TopBarData) {
 
 export default function DashboardTopBar() {
   const pathname = usePathname();
-  const { logout, user: authUser } = useAuth();
+  const { logout, user: authUser, isCounselor } = useAuth();
   const cachedTopBarData = getCachedTopBarData(authUser?.userId);
 
   const [topBarData, setTopBarData] = useState<TopBarData>(
@@ -116,8 +116,6 @@ export default function DashboardTopBar() {
 
     let cancelled = false;
     const userId = authUser.userId;
-    const cached = getCachedTopBarData(userId);
-    if (cached) setTopBarData(cached);
 
     const loadTopBarData = async () => {
       try {
@@ -126,8 +124,19 @@ export default function DashboardTopBar() {
           localStorage.getItem(financialAdvisorAppointmentKey(userId)) === "1";
 
         const todayStr = getLocalDateString();
-        const [userProfile, gamification, txnsResult] = await Promise.all([
-          storage.getProfile(),
+        const userProfile = await storage.getProfile();
+
+        if (userProfile?.role === "counselor") {
+          const nextTopBarData = {
+            ...defaultTopBarData,
+            profile: userProfile,
+          };
+          setTopBarData(nextTopBarData);
+          setCachedTopBarData(userId, nextTopBarData);
+          return;
+        }
+
+        const [gamification, txnsResult] = await Promise.all([
           rewards.getGamificationState(todayStr),
           supabase
             .from("reward_transactions")
@@ -161,6 +170,13 @@ export default function DashboardTopBar() {
 
     if (shouldRefreshTopBarData(userId, ROUTE_REFRESH_MS)) {
       loadTopBarData();
+    } else {
+      const cached = getCachedTopBarData(userId);
+      if (cached) {
+        void Promise.resolve().then(() => {
+          if (!cancelled) setTopBarData(cached);
+        });
+      }
     }
 
     let intervalId: ReturnType<typeof setInterval> | null = null;
@@ -205,6 +221,7 @@ export default function DashboardTopBar() {
   }, []);
 
   const { profile, rewardTotalPoints, rewardTodayPoints, hasAppointedFinancialAdvisor } = topBarData;
+  const isCoachTopBar = isCounselor || profile?.role === "counselor";
   const firstName = profile?.name?.split(" ")[0] || "there";
   const availableBalance = rewardTotalPoints / 100;
   const todayFormatted = new Date().toLocaleDateString("en-US", {
@@ -219,29 +236,39 @@ export default function DashboardTopBar() {
       <div className="sticky top-0 z-20 -mx-4 px-4 -mt-4 pt-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-8 pb-4 mb-8 border-b border-[#254e52] bg-[#2f6064]">
         <div className="grid grid-cols-3 items-center gap-4">
           <div className="flex items-center gap-3">
-            <div className="flex flex-col gap-0.5">
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">MY 1-Community Savings</span>
-              <span className="text-base font-bold text-white">R 0.00</span>
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Updated Quarterly</span>
-            </div>
-            {!hasAppointedFinancialAdvisor && (
-              <div className="flex flex-col items-start gap-1">
-                <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">
-                  Supercharge your points
-                </span>
-                <Link
-                  href="/consent"
-                  className="flex flex-col items-start gap-0.5 px-2.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 transition-colors text-left shrink-0"
-                >
-                  <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">Appoint</span>
-                  <span className="text-[11px] font-bold text-white leading-snug whitespace-nowrap">
-                    &ldquo;OneWayOut&rdquo; as your
-                  </span>
-                  <span className="text-[10px] font-medium text-white/90 leading-snug whitespace-nowrap">
-                    Financial Adviser
-                  </span>
-                </Link>
+            {isCoachTopBar ? (
+              <div className="flex flex-col gap-0.5">
+                <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Coach Portal</span>
+                <span className="text-base font-bold text-white">Session Dashboard</span>
+                <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Appointments and client bookings</span>
               </div>
+            ) : (
+              <>
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">MY 1-Community Savings</span>
+                  <span className="text-base font-bold text-white">R 0.00</span>
+                  <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Updated Quarterly</span>
+                </div>
+                {!hasAppointedFinancialAdvisor && (
+                  <div className="flex flex-col items-start gap-1">
+                    <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">
+                      Supercharge your points
+                    </span>
+                    <Link
+                      href="/consent"
+                      className="flex flex-col items-start gap-0.5 px-2.5 py-2 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 transition-colors text-left shrink-0"
+                    >
+                      <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">Appoint</span>
+                      <span className="text-[11px] font-bold text-white leading-snug whitespace-nowrap">
+                        &ldquo;OneWayOut&rdquo; as your
+                      </span>
+                      <span className="text-[10px] font-medium text-white/90 leading-snug whitespace-nowrap">
+                        Financial Adviser
+                      </span>
+                    </Link>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
@@ -258,31 +285,35 @@ export default function DashboardTopBar() {
           </div>
 
           <div className="flex items-center justify-end gap-3">
-            <div className="flex flex-col items-end gap-0.5 border-r border-white/20 pr-3">
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Rewards Tracker</span>
-              <div className="flex flex-col items-end mt-0.5">
-                <span className="text-[11px] text-white/80">
-                  Total Points: <span className="font-bold text-white">{rewardTotalPoints.toLocaleString()}</span>
-                </span>
-                <span className="text-[11px] text-white/80">
-                  Today&apos;s Points: <span className="font-bold text-white">{rewardTodayPoints.toLocaleString()}</span>
-                </span>
-              </div>
-            </div>
+            {!isCoachTopBar && (
+              <>
+                <div className="flex flex-col items-end gap-0.5 border-r border-white/20 pr-3">
+                  <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Rewards Tracker</span>
+                  <div className="flex flex-col items-end mt-0.5">
+                    <span className="text-[11px] text-white/80">
+                      Total Points: <span className="font-bold text-white">{rewardTotalPoints.toLocaleString()}</span>
+                    </span>
+                    <span className="text-[11px] text-white/80">
+                      Today&apos;s Points: <span className="font-bold text-white">{rewardTodayPoints.toLocaleString()}</span>
+                    </span>
+                  </div>
+                </div>
 
-            <div className="flex flex-col items-end">
-              <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">My 1-Wallet</span>
-              <span className="text-base font-bold text-white">Balance: R {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-              <span className="text-base font-bold text-white/80">
-                Available: R {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <button
-                onClick={() => { setShowTransfer(true); setTransferMethod(""); setTransferInput(""); }}
-                className="mt-1.5 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
-              >
-                ⇄ Quick Transfer
-              </button>
-            </div>
+                <div className="flex flex-col items-end">
+                  <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">My 1-Wallet</span>
+                  <span className="text-base font-bold text-white">Balance: R {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-base font-bold text-white/80">
+                    Available: R {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                  <button
+                    onClick={() => { setShowTransfer(true); setTransferMethod(""); setTransferInput(""); }}
+                    className="mt-1.5 flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-white/20 hover:bg-white/30 rounded-lg transition-colors"
+                  >
+                    ⇄ Quick Transfer
+                  </button>
+                </div>
+              </>
+            )}
 
             <div className="relative" ref={profileDropdownRef}>
               <button
@@ -328,7 +359,7 @@ export default function DashboardTopBar() {
         </div>
       </div>
 
-      {showTransfer && (
+      {showTransfer && !isCoachTopBar && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
             <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">Quick Transfer</h2>
