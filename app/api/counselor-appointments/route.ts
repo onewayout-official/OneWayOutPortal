@@ -16,7 +16,9 @@ async function getAuthenticatedUser(request: NextRequest) {
     return { error: NextResponse.json({ error: "Missing auth token." }, { status: 401 }) };
   }
 
-  const client = createClient(supabaseUrl, anonKey);
+  const client = createClient(supabaseUrl, anonKey, {
+    global: { headers: { Authorization: `Bearer ${token}` } },
+  });
   const {
     data: { user },
     error,
