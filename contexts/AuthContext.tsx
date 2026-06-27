@@ -6,6 +6,7 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { storage } from "@/lib/storage";
 import { isCoachesAdminEmail } from "@/lib/coachesAdmin";
+import { getAppUrl } from "@/lib/siteUrl";
 
 export interface RegisterPayload {
   firstName: string;
@@ -264,7 +265,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: getAppUrl("/reset-password"),
       });
       if (error) {
         return { success: false, error: error.message };

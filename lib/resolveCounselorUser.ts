@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getAppUrl } from "@/lib/siteUrl";
 
 function randomPassword(length = 16) {
   return randomBytes(length).toString("base64url").slice(0, length);
@@ -46,7 +47,9 @@ async function updatePasswordAndSendSetupEmail(
     return { error: passwordError.message };
   }
 
-  const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email);
+  const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email, {
+    redirectTo: getAppUrl("/reset-password"),
+  });
 
   return { passwordUpdated: true, setupEmailSent: !emailError };
 }
@@ -139,7 +142,9 @@ export async function resolveOrCreateCounselorUser(
       return { error: upsertError.message };
     }
 
-    const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email);
+    const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email, {
+      redirectTo: getAppUrl("/reset-password"),
+    });
 
     return {
       linkedUserId: createdUser.user.id,
