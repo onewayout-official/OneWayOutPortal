@@ -39,6 +39,19 @@ type UserAccount = {
   sortOrder: number;
 };
 
+type MobileDragSource = {
+  type: "income" | "account";
+  id: string;
+  label: string;
+};
+
+type MobileDragSession = MobileDragSource & {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  active: boolean;
+};
+
 type TransferModal =
   | {
       mode: "income_to_account";
@@ -167,6 +180,7 @@ function IconCard({
   disabled,
   onDragStart,
   onDragEnd,
+  onPointerDown,
   colorClass = "text-[#2f6064]",
   bgClass = "bg-[#2f6064]/5 dark:bg-[#2f6064]/10 border-[#2f6064]/20",
   hoverRing = "hover:ring-[#2f6064]/40",
@@ -174,12 +188,16 @@ function IconCard({
   liveAmountLabel,
   liveAmountPrefix,
   liveAmountTone,
+  selected,
+  onClick,
 }: {
   item: IconItem;
   draggable?: boolean;
   disabled?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
+  onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onClick?: () => void;
   colorClass?: string;
   bgClass?: string;
   hoverRing?: string;
@@ -187,6 +205,7 @@ function IconCard({
   liveAmountLabel?: string;
   liveAmountPrefix?: string;
   liveAmountTone?: "danger" | "success" | "neutral";
+  selected?: boolean;
 }) {
   const Icon = ICONS[item.key] || Wallet;
   const title =
@@ -199,13 +218,17 @@ function IconCard({
       draggable={draggable && !disabled}
       onDragStart={disabled ? undefined : onDragStart}
       onDragEnd={onDragEnd}
-      className={`flex min-w-[76px] select-none flex-col items-center sm:min-w-[88px] ${
+      onPointerDown={disabled ? undefined : onPointerDown}
+      onClick={disabled ? undefined : onClick}
+      className={`flex min-w-[76px] select-none flex-col items-center rounded-xl sm:min-w-[88px] ${onPointerDown ? "touch-none" : "touch-manipulation"} ${
         disabled
           ? "cursor-not-allowed opacity-60"
           : draggable
             ? "cursor-grab active:cursor-grabbing"
-            : ""
-      }`}
+            : onClick
+              ? "cursor-pointer"
+              : ""
+      } ${selected ? "ring-2 ring-[#2f6064]/50 ring-offset-2 ring-offset-white dark:ring-offset-gray-800" : ""}`}
       title={title}
     >
       <div
@@ -276,6 +299,9 @@ export default function BudgetManager() {
   const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [isDraggingAccount, setIsDraggingAccount] = useState(false);
+  const [selectedIncomeId, setSelectedIncomeId] = useState<string | null>(null);
+  const [selectedSourceAccountId, setSelectedSourceAccountId] = useState<string | null>(null);
+  const [mobileDragSource, setMobileDragSource] = useState<MobileDragSource | null>(null);
   const [addingAccountType, setAddingAccountType] = useState<string | null>(null);
   const [newAccountName, setNewAccountName] = useState("");
 
@@ -307,6 +333,8 @@ export default function BudgetManager() {
   const [newExpenseAmount, setNewExpenseAmount] = useState("");
   const [availableWalletBalance, setAvailableWalletBalance] = useState(0);
   const loadGeneration = useRef(0);
+  const mobileDragRef = useRef<MobileDragSession | null>(null);
+  const suppressNextTapRef = useRef(false);
 
   const invalidateBudgetLoads = () => {
     loadGeneration.current += 1;
@@ -510,6 +538,12 @@ export default function BudgetManager() {
     setIsDragging(false);
     setIsDraggingAccount(false);
     setDragOverTarget(null);
+    setMobileDragSource(null);
+  };
+
+  const clearTapSelection = () => {
+    setSelectedIncomeId(null);
+    setSelectedSourceAccountId(null);
   };
 
   const handleDragStart = (e: React.DragEvent, item: IconItem) => {
@@ -532,25 +566,198 @@ export default function BudgetManager() {
     setIsDraggingAccount(true);
   };
 
+  const openExpenseAllocationModal = (accountId: string, expItem: IconItem): boolean => {
+    const acc = userAccounts.find((a) => a.id === accountId);
+    if (!acc) return false;
+
+    const existing = getAllocForExpense(acc.id, expItem.id);
+    setAllocAmount(existing > 0 ? String(existing) : "");
+    setAllocModal({
+      accountId: acc.id,
+      accountName: acc.name,
+      expenseId: expItem.id,
+      expenseLabel: expItem.name ?? expItem.category ?? expItem.label,
+      existing,
+    });
+    return true;
+  };
+
+  const openIncomeTransferModal = (incomeId: string, accountId: string): boolean => {
+    const incomeItem = allIncomeIcons.find((i) => i.id === incomeId);
+    const targetAccount = userAccounts.find((a) => a.id === accountId);
+    if (!incomeItem || !targetAccount || targetAccount.accountType === "wallet") return false;
+
+    const incomeTotal = getIncomeTotal(incomeItem);
+    const previousUsed = getAllocatedAmount(incomeId);
+    const maxIncrement = Math.max(0, incomeTotal - previousUsed);
+    if (maxIncrement <= 0) return false;
+
+    setTransferAmount(String(maxIncrement));
+    setTransferModal({
+      mode: "income_to_account",
+      incomeId,
+      incomeLabel: incomeItem.category ?? incomeItem.label,
+      accountId,
+      accountName: targetAccount.name,
+      existing: previousUsed,
+      incomeTotal,
+      previousUsed,
+      maxIncrement,
+    });
+    return true;
+  };
+
+  const openAccountTransferModal = (sourceAccountId: string, accountId: string): boolean => {
+    if (sourceAccountId === accountId) return false;
+
+    const sourceAccount = userAccounts.find((a) => a.id === sourceAccountId);
+    const targetAccount = userAccounts.find((a) => a.id === accountId);
+    if (!sourceAccount || !targetAccount || sourceAccount.accountType === "wallet" || targetAccount.accountType === "wallet") return false;
+
+    const existing = accountTransfers.get(`${sourceAccountId}::${accountId}`) ?? 0;
+    setTransferAmount(existing > 0 ? String(existing) : "");
+    setTransferModal({
+      mode: "account_to_account",
+      fromAccountId: sourceAccountId,
+      fromAccountName: sourceAccount.name,
+      toAccountId: accountId,
+      toAccountName: targetAccount.name,
+      existing,
+    });
+    return true;
+  };
+
+  const handleIncomeTap = (item: IconItem) => {
+    if (suppressNextTapRef.current) return;
+    if (getRemainingIncome(item) <= 0) return;
+    setSelectedSourceAccountId(null);
+    setSelectedIncomeId((current) => current === item.id ? null : item.id);
+  };
+
+  const handleAccountTap = (acc: UserAccount) => {
+    if (suppressNextTapRef.current) return;
+    if (acc.accountType === "wallet") return;
+
+    if (selectedIncomeId) {
+      if (openIncomeTransferModal(selectedIncomeId, acc.id)) clearTapSelection();
+      return;
+    }
+
+    if (selectedSourceAccountId && selectedSourceAccountId !== acc.id) {
+      if (openAccountTransferModal(selectedSourceAccountId, acc.id)) clearTapSelection();
+      return;
+    }
+
+    setSelectedIncomeId(null);
+    setSelectedSourceAccountId((current) => current === acc.id ? null : acc.id);
+  };
+
+  const handleExpenseTap = (expItem: IconItem) => {
+    if (suppressNextTapRef.current) return;
+    if (!selectedSourceAccountId) return;
+    if (openExpenseAllocationModal(selectedSourceAccountId, expItem)) clearTapSelection();
+  };
+
+  const getMobileDropTarget = (source: MobileDragSource, clientX: number, clientY: number) => {
+    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
+    if (!target) return null;
+
+    if (source.type === "account") {
+      const expenseTarget = target.closest<HTMLElement>("[data-drop-expense-id]");
+      if (expenseTarget?.dataset.dropExpenseId) {
+        return { type: "expense" as const, id: expenseTarget.dataset.dropExpenseId };
+      }
+    }
+
+    const accountTarget = target.closest<HTMLElement>("[data-drop-account-id]");
+    if (accountTarget?.dataset.dropAccountId) {
+      return { type: "account" as const, id: accountTarget.dataset.dropAccountId };
+    }
+
+    return null;
+  };
+
+  const updateMobileDragTarget = (source: MobileDragSource, clientX: number, clientY: number) => {
+    const target = getMobileDropTarget(source, clientX, clientY);
+    const nextTarget =
+      target?.type === "expense"
+        ? `exp-${target.id}`
+        : target?.type === "account"
+          ? target.id
+          : null;
+
+    setDragOverTarget((current) => current === nextTarget ? current : nextTarget);
+  };
+
+  const handleMobilePointerDown = (e: React.PointerEvent<HTMLElement>, source: MobileDragSource) => {
+    if (e.pointerType === "mouse") return;
+
+    mobileDragRef.current = {
+      ...source,
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      active: false,
+    };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  };
+
+  const handleMobilePointerMove = (e: React.PointerEvent<HTMLElement>) => {
+    const session = mobileDragRef.current;
+    if (!session || session.pointerId !== e.pointerId) return;
+
+    const moved = Math.hypot(e.clientX - session.startX, e.clientY - session.startY);
+    if (!session.active && moved < 10) return;
+
+    if (!session.active) {
+      session.active = true;
+      clearTapSelection();
+      setMobileDragSource({ type: session.type, id: session.id, label: session.label });
+      if (session.type === "income") setIsDragging(true);
+      else setIsDraggingAccount(true);
+    }
+
+    e.preventDefault();
+    updateMobileDragTarget(session, e.clientX, e.clientY);
+  };
+
+  const handleMobilePointerEnd = (e: React.PointerEvent<HTMLElement>) => {
+    const session = mobileDragRef.current;
+    if (!session || session.pointerId !== e.pointerId) return;
+
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+
+    if (session.active) {
+      e.preventDefault();
+      suppressNextTapRef.current = true;
+      const target = getMobileDropTarget(session, e.clientX, e.clientY);
+
+      if (session.type === "income" && target?.type === "account") {
+        openIncomeTransferModal(session.id, target.id);
+      } else if (session.type === "account" && target?.type === "expense") {
+        const expense = expenseIcons.find((item) => item.id === target.id);
+        if (expense) openExpenseAllocationModal(session.id, expense);
+      } else if (session.type === "account" && target?.type === "account") {
+        openAccountTransferModal(session.id, target.id);
+      }
+
+      window.setTimeout(() => {
+        suppressNextTapRef.current = false;
+      }, 0);
+    }
+
+    mobileDragRef.current = null;
+    resetDragState();
+  };
+
   const handleDropOnExpense = (e: React.DragEvent, expItem: IconItem) => {
     e.preventDefault();
     resetDragState();
     const raw = e.dataTransfer.getData("application/account-id");
     if (!raw) return;
-    try {
-      const accountId = raw;
-      const acc = userAccounts.find((a) => a.id === accountId);
-      if (!acc) return;
-      const existing = getAllocForExpense(acc.id, expItem.id);
-      setAllocAmount(existing > 0 ? String(existing) : "");
-      setAllocModal({
-        accountId: acc.id,
-        accountName: acc.name,
-        expenseId: expItem.id,
-        expenseLabel: expItem.name ?? expItem.category ?? expItem.label,
-        existing,
-      });
-    } catch { /* ignore */ }
+    openExpenseAllocationModal(raw, expItem);
   };
 
   const handleSaveAllocation = async () => {
@@ -587,44 +794,13 @@ export default function BudgetManager() {
     resetDragState();
     const incomeId = e.dataTransfer.getData("application/income-id");
     if (incomeId) {
-      const incomeItem = allIncomeIcons.find((i) => i.id === incomeId);
-      const targetAccount = userAccounts.find((a) => a.id === accountId);
-      if (!incomeItem || !targetAccount || targetAccount.accountType === "wallet") return;
-
-      const incomeTotal = getIncomeTotal(incomeItem);
-      const previousUsed = getAllocatedAmount(incomeId);
-      const maxIncrement = Math.max(0, incomeTotal - previousUsed);
-
-      setTransferAmount(maxIncrement > 0 ? String(maxIncrement) : "");
-      setTransferModal({
-        mode: "income_to_account",
-        incomeId,
-        incomeLabel: incomeItem.category ?? incomeItem.label,
-        accountId,
-        accountName: targetAccount.name,
-        existing: previousUsed,
-        incomeTotal,
-        previousUsed,
-        maxIncrement,
-      });
+      openIncomeTransferModal(incomeId, accountId);
       return;
     }
 
     const sourceAccountId = e.dataTransfer.getData("application/account-id");
     if (sourceAccountId && sourceAccountId !== accountId) {
-      const sourceAccount = userAccounts.find((a) => a.id === sourceAccountId);
-      const targetAccount = userAccounts.find((a) => a.id === accountId);
-      if (!sourceAccount || !targetAccount || sourceAccount.accountType === "wallet" || targetAccount.accountType === "wallet") return;
-      const existing = accountTransfers.get(`${sourceAccountId}::${accountId}`) ?? 0;
-      setTransferAmount(existing > 0 ? String(existing) : "");
-      setTransferModal({
-        mode: "account_to_account",
-        fromAccountId: sourceAccountId,
-        fromAccountName: sourceAccount.name,
-        toAccountId: accountId,
-        toAccountName: targetAccount.name,
-        existing,
-      });
+      openAccountTransferModal(sourceAccountId, accountId);
       return;
     }
   };
@@ -637,6 +813,7 @@ export default function BudgetManager() {
     setTransferModal(null);
     setTransferAmount("");
     resetDragState();
+    clearTapSelection();
   };
 
   const handleSaveTransfer = async () => {
@@ -864,6 +1041,8 @@ export default function BudgetManager() {
   const totalAllocatedToExpenses = getTotalExpenseAllocations();
   const monthlyBalance = pooledIncome - totalAllocatedToExpenses;
   const isOverBudget = monthlyBalance < 0;
+  const selectedIncome = selectedIncomeId ? allIncomeIcons.find((item) => item.id === selectedIncomeId) : null;
+  const selectedSourceAccount = selectedSourceAccountId ? userAccounts.find((account) => account.id === selectedSourceAccountId) : null;
 
   return (
     <div className="space-y-5">
@@ -890,7 +1069,7 @@ export default function BudgetManager() {
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">Cash and Liquid Investments</div>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 xl:hidden">
-              Add accounts here, then use drag and drop on larger screens to allocate income and expenses.
+              Add accounts here, then tap or drag to allocate income and expenses.
             </p>
           </div>
 
@@ -964,21 +1143,32 @@ export default function BudgetManager() {
                   const accountIncome = getAccountIncome(acc.id);
                   const total = getAccountTotal(acc.id);
                   const isOver = dragOverTarget === acc.id;
+                  const isSelectedSource = selectedSourceAccountId === acc.id;
 
                   return (
                     <div
                       key={acc.id}
+                      data-drop-account-id={acc.id}
                       draggable
+                      onClick={() => handleAccountTap(acc)}
+                      onPointerDown={(e) => handleMobilePointerDown(e, { type: "account", id: acc.id, label: acc.name })}
+                      onPointerMove={handleMobilePointerMove}
+                      onPointerUp={handleMobilePointerEnd}
+                      onPointerCancel={handleMobilePointerEnd}
                       onDragStart={(e) => { e.stopPropagation(); handleAccountDragStart(e, acc); }}
                       onDragEnd={handleDragEnd}
-                      className={`w-full rounded-xl border-2 p-3 transition-all cursor-grab active:cursor-grabbing select-none ${
+                      className={`w-full rounded-xl border-2 p-3 transition-all cursor-grab active:cursor-grabbing select-none touch-none ${
                         isOver
                           ? `${c.border} ${c.ring} ring-2 scale-[1.02]`
+                          : isSelectedSource
+                            ? `${c.border} ${c.ring} ring-2 scale-[1.01]`
+                          : selectedIncomeId
+                            ? `border-gray-300 dark:border-gray-600 ${c.ring}/30 ring-1`
                           : isDragging || isDraggingAccount
                             ? `border-gray-300 dark:border-gray-600 ${c.ring}/30 ring-1 animate-pulse`
                             : `border-gray-200 dark:border-gray-700 hover:${c.border} hover:shadow-sm`
                       }`}
-                      title={`Drag this card to a planned expense to allocate budget from ${acc.name}`}
+                      title={selectedIncomeId ? `Tap to transfer selected income to ${acc.name}` : `Drag or tap this card to allocate budget from ${acc.name}`}
                       onDrop={(e) => handleDropOnAccount(e, acc.id)}
                       onDragOver={(e) => { handleDragOver(e); setDragOverTarget(acc.id); }}
                       onDragLeave={() => setDragOverTarget(null)}
@@ -1023,7 +1213,7 @@ export default function BudgetManager() {
                           )}
                         </div>
                         <button
-                          onClick={() => confirmDeleteAccount(acc)}
+                          onClick={(e) => { e.stopPropagation(); confirmDeleteAccount(acc); }}
                           className="p-0.5 rounded hover:bg-red-50 dark:hover:bg-red-900/20 text-gray-400 hover:text-red-500 transition-colors"
                           title={`Remove ${acc.name}`}
                         >
@@ -1072,7 +1262,9 @@ export default function BudgetManager() {
                         </div>
                       ) : (
                         <div className="flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg min-h-[40px]">
-                          <span className="text-[10px] text-gray-400 text-center px-1">Drop income here</span>
+                          <span className="text-[10px] text-gray-400 text-center px-1">
+                            {selectedIncomeId ? "Tap to add income" : "Drop income here"}
+                          </span>
                         </div>
                       )}
                     </div>
@@ -1136,6 +1328,11 @@ export default function BudgetManager() {
                 </button>
               </div>
             </div>
+            {selectedIncome && (
+              <p className="mb-3 rounded-lg bg-[#2f6064]/10 px-3 py-2 text-xs font-medium text-[#2f6064] dark:text-[#7bb9bd]">
+                {selectedIncome.category ?? selectedIncome.label} selected. Tap a bank, savings, investment, or cash account to transfer income.
+              </p>
+            )}
             {allIncomeIcons.length > 0 ? (
               <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
                 {allIncomeIcons.map((inc) => {
@@ -1149,6 +1346,12 @@ export default function BudgetManager() {
                       disabled={isFullyAllocated}
                       onDragStart={(e) => handleDragStart(e, inc)}
                       onDragEnd={handleDragEnd}
+                      onPointerDown={(e) => handleMobilePointerDown(e, { type: "income", id: inc.id, label: inc.category ?? inc.label })}
+                      onPointerMove={handleMobilePointerMove}
+                      onPointerUp={handleMobilePointerEnd}
+                      onPointerCancel={handleMobilePointerEnd}
+                      onClick={() => handleIncomeTap(inc)}
+                      selected={selectedIncomeId === inc.id}
                       liveAmount={remaining}
                       liveAmountLabel="Left"
                     />
@@ -1182,6 +1385,11 @@ export default function BudgetManager() {
                 </button>
               </div>
             </div>
+            {selectedSourceAccount && (
+              <p className="mb-3 rounded-lg bg-orange-50 px-3 py-2 text-xs font-medium text-orange-600 dark:bg-orange-900/20 dark:text-orange-300">
+                {selectedSourceAccount.name} selected. Tap an expense to budget from this account, or tap another account to transfer between accounts.
+              </p>
+            )}
             {isDraggingAccount && (
               <p className="text-[11px] text-orange-500 font-medium mb-3 flex items-center gap-1">
                 <Receipt className="h-3 w-3" /> Drop on an expense to set your budget for it
@@ -1195,19 +1403,25 @@ export default function BudgetManager() {
                   return (
                     <div
                       key={exp.id}
+                      data-drop-expense-id={exp.id}
                       className={`relative flex flex-col items-center gap-1 rounded-xl border-2 transition-all duration-150 ${
                         isDropOver
                           ? "border-orange-400 ring-2 ring-orange-300 bg-orange-50 dark:bg-orange-900/20 scale-105 p-3"
+                          : selectedSourceAccountId
+                            ? "border-dashed border-orange-300 dark:border-orange-600 bg-orange-50/50 dark:bg-orange-900/10 cursor-pointer p-3 min-w-[96px] min-h-[100px] justify-center"
                           : isDraggingAccount
                             ? "border-dashed border-orange-300 dark:border-orange-600 bg-orange-50/50 dark:bg-orange-900/10 cursor-copy p-3 min-w-[96px] min-h-[100px] justify-center"
                             : "border-transparent p-2"
                       }`}
+                      onClick={selectedSourceAccountId ? () => handleExpenseTap(exp) : undefined}
                       onDrop={(e) => handleDropOnExpense(e, exp)}
                       onDragOver={(e) => { e.preventDefault(); setDragOverTarget(`exp-${exp.id}`); }}
                       onDragLeave={() => setDragOverTarget(null)}
                     >
-                      {isDraggingAccount && !isDropOver && (
-                        <span className="absolute top-1 right-1.5 text-[9px] font-semibold text-orange-400">drop here</span>
+                      {(isDraggingAccount || selectedSourceAccountId) && !isDropOver && (
+                        <span className="absolute top-1 right-1.5 text-[9px] font-semibold text-orange-400">
+                          {selectedSourceAccountId ? "tap here" : "drop here"}
+                        </span>
                       )}
                       <IconCard
                         item={exp}
@@ -1259,6 +1473,12 @@ export default function BudgetManager() {
           </div>
         </main>
       </div>
+
+      {mobileDragSource && (
+        <div className="pointer-events-none fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow-lg dark:bg-white dark:text-gray-900 sm:hidden">
+          Dragging {mobileDragSource.label}
+        </div>
+      )}
 
       {/* ── Delete confirmation modal ── */}
       {deleteConfirm && (
