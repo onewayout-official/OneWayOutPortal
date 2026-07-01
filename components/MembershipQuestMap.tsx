@@ -57,14 +57,25 @@ const TIER_VISUALS: Record<
 };
 
 /** Winding quest path — viewBox 0 0 800 360 */
-const MAP_PATH =
+const DESKTOP_MAP_PATH =
   "M 60 280 C 120 220, 180 300, 240 240 S 360 120, 420 200 S 540 80, 600 160 S 700 60, 740 100";
 
-const CHECKPOINTS: { tier: MembershipTier; x: number; y: number }[] = [
+const DESKTOP_CHECKPOINTS: { tier: MembershipTier; x: number; y: number }[] = [
   { tier: "Debt Crusher", x: 60, y: 280 },
   { tier: "Cash King", x: 240, y: 240 },
   { tier: "Wealth Creator", x: 420, y: 200 },
   { tier: "Legacy Builder", x: 740, y: 100 },
+];
+
+/** Mobile quest path — viewBox 0 0 320 560 */
+const MOBILE_MAP_PATH =
+  "M 72 72 C 210 116, 52 188, 136 248 S 254 346, 152 404 S 88 492, 232 500";
+
+const MOBILE_CHECKPOINTS: { tier: MembershipTier; x: number; y: number; labelX: number; labelAnchor: "start" | "end" }[] = [
+  { tier: "Debt Crusher", x: 72, y: 72, labelX: 120, labelAnchor: "start" },
+  { tier: "Cash King", x: 136, y: 248, labelX: 188, labelAnchor: "start" },
+  { tier: "Wealth Creator", x: 152, y: 404, labelX: 100, labelAnchor: "end" },
+  { tier: "Legacy Builder", x: 232, y: 500, labelX: 180, labelAnchor: "end" },
 ];
 
 interface MembershipQuestMapProps {
@@ -72,9 +83,12 @@ interface MembershipQuestMapProps {
 }
 
 export default function MembershipQuestMap({ progress }: MembershipQuestMapProps) {
-  const pathRef = useRef<SVGPathElement>(null);
-  const [playerPos, setPlayerPos] = useState({ x: 60, y: 280 });
-  const [pathLength, setPathLength] = useState(0);
+  const desktopPathRef = useRef<SVGPathElement>(null);
+  const mobilePathRef = useRef<SVGPathElement>(null);
+  const [desktopPlayerPos, setDesktopPlayerPos] = useState({ x: 60, y: 280 });
+  const [mobilePlayerPos, setMobilePlayerPos] = useState({ x: 72, y: 72 });
+  const [desktopPathLength, setDesktopPathLength] = useState(0);
+  const [mobilePathLength, setMobilePathLength] = useState(0);
   const gradientId = useId().replace(/:/g, "");
 
   const {
@@ -90,12 +104,20 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
   } = progress;
 
   useEffect(() => {
-    const path = pathRef.current;
-    if (!path) return;
-    const len = path.getTotalLength();
-    setPathLength(len);
-    const pt = path.getPointAtLength((journeyProgress / 100) * len);
-    setPlayerPos({ x: pt.x, y: pt.y });
+    const updatePathProgress = (
+      path: SVGPathElement | null,
+      setLength: (length: number) => void,
+      setPosition: (position: { x: number; y: number }) => void
+    ) => {
+      if (!path) return;
+      const len = path.getTotalLength();
+      setLength(len);
+      const pt = path.getPointAtLength((journeyProgress / 100) * len);
+      setPosition({ x: pt.x, y: pt.y });
+    };
+
+    updatePathProgress(desktopPathRef.current, setDesktopPathLength, setDesktopPlayerPos);
+    updatePathProgress(mobilePathRef.current, setMobilePathLength, setMobilePlayerPos);
   }, [journeyProgress]);
 
   const currentVisual = TIER_VISUALS[currentTier];
@@ -135,10 +157,10 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
           <div className="absolute left-1/3 top-0 h-24 w-32 rounded-full bg-sky-200/40 blur-2xl dark:bg-sky-900/20" />
         </div>
 
-        <div className="relative mx-auto w-full max-w-4xl overflow-x-auto">
+        <div className="relative mx-auto hidden w-full max-w-4xl overflow-hidden sm:block">
           <svg
             viewBox="0 0 800 360"
-            className="h-auto min-w-[640px] w-full"
+            className="h-auto w-full"
             role="img"
             aria-label={`Membership quest map. Current tier: ${currentTier}. ${tierProgress}% progress to next level.`}
           >
@@ -170,7 +192,7 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
 
             {/* Base path (locked / future) */}
             <path
-              d={MAP_PATH}
+              d={DESKTOP_MAP_PATH}
               fill="none"
               stroke="currentColor"
               strokeWidth="14"
@@ -178,7 +200,7 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
               className="text-stone-300/80 dark:text-slate-600/80"
             />
             <path
-              d={MAP_PATH}
+              d={DESKTOP_MAP_PATH}
               fill="none"
               stroke="currentColor"
               strokeWidth="6"
@@ -188,23 +210,23 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
             />
 
             {/* Hidden path for length / player position */}
-            <path ref={pathRef} d={MAP_PATH} fill="none" stroke="transparent" strokeWidth="8" />
+            <path ref={desktopPathRef} d={DESKTOP_MAP_PATH} fill="none" stroke="transparent" strokeWidth="8" />
 
             {/* Completed path segment */}
-            {pathLength > 0 && (
+            {desktopPathLength > 0 && (
               <path
-                d={MAP_PATH}
+                d={DESKTOP_MAP_PATH}
                 fill="none"
                 stroke={currentVisual.pathFill}
                 strokeWidth="8"
                 strokeLinecap="round"
-                strokeDasharray={`${(journeyProgress / 100) * pathLength} ${pathLength}`}
+                strokeDasharray={`${(journeyProgress / 100) * desktopPathLength} ${desktopPathLength}`}
                 className="transition-all duration-700 ease-out"
               />
             )}
 
             {/* Checkpoints */}
-            {CHECKPOINTS.map((cp, i) => {
+            {DESKTOP_CHECKPOINTS.map((cp, i) => {
               const visual = TIER_VISUALS[cp.tier];
               const isPast = i < currentTierIndex;
               const isCurrent = i === currentTierIndex;
@@ -299,8 +321,175 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
 
             {/* Player marker */}
             <g className="transition-all duration-700 ease-out">
-              <g transform={`translate(${playerPos.x}, ${playerPos.y - 42})`}>
+              <g transform={`translate(${desktopPlayerPos.x}, ${desktopPlayerPos.y - 42})`}>
                 <ellipse cx="0" cy="38" rx="10" ry="4" className="fill-black/15" />
+                <circle r="14" fill={currentVisual.accent} stroke="white" strokeWidth="3" className="drop-shadow-lg" />
+                <text y="5" textAnchor="middle" fontSize="14">
+                  {currentVisual.emoji}
+                </text>
+              </g>
+            </g>
+          </svg>
+        </div>
+
+        <div className="relative mx-auto w-full overflow-hidden sm:hidden">
+          <svg
+            viewBox="0 0 320 560"
+            className="h-auto w-full"
+            role="img"
+            aria-label={`Membership quest map. Current tier: ${currentTier}. ${tierProgress}% progress to next level.`}
+          >
+            <defs>
+              <linearGradient id={`mobile-sky-${gradientId}`} x1="0%" y1="0%" x2="0%" y2="100%">
+                <stop offset="0%" stopColor="#bae6fd" stopOpacity="0.4" />
+                <stop offset="100%" stopColor="transparent" />
+              </linearGradient>
+              <filter id={`mobile-glow-${gradientId}`} x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            <rect width="320" height="560" fill={`url(#mobile-sky-${gradientId})`} />
+
+            <path
+              d="M0 500 Q80 458 160 496 T320 468 L320 560 L0 560 Z"
+              className="fill-emerald-200/50 dark:fill-emerald-900/25"
+            />
+            <path
+              d="M0 532 Q92 492 184 520 T320 504 L320 560 L0 560 Z"
+              className="fill-emerald-300/40 dark:fill-emerald-800/20"
+            />
+
+            <path
+              d={MOBILE_MAP_PATH}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="14"
+              strokeLinecap="round"
+              className="text-stone-300/80 dark:text-slate-600/80"
+            />
+            <path
+              d={MOBILE_MAP_PATH}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="6"
+              strokeLinecap="round"
+              strokeDasharray="10 14"
+              className="text-stone-400/60 dark:text-slate-500/60"
+            />
+            <path ref={mobilePathRef} d={MOBILE_MAP_PATH} fill="none" stroke="transparent" strokeWidth="8" />
+
+            {mobilePathLength > 0 && (
+              <path
+                d={MOBILE_MAP_PATH}
+                fill="none"
+                stroke={currentVisual.pathFill}
+                strokeWidth="8"
+                strokeLinecap="round"
+                strokeDasharray={`${(journeyProgress / 100) * mobilePathLength} ${mobilePathLength}`}
+                className="transition-all duration-700 ease-out"
+              />
+            )}
+
+            {MOBILE_CHECKPOINTS.map((cp, i) => {
+              const visual = TIER_VISUALS[cp.tier];
+              const isPast = i < currentTierIndex;
+              const isCurrent = i === currentTierIndex;
+              const isLocked = i > currentTierIndex;
+              const Icon = visual.Icon;
+
+              return (
+                <g key={cp.tier}>
+                  <g transform={`translate(${cp.x}, ${cp.y})`}>
+                    <ellipse
+                      cx="0"
+                      cy="27"
+                      rx={isCurrent ? 48 : 40}
+                      ry={isCurrent ? 17 : 13}
+                      className={
+                        isLocked
+                          ? "fill-stone-300/70 dark:fill-slate-700/70"
+                          : isPast
+                            ? "fill-emerald-200/80 dark:fill-emerald-900/50"
+                            : "fill-amber-100/90 dark:fill-amber-900/30"
+                      }
+                    />
+
+                    {isCurrent && (
+                      <circle
+                        r="39"
+                        fill="none"
+                        stroke={visual.accent}
+                        strokeWidth="3"
+                        opacity="0.5"
+                        filter={`url(#mobile-glow-${gradientId})`}
+                        className="animate-pulse"
+                      />
+                    )}
+
+                    <circle
+                      r={isCurrent ? 32 : 27}
+                      fill={isLocked ? "#9ca3af" : visual.accent}
+                      stroke="white"
+                      strokeWidth="3"
+                      className="drop-shadow-md"
+                    />
+
+                    <foreignObject x="-14" y="-14" width="28" height="28">
+                      <div className="flex h-full w-full items-center justify-center text-white">
+                        {isLocked ? (
+                          <Lock className="h-5 w-5" />
+                        ) : (
+                          <Icon className="h-6 w-6" />
+                        )}
+                      </div>
+                    </foreignObject>
+
+                    {isPast && (
+                      <g transform="translate(22, -22)">
+                        <circle r="10" fill="#10b981" stroke="white" strokeWidth="2" />
+                        <foreignObject x="-6" y="-6" width="12" height="12">
+                          <div className="flex h-full w-full items-center justify-center">
+                            <Check className="h-2.5 w-2.5 text-white" strokeWidth={3} />
+                          </div>
+                        </foreignObject>
+                      </g>
+                    )}
+                  </g>
+
+                  <text
+                    x={cp.labelX}
+                    y={cp.y - 5}
+                    textAnchor={cp.labelAnchor}
+                    className={`fill-current text-[13px] font-bold ${
+                      isCurrent
+                        ? "text-gray-900 dark:text-white"
+                        : isPast
+                          ? "text-emerald-800 dark:text-emerald-300"
+                          : "text-gray-500 dark:text-gray-500"
+                    }`}
+                  >
+                    {i + 1}. {cp.tier}
+                  </text>
+                  <text
+                    x={cp.labelX}
+                    y={cp.y + 12}
+                    textAnchor={cp.labelAnchor}
+                    className="fill-current text-[10px] font-medium text-gray-500 dark:text-gray-400"
+                  >
+                    {visual.biome}
+                  </text>
+                </g>
+              );
+            })}
+
+            <g className="transition-all duration-700 ease-out">
+              <g transform={`translate(${mobilePlayerPos.x}, ${mobilePlayerPos.y - 40})`}>
+                <ellipse cx="0" cy="36" rx="10" ry="4" className="fill-black/15" />
                 <circle r="14" fill={currentVisual.accent} stroke="white" strokeWidth="3" className="drop-shadow-lg" />
                 <text y="5" textAnchor="middle" fontSize="14">
                   {currentVisual.emoji}
@@ -319,7 +508,7 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
             return (
               <div
                 key={tier}
-                className={`flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[10px] font-semibold ${
+                className={`flex h-14 w-14 items-center justify-center gap-1.5 rounded-full p-0 text-3xl font-semibold sm:h-auto sm:w-auto sm:justify-start sm:px-2.5 sm:py-1 sm:text-[10px] ${
                   active
                     ? "bg-white shadow-md ring-2 ring-offset-1 dark:bg-slate-800 dark:ring-offset-slate-900"
                     : done
@@ -328,7 +517,7 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
                 }`}
                 style={active ? { boxShadow: `0 0 0 2px ${v.accent}` } : undefined}
               >
-                <span>{v.emoji}</span>
+                <span className="leading-none sm:leading-normal">{v.emoji}</span>
                 <span className="hidden sm:inline">{tier}</span>
               </div>
             );

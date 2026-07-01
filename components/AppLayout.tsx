@@ -78,7 +78,7 @@ export default function AppLayout({ children }: AppLayoutProps) {
 
         </aside>
 
-        <main className="flex-1 min-w-0 p-4 md:p-8 pb-20 md:pb-8 md:ml-64 min-h-screen">
+        <main className="flex-1 min-w-0 p-4 pb-6 md:p-8 md:ml-64 min-h-screen">
 
           <DashboardTopBar />
 

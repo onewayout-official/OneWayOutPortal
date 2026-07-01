@@ -233,9 +233,9 @@ export default function DashboardTopBar() {
 
   return (
     <>
-      <div className="sticky top-0 z-20 -mx-4 px-4 -mt-4 pt-4 md:-mx-8 md:px-8 md:-mt-8 md:pt-8 pb-4 mb-8 border-b border-[#254e52] bg-[#2f6064]">
-        <div className="grid grid-cols-3 items-center gap-4">
-          <div className="flex items-center gap-3">
+      <div className="sticky top-0 z-20 -mx-4 px-4 -mt-4 pt-4 pb-3 mb-5 border-b border-[#254e52] bg-[#2f6064] md:-mx-8 md:px-8 md:-mt-8 md:pt-8 md:pb-4 md:mb-8">
+        <div className="relative grid grid-cols-2 gap-3 md:grid-cols-3 md:items-center md:gap-4">
+          <div className="mt-1 flex min-w-0 flex-col gap-0.5 rounded-xl bg-white/10 p-3 md:mt-0 md:flex-row md:flex-wrap md:items-center md:justify-start md:gap-3 md:bg-transparent md:p-0">
             {isCoachTopBar ? (
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Coach Portal</span>
@@ -250,7 +250,7 @@ export default function DashboardTopBar() {
                   <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Updated Quarterly</span>
                 </div>
                 {!hasAppointedFinancialAdvisor && (
-                  <div className="flex flex-col items-start gap-1">
+                  <div className="hidden flex-col items-start gap-1 md:flex">
                     <span className="text-[10px] font-semibold text-white/80 uppercase tracking-wide leading-none">
                       Supercharge your points
                     </span>
@@ -272,22 +272,22 @@ export default function DashboardTopBar() {
             )}
           </div>
 
-          <div className="flex flex-col items-center justify-center">
+          <div className="order-first col-span-2 flex flex-col items-center justify-center md:order-none md:col-span-1">
             <Image
               src="/logo.png"
               alt="OneWayOut logo"
               width={180}
               height={64}
               priority
-              className="h-10 md:h-12 w-auto object-contain"
+              className="h-9 w-auto object-contain md:h-12"
             />
             <p className="text-xs text-white/60 hidden sm:block">{todayFormatted}</p>
           </div>
 
-          <div className="flex items-center justify-end gap-3">
+          <div className="mt-1 flex min-w-0 flex-col items-start rounded-xl bg-white/10 p-3 md:mt-0 md:flex-row md:flex-nowrap md:items-center md:justify-end md:gap-3 md:bg-transparent md:p-0">
             {!isCoachTopBar && (
               <>
-                <div className="flex flex-col items-end gap-0.5 border-r border-white/20 pr-3">
+                <div className="hidden flex-col items-end gap-0.5 border-r border-white/20 pr-3 md:flex">
                   <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Rewards Tracker</span>
                   <div className="flex flex-col items-end mt-0.5">
                     <span className="text-[11px] text-white/80">
@@ -299,10 +299,10 @@ export default function DashboardTopBar() {
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end">
+                <div className="flex min-w-0 flex-col items-start md:items-end">
                   <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">My 1-Wallet</span>
-                  <span className="text-base font-bold text-white">Balance: R {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                  <span className="text-base font-bold text-white/80">
+                  <span className="text-sm font-bold text-white md:text-base">Balance: R {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span className="text-sm font-bold text-white/80 md:text-base">
                     Available: R {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                   <button
@@ -315,7 +315,7 @@ export default function DashboardTopBar() {
               </>
             )}
 
-            <div className="relative" ref={profileDropdownRef}>
+            <div className="absolute right-0 top-0 md:relative md:right-auto md:top-auto" ref={profileDropdownRef}>
               <button
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
                 className="flex items-center gap-1 p-2 rounded-full hover:bg-white/10 transition-colors"

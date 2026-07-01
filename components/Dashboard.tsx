@@ -761,11 +761,11 @@ export default function Dashboard() {
             No counselors are available right now. Please check back soon.
           </p>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
+          <div className="flex gap-4 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0 lg:grid-cols-3">
             {counselors.slice(0, 3).map((counselor) => (
               <div
                 key={counselor.id}
-                className="bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4 flex flex-col items-center text-center gap-3"
+                className="w-[calc((100%-1rem)/2)] min-w-[calc((100%-1rem)/2)] bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4 flex flex-col items-center text-center gap-3 sm:w-auto sm:min-w-0"
               >
                 <img
                   src={resolveCounselorImage(counselor.image)}
@@ -773,16 +773,16 @@ export default function Dashboard() {
                   className="w-14 h-14 rounded-full object-cover shadow-md ring-2 ring-white dark:ring-gray-600"
                 />
                 <div>
-                  <p className="font-semibold text-gray-900 dark:text-white text-sm">{counselor.name}</p>
-                  <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">{counselor.title}</p>
+                  <p className="font-semibold text-gray-900 dark:text-white text-base">{counselor.name}</p>
+                  <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{counselor.title}</p>
                 </div>
-                <span className="text-[10px] font-medium bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-700">
+                <span className="text-xs font-medium bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-700">
                   {counselor.specialty}
                 </span>
-                <p className="text-xs text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-3">{counselor.bio}</p>
+                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-3">{counselor.bio}</p>
                 <Link
                   href={`/help-me/counselors/${counselor.id}?action=book`}
-                  className="mt-auto w-full text-xs font-medium py-1.5 px-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-center"
+                  className="mt-auto w-full text-sm font-medium py-1.5 px-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-center"
                 >
                   Book Free Session
                 </Link>
