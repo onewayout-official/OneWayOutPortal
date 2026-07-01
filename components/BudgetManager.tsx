@@ -189,6 +189,9 @@ function IconCard({
   onDragStart,
   onDragEnd,
   onPointerDown,
+  onPointerMove,
+  onPointerUp,
+  onPointerCancel,
   colorClass = "text-[#2f6064]",
   bgClass = "bg-[#2f6064]/5 dark:bg-[#2f6064]/10 border-[#2f6064]/20",
   hoverRing = "hover:ring-[#2f6064]/40",
@@ -205,6 +208,9 @@ function IconCard({
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
   onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerMove?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerUp?: (e: React.PointerEvent<HTMLDivElement>) => void;
+  onPointerCancel?: (e: React.PointerEvent<HTMLDivElement>) => void;
   onClick?: () => void;
   colorClass?: string;
   bgClass?: string;
@@ -227,8 +233,11 @@ function IconCard({
       onDragStart={disabled ? undefined : onDragStart}
       onDragEnd={onDragEnd}
       onPointerDown={disabled ? undefined : onPointerDown}
+      onPointerMove={disabled ? undefined : onPointerMove}
+      onPointerUp={disabled ? undefined : onPointerUp}
+      onPointerCancel={disabled ? undefined : onPointerCancel}
       onClick={disabled ? undefined : onClick}
-      className={`flex min-w-[76px] select-none flex-col items-center rounded-xl sm:min-w-[88px] ${onPointerDown ? "touch-none" : "touch-manipulation"} ${
+      className={`flex min-w-[76px] flex-none select-none flex-col items-center rounded-xl sm:min-w-[88px] ${onPointerDown ? "touch-none" : "touch-manipulation"} ${
         disabled
           ? "cursor-not-allowed opacity-60"
           : draggable
@@ -1402,7 +1411,7 @@ export default function BudgetManager() {
               </p>
             )}
             {allIncomeIcons.length > 0 ? (
-              <div className="grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
+              <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:items-center sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                 {allIncomeIcons.map((inc) => {
                   const remaining = getRemainingIncome(inc);
                   const isFullyAllocated = getIncomeTotal(inc) > 0 && remaining === 0;
@@ -1464,7 +1473,7 @@ export default function BudgetManager() {
               </p>
             )}
             {expenseIcons.length > 0 ? (
-              <div className="mt-2 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap sm:items-start sm:gap-4">
+              <div className="-mx-4 mt-2 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:items-start sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                 {expenseIcons.map((exp) => {
                   const allocated = getTotalAllocForExpense(exp.id);
                   const isDropOver = dragOverTarget === `exp-${exp.id}`;
@@ -1472,7 +1481,7 @@ export default function BudgetManager() {
                     <div
                       key={exp.id}
                       data-drop-expense-id={exp.id}
-                      className={`relative flex flex-col items-center gap-1 rounded-xl border-2 transition-all duration-150 ${
+                      className={`relative flex w-[104px] flex-none snap-start flex-col items-center gap-1 rounded-xl border-2 transition-all duration-150 sm:w-auto ${
                         isDropOver
                           ? "border-orange-400 ring-2 ring-orange-300 bg-orange-50 dark:bg-orange-900/20 scale-105 p-3"
                           : selectedSourceAccountId
