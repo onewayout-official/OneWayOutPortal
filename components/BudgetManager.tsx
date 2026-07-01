@@ -52,6 +52,14 @@ type MobileDragSession = MobileDragSource & {
   active: boolean;
 };
 
+type MobileAutoScrollState = {
+  frame: number | null;
+  source: MobileDragSource | null;
+  clientX: number;
+  clientY: number;
+  velocity: number;
+};
+
 type TransferModal =
   | {
       mode: "income_to_account";
@@ -334,6 +342,13 @@ export default function BudgetManager() {
   const [availableWalletBalance, setAvailableWalletBalance] = useState(0);
   const loadGeneration = useRef(0);
   const mobileDragRef = useRef<MobileDragSession | null>(null);
+  const mobileAutoScrollRef = useRef<MobileAutoScrollState>({
+    frame: null,
+    source: null,
+    clientX: 0,
+    clientY: 0,
+    velocity: 0,
+  });
   const suppressNextTapRef = useRef(false);
 
   const invalidateBudgetLoads = () => {
@@ -689,9 +704,59 @@ export default function BudgetManager() {
     setDragOverTarget((current) => current === nextTarget ? current : nextTarget);
   };
 
+  const stopMobileAutoScroll = () => {
+    const state = mobileAutoScrollRef.current;
+    if (state.frame != null) cancelAnimationFrame(state.frame);
+    state.frame = null;
+    state.source = null;
+    state.velocity = 0;
+  };
+
+  const runMobileAutoScroll = () => {
+    const state = mobileAutoScrollRef.current;
+    if (!state.source || state.velocity === 0) {
+      state.frame = null;
+      return;
+    }
+
+    window.scrollBy(0, state.velocity);
+    updateMobileDragTarget(state.source, state.clientX, state.clientY);
+    state.frame = requestAnimationFrame(runMobileAutoScroll);
+  };
+
+  const updateMobileAutoScroll = (source: MobileDragSource, clientX: number, clientY: number) => {
+    const edgeSize = 88;
+    const maxSpeed = 16;
+    const viewportHeight = window.innerHeight;
+    let velocity = 0;
+
+    if (clientY < edgeSize) {
+      velocity = -Math.ceil(((edgeSize - clientY) / edgeSize) * maxSpeed);
+    } else if (clientY > viewportHeight - edgeSize) {
+      velocity = Math.ceil(((clientY - (viewportHeight - edgeSize)) / edgeSize) * maxSpeed);
+    }
+
+    const state = mobileAutoScrollRef.current;
+    state.source = source;
+    state.clientX = clientX;
+    state.clientY = clientY;
+    state.velocity = velocity;
+
+    if (velocity === 0) {
+      if (state.frame != null) cancelAnimationFrame(state.frame);
+      state.frame = null;
+      return;
+    }
+
+    if (state.frame == null) {
+      state.frame = requestAnimationFrame(runMobileAutoScroll);
+    }
+  };
+
   const handleMobilePointerDown = (e: React.PointerEvent<HTMLElement>, source: MobileDragSource) => {
     if (e.pointerType === "mouse") return;
 
+    stopMobileAutoScroll();
     mobileDragRef.current = {
       ...source,
       pointerId: e.pointerId,
@@ -719,6 +784,7 @@ export default function BudgetManager() {
 
     e.preventDefault();
     updateMobileDragTarget(session, e.clientX, e.clientY);
+    updateMobileAutoScroll(session, e.clientX, e.clientY);
   };
 
   const handleMobilePointerEnd = (e: React.PointerEvent<HTMLElement>) => {
@@ -732,6 +798,7 @@ export default function BudgetManager() {
     if (session.active) {
       e.preventDefault();
       suppressNextTapRef.current = true;
+      stopMobileAutoScroll();
       const target = getMobileDropTarget(session, e.clientX, e.clientY);
 
       if (session.type === "income" && target?.type === "account") {
@@ -749,6 +816,7 @@ export default function BudgetManager() {
     }
 
     mobileDragRef.current = null;
+    stopMobileAutoScroll();
     resetDragState();
   };
 
