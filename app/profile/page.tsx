@@ -303,8 +303,8 @@ export default function ProfilePage() {
     }
   };
 
-  const inputCls = "w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-800 dark:text-white transition-all";
-  const labelCls = "block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2";
+  const inputCls = "w-full rounded-xl border border-gray-200 bg-white px-3.5 py-3 text-sm shadow-sm transition-all placeholder:text-gray-400 focus:border-transparent focus:outline-none focus:ring-2 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-900/70 dark:text-white sm:px-4 sm:text-base";
+  const labelCls = "mb-1.5 block text-sm font-semibold text-gray-700 dark:text-gray-300";
 
   const renderCrmField = (field: CrmField) => {
     if (!profile) return null;
@@ -348,7 +348,7 @@ export default function ProfilePage() {
   };
 
   const renderCrmFields = (tab: keyof typeof CRM_FIELDS) => (
-    <div className="grid grid-cols-1 md:grid-cols-2 gap-5">{CRM_FIELDS[tab].map(renderCrmField)}</div>
+    <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">{CRM_FIELDS[tab].map(renderCrmField)}</div>
   );
 
   if (isLoading) {
@@ -382,14 +382,15 @@ export default function ProfilePage() {
   return (
     <ProtectedRoute>
       <AppLayout>
-        <div className="w-full max-w-6xl mx-auto space-y-6">
-          <div className="flex items-center gap-3">
-            <div className="p-3 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-sm">
+        <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
+          <div className="rounded-3xl border border-white/70 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-gray-800 dark:bg-gray-900/60 sm:flex sm:items-center sm:gap-4 sm:p-0 sm:shadow-none sm:backdrop-blur-none sm:border-0 sm:bg-transparent dark:sm:bg-transparent">
+            <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-blue-500 to-blue-600 shadow-sm sm:mb-0 sm:h-auto sm:w-auto sm:p-3">
               <User className="h-6 w-6 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Profile Settings</h1>
-              <p className="text-gray-600 dark:text-gray-400 mt-1">Manage your CRM client profile information.</p>
+              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-blue-600 dark:text-blue-400 sm:hidden">Account</p>
+              <h1 className="text-2xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-3xl">Profile Settings</h1>
+              <p className="mt-1 text-sm leading-6 text-gray-600 dark:text-gray-400 sm:text-base">Manage your CRM client profile information.</p>
             </div>
           </div>
 
@@ -406,24 +407,26 @@ export default function ProfilePage() {
             </div>
           )}
 
-          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-2xl overflow-hidden shadow-sm">
-            <div className="flex overflow-x-auto border-b border-gray-200 dark:border-gray-700">
+          <div className="overflow-hidden rounded-3xl border border-gray-200 bg-white shadow-sm dark:border-gray-800 dark:bg-gray-900">
+            <div className="border-b border-gray-100 bg-gray-50/80 p-2 dark:border-gray-800 dark:bg-gray-950/30">
+              <div className="scrollbar-hide flex gap-2 overflow-x-auto">
               {TABS.map((tab) => {
                 const Icon = tab.icon;
                 return (
-                  <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-2 min-w-40 flex-1 justify-center px-4 py-4 text-sm font-semibold transition-all ${activeTab === tab.id ? "border-b-2 border-blue-600 text-blue-600 bg-blue-50 dark:bg-blue-900/20 dark:text-blue-400" : "text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 hover:bg-gray-50 dark:hover:bg-gray-700/40"}`}>
+                  <button key={tab.id} type="button" onClick={() => setActiveTab(tab.id)} className={`flex min-w-max items-center justify-center gap-2 rounded-2xl px-3.5 py-2.5 text-sm font-semibold transition-all sm:min-w-40 sm:flex-1 sm:px-4 ${activeTab === tab.id ? "bg-blue-600 text-white shadow-sm shadow-blue-600/20 dark:bg-blue-500" : "text-gray-500 hover:bg-white hover:text-gray-900 dark:text-gray-400 dark:hover:bg-gray-800 dark:hover:text-gray-100"}`}>
                     <Icon className="h-4 w-4" />
-                    {tab.label}
+                    <span className="whitespace-nowrap">{tab.label}</span>
                   </button>
                 );
               })}
+              </div>
             </div>
 
-            <div className="p-6">
+            <div className="p-4 sm:p-6">
               {activeTab === "personal" && (
-                <section className="space-y-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Personal Information</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <section className="space-y-4 sm:space-y-6">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">Personal Information</h2>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                     <div><label className={labelCls}>Full Name *</label><input className={inputCls} value={profile.name} onChange={(e) => updateProfile("name", e.target.value)} required /></div>
                     <div><label className={labelCls}>Preferred / First Name</label><input className={inputCls} value={profile.firstName || ""} onChange={(e) => updateProfile("firstName", e.target.value)} /></div>
                     <div><label className={labelCls}>Surname</label><input className={inputCls} value={profile.lastName || ""} onChange={(e) => updateProfile("lastName", e.target.value)} /></div>
@@ -437,13 +440,13 @@ export default function ProfilePage() {
                 </section>
               )}
 
-              {activeTab === "crm" && <section className="space-y-6"><h2 className="text-xl font-bold text-gray-900 dark:text-white">CRM Admin Fields</h2>{renderCrmFields("crm")}</section>}
-              {activeTab === "contact" && <section className="space-y-6"><h2 className="text-xl font-bold text-gray-900 dark:text-white">Contact & Address</h2>{renderCrmFields("contact")}</section>}
+              {activeTab === "crm" && <section className="space-y-4 sm:space-y-6"><h2 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">CRM Admin Fields</h2>{renderCrmFields("crm")}</section>}
+              {activeTab === "contact" && <section className="space-y-4 sm:space-y-6"><h2 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">Contact & Address</h2>{renderCrmFields("contact")}</section>}
 
               {activeTab === "identity" && (
-                <section className="space-y-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">ID Information</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <section className="space-y-4 sm:space-y-6">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">ID Information</h2>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                     <div><label className={labelCls}>ID Number</label><input className={inputCls} value={profile.idNumber || ""} onChange={(e) => updateProfile("idNumber", e.target.value)} /></div>
                     {renderCrmField({ key: "id_full_name", label: "ID Full Name" })}
                     <div><label className={labelCls}>Tax Number</label><input className={inputCls} value={profile.taxNumber || ""} onChange={(e) => updateProfile("taxNumber", e.target.value)} /></div>
@@ -476,9 +479,9 @@ export default function ProfilePage() {
               )}
 
               {activeTab === "work" && (
-                <section className="space-y-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Work & Wealth Information</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <section className="space-y-4 sm:space-y-6">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">Work & Wealth Information</h2>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                     <div><label className={labelCls}>Employer</label><input className={inputCls} value={profile.employer || ""} onChange={(e) => updateProfile("employer", e.target.value)} /></div>
                     <div><label className={labelCls}>Occupation</label><input className={inputCls} value={profile.occupation || ""} onChange={(e) => updateProfile("occupation", e.target.value)} /></div>
                     <div><label className={labelCls}>Highest Qualification</label><input className={inputCls} value={profile.highestQualification || ""} onChange={(e) => updateProfile("highestQualification", e.target.value)} /></div>
@@ -496,12 +499,12 @@ export default function ProfilePage() {
                 </section>
               )}
 
-              {activeTab === "compliance" && <section className="space-y-6"><h2 className="text-xl font-bold text-gray-900 dark:text-white">Compliance</h2>{renderCrmFields("compliance")}</section>}
+              {activeTab === "compliance" && <section className="space-y-4 sm:space-y-6"><h2 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">Compliance</h2>{renderCrmFields("compliance")}</section>}
 
               {activeTab === "banking" && (
-                <section className="space-y-6">
-                  <h2 className="text-xl font-bold text-gray-900 dark:text-white">Banking Details</h2>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <section className="space-y-4 sm:space-y-6">
+                  <h2 className="text-lg font-bold text-gray-900 dark:text-white sm:text-xl">Banking Details</h2>
+                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 md:gap-5">
                     <div><label className={labelCls}>Account Holder</label><input name="clientbanking_set-0-account_holder" className={inputCls} value={profile.bankAccountHolder || ""} onChange={(e) => updateProfile("bankAccountHolder", e.target.value)} /></div>
                     <div>
                       <label className={labelCls}>Bank</label>
@@ -519,16 +522,16 @@ export default function ProfilePage() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-3 p-6 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60">
-              <button type="button" onClick={() => setActiveTab(TABS[Math.max(activeTabIndex - 1, 0)].id)} disabled={isFirstTab || isSaving} className="flex items-center gap-2 px-5 py-2.5 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 font-semibold hover:bg-white dark:hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all">
+            <div className="flex flex-col-reverse gap-3 border-t border-gray-100 bg-gray-50/80 p-4 dark:border-gray-800 dark:bg-gray-950/30 sm:flex-row sm:items-center sm:justify-between sm:p-6">
+              <button type="button" onClick={() => setActiveTab(TABS[Math.max(activeTabIndex - 1, 0)].id)} disabled={isFirstTab || isSaving} className="flex w-full items-center justify-center gap-2 rounded-xl border border-gray-200 bg-white px-5 py-3 font-semibold text-gray-700 shadow-sm transition-all hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 dark:hover:bg-gray-800 sm:w-auto sm:py-2.5">
                 <ArrowLeft className="h-4 w-4" /> Back
               </button>
               {!isLastTab ? (
-                <button type="button" onClick={() => setActiveTab(TABS[Math.min(activeTabIndex + 1, TABS.length - 1)].id)} disabled={isSaving} className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all disabled:opacity-50">
+                <button type="button" onClick={() => setActiveTab(TABS[Math.min(activeTabIndex + 1, TABS.length - 1)].id)} disabled={isSaving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-sm shadow-blue-600/20 transition-all hover:bg-blue-700 disabled:opacity-50 sm:w-auto sm:py-2.5">
                   Next <ArrowRight className="h-4 w-4" />
                 </button>
               ) : (
-                <button type="button" onClick={handleSave} disabled={isSaving} className="flex items-center gap-2 px-6 py-2.5 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+                <button type="button" onClick={handleSave} disabled={isSaving} className="flex w-full items-center justify-center gap-2 rounded-xl bg-blue-600 px-6 py-3 font-semibold text-white shadow-sm shadow-blue-600/20 transition-all hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto sm:py-2.5">
                   {isSaving ? <><Loader2 className="h-4 w-4 animate-spin" /> Saving...</> : <><Save className="h-4 w-4" /> Save and Sync CRM</>}
                 </button>
               )}

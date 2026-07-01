@@ -233,9 +233,9 @@ export default function DashboardTopBar() {
 
   return (
     <>
-      <div className="sticky top-0 z-20 -mx-4 px-4 -mt-4 pt-4 pb-3 mb-5 border-b border-[#254e52] bg-[#2f6064] md:-mx-8 md:px-8 md:-mt-8 md:pt-8 md:pb-4 md:mb-8">
-        <div className="relative grid grid-cols-2 gap-3 md:grid-cols-3 md:items-center md:gap-4">
-          <div className="mt-1 flex min-w-0 flex-col gap-0.5 rounded-xl bg-white/10 p-3 md:mt-0 md:flex-row md:flex-wrap md:items-center md:justify-start md:gap-3 md:bg-transparent md:p-0">
+      <div className="sticky top-0 z-20 -mx-4 -mt-4 mb-5 border-b border-[#254e52] bg-[#2f6064]/95 px-4 pb-3 pt-4 shadow-lg shadow-black/10 backdrop-blur md:-mx-8 md:-mt-8 md:mb-8 md:bg-[#2f6064] md:px-8 md:pb-4 md:pt-8 md:shadow-none">
+        <div className="relative flex min-h-12 items-center justify-center md:grid md:min-h-0 md:grid-cols-3 md:items-center md:gap-4">
+          <div className={`${isCoachTopBar ? "mt-1 flex" : "hidden"} min-w-0 flex-col gap-0.5 rounded-xl bg-white/10 p-3 md:mt-0 md:flex md:flex-row md:flex-wrap md:items-center md:justify-start md:gap-3 md:bg-transparent md:p-0`}>
             {isCoachTopBar ? (
               <div className="flex flex-col gap-0.5">
                 <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">Coach Portal</span>
@@ -272,19 +272,19 @@ export default function DashboardTopBar() {
             )}
           </div>
 
-          <div className="order-first col-span-2 flex flex-col items-center justify-center md:order-none md:col-span-1">
+          <div className="flex min-w-0 flex-col items-center justify-center md:col-span-1">
             <Image
               src="/logo.png"
               alt="OneWayOut logo"
               width={180}
               height={64}
               priority
-              className="h-9 w-auto object-contain md:h-12"
+              className="h-8 w-auto object-contain drop-shadow-sm md:h-12 md:drop-shadow-none"
             />
-            <p className="text-xs text-white/60 hidden sm:block">{todayFormatted}</p>
+            <p className="mt-0.5 hidden text-xs text-white/60 sm:block">{todayFormatted}</p>
           </div>
 
-          <div className="mt-1 flex min-w-0 flex-col items-start rounded-xl bg-white/10 p-3 md:mt-0 md:flex-row md:flex-nowrap md:items-center md:justify-end md:gap-3 md:bg-transparent md:p-0">
+          <div className={`${isCoachTopBar ? "mt-1 flex min-w-0 flex-col items-start rounded-xl bg-white/10 p-3" : "contents"} md:mt-0 md:flex md:min-w-0 md:flex-row md:flex-nowrap md:items-center md:justify-end md:gap-3 md:bg-transparent md:p-0`}>
             {!isCoachTopBar && (
               <>
                 <div className="hidden flex-col items-end gap-0.5 border-r border-white/20 pr-3 md:flex">
@@ -299,7 +299,7 @@ export default function DashboardTopBar() {
                   </div>
                 </div>
 
-                <div className="flex min-w-0 flex-col items-start md:items-end">
+                <div className="hidden min-w-0 flex-col items-start md:flex md:items-end">
                   <span className="text-xs font-semibold text-white/70 uppercase tracking-wide">My 1-Wallet</span>
                   <span className="text-sm font-bold text-white md:text-base">Balance: R {availableBalance.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   <span className="text-sm font-bold text-white/80 md:text-base">
@@ -315,14 +315,14 @@ export default function DashboardTopBar() {
               </>
             )}
 
-            <div className="absolute right-0 top-0 md:relative md:right-auto md:top-auto" ref={profileDropdownRef}>
+            <div className="absolute right-0 top-1/2 -translate-y-1/2 md:relative md:right-auto md:top-auto md:translate-y-0" ref={profileDropdownRef}>
               <button
                 onClick={() => setProfileDropdownOpen(!profileDropdownOpen)}
-                className="flex items-center gap-1 p-2 rounded-full hover:bg-white/10 transition-colors"
+                className="flex items-center gap-1 rounded-full p-1.5 transition-colors hover:bg-white/10 md:p-2"
                 aria-expanded={profileDropdownOpen}
                 aria-haspopup="true"
               >
-                <div className="w-9 h-9 rounded-full bg-white/20 flex items-center justify-center">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full border border-white/20 bg-white/15 shadow-sm md:h-9 md:w-9 md:border-0 md:bg-white/20 md:shadow-none">
                   <User className="h-5 w-5 text-white" />
                 </div>
                 <ChevronDown className={`h-4 w-4 text-white/70 transition-transform ${profileDropdownOpen ? "rotate-180" : ""}`} />

@@ -24,6 +24,7 @@ interface SpinWheelProps {
 }
 
 const SEGMENT_ANGLE = 360 / SPIN_WHEEL_SEGMENTS.length;
+const POINTER_ANGLE = 270;
 
 export default function SpinWheel({
   state,
@@ -43,8 +44,12 @@ export default function SpinWheel({
     const idx = index >= 0 ? index : 0;
     const segmentCenter = idx * SEGMENT_ANGLE + SEGMENT_ANGLE / 2;
     const extraTurns = 5 * 360;
-    const target = extraTurns + (360 - segmentCenter);
-    setRotation((r) => r + target);
+    setRotation((currentRotation) => {
+      const normalizedRotation = ((currentRotation % 360) + 360) % 360;
+      const pointerDelta =
+        (POINTER_ANGLE - segmentCenter - normalizedRotation + 360) % 360;
+      return currentRotation + extraTurns + pointerDelta;
+    });
     setTimeout(onDone, 4200);
   }, []);
 
