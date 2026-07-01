@@ -39,27 +39,6 @@ type UserAccount = {
   sortOrder: number;
 };
 
-type MobileDragSource = {
-  type: "income" | "account";
-  id: string;
-  label: string;
-};
-
-type MobileDragSession = MobileDragSource & {
-  pointerId: number;
-  startX: number;
-  startY: number;
-  active: boolean;
-};
-
-type MobileAutoScrollState = {
-  frame: number | null;
-  source: MobileDragSource | null;
-  clientX: number;
-  clientY: number;
-  velocity: number;
-};
-
 type TransferModal =
   | {
       mode: "income_to_account";
@@ -188,10 +167,6 @@ function IconCard({
   disabled,
   onDragStart,
   onDragEnd,
-  onPointerDown,
-  onPointerMove,
-  onPointerUp,
-  onPointerCancel,
   colorClass = "text-[#2f6064]",
   bgClass = "bg-[#2f6064]/5 dark:bg-[#2f6064]/10 border-[#2f6064]/20",
   hoverRing = "hover:ring-[#2f6064]/40",
@@ -207,10 +182,6 @@ function IconCard({
   disabled?: boolean;
   onDragStart?: (e: React.DragEvent) => void;
   onDragEnd?: (e: React.DragEvent) => void;
-  onPointerDown?: (e: React.PointerEvent<HTMLDivElement>) => void;
-  onPointerMove?: (e: React.PointerEvent<HTMLDivElement>) => void;
-  onPointerUp?: (e: React.PointerEvent<HTMLDivElement>) => void;
-  onPointerCancel?: (e: React.PointerEvent<HTMLDivElement>) => void;
   onClick?: () => void;
   colorClass?: string;
   bgClass?: string;
@@ -232,12 +203,8 @@ function IconCard({
       draggable={draggable && !disabled}
       onDragStart={disabled ? undefined : onDragStart}
       onDragEnd={onDragEnd}
-      onPointerDown={disabled ? undefined : onPointerDown}
-      onPointerMove={disabled ? undefined : onPointerMove}
-      onPointerUp={disabled ? undefined : onPointerUp}
-      onPointerCancel={disabled ? undefined : onPointerCancel}
       onClick={disabled ? undefined : onClick}
-      className={`flex min-w-[76px] flex-none select-none flex-col items-center rounded-xl sm:min-w-[88px] ${onPointerDown ? "touch-none" : "touch-manipulation"} ${
+      className={`flex min-w-[76px] flex-none select-none flex-col items-center rounded-xl touch-manipulation sm:min-w-[88px] ${
         disabled
           ? "cursor-not-allowed opacity-60"
           : draggable
@@ -318,7 +285,6 @@ export default function BudgetManager() {
   const [isDraggingAccount, setIsDraggingAccount] = useState(false);
   const [selectedIncomeId, setSelectedIncomeId] = useState<string | null>(null);
   const [selectedSourceAccountId, setSelectedSourceAccountId] = useState<string | null>(null);
-  const [mobileDragSource, setMobileDragSource] = useState<MobileDragSource | null>(null);
   const [addingAccountType, setAddingAccountType] = useState<string | null>(null);
   const [newAccountName, setNewAccountName] = useState("");
 
@@ -350,15 +316,6 @@ export default function BudgetManager() {
   const [newExpenseAmount, setNewExpenseAmount] = useState("");
   const [availableWalletBalance, setAvailableWalletBalance] = useState(0);
   const loadGeneration = useRef(0);
-  const mobileDragRef = useRef<MobileDragSession | null>(null);
-  const mobileAutoScrollRef = useRef<MobileAutoScrollState>({
-    frame: null,
-    source: null,
-    clientX: 0,
-    clientY: 0,
-    velocity: 0,
-  });
-  const suppressNextTapRef = useRef(false);
 
   const invalidateBudgetLoads = () => {
     loadGeneration.current += 1;
@@ -562,7 +519,6 @@ export default function BudgetManager() {
     setIsDragging(false);
     setIsDraggingAccount(false);
     setDragOverTarget(null);
-    setMobileDragSource(null);
   };
 
   const clearTapSelection = () => {
@@ -652,14 +608,12 @@ export default function BudgetManager() {
   };
 
   const handleIncomeTap = (item: IconItem) => {
-    if (suppressNextTapRef.current) return;
     if (getRemainingIncome(item) <= 0) return;
     setSelectedSourceAccountId(null);
     setSelectedIncomeId((current) => current === item.id ? null : item.id);
   };
 
   const handleAccountTap = (acc: UserAccount) => {
-    if (suppressNextTapRef.current) return;
     if (acc.accountType === "wallet") return;
 
     if (selectedIncomeId) {
@@ -677,156 +631,8 @@ export default function BudgetManager() {
   };
 
   const handleExpenseTap = (expItem: IconItem) => {
-    if (suppressNextTapRef.current) return;
     if (!selectedSourceAccountId) return;
     if (openExpenseAllocationModal(selectedSourceAccountId, expItem)) clearTapSelection();
-  };
-
-  const getMobileDropTarget = (source: MobileDragSource, clientX: number, clientY: number) => {
-    const target = document.elementFromPoint(clientX, clientY) as HTMLElement | null;
-    if (!target) return null;
-
-    if (source.type === "account") {
-      const expenseTarget = target.closest<HTMLElement>("[data-drop-expense-id]");
-      if (expenseTarget?.dataset.dropExpenseId) {
-        return { type: "expense" as const, id: expenseTarget.dataset.dropExpenseId };
-      }
-    }
-
-    const accountTarget = target.closest<HTMLElement>("[data-drop-account-id]");
-    if (accountTarget?.dataset.dropAccountId) {
-      return { type: "account" as const, id: accountTarget.dataset.dropAccountId };
-    }
-
-    return null;
-  };
-
-  const updateMobileDragTarget = (source: MobileDragSource, clientX: number, clientY: number) => {
-    const target = getMobileDropTarget(source, clientX, clientY);
-    const nextTarget =
-      target?.type === "expense"
-        ? `exp-${target.id}`
-        : target?.type === "account"
-          ? target.id
-          : null;
-
-    setDragOverTarget((current) => current === nextTarget ? current : nextTarget);
-  };
-
-  const stopMobileAutoScroll = () => {
-    const state = mobileAutoScrollRef.current;
-    if (state.frame != null) cancelAnimationFrame(state.frame);
-    state.frame = null;
-    state.source = null;
-    state.velocity = 0;
-  };
-
-  const runMobileAutoScroll = () => {
-    const state = mobileAutoScrollRef.current;
-    if (!state.source || state.velocity === 0) {
-      state.frame = null;
-      return;
-    }
-
-    window.scrollBy(0, state.velocity);
-    updateMobileDragTarget(state.source, state.clientX, state.clientY);
-    state.frame = requestAnimationFrame(runMobileAutoScroll);
-  };
-
-  const updateMobileAutoScroll = (source: MobileDragSource, clientX: number, clientY: number) => {
-    const edgeSize = 88;
-    const maxSpeed = 16;
-    const viewportHeight = window.innerHeight;
-    let velocity = 0;
-
-    if (clientY < edgeSize) {
-      velocity = -Math.ceil(((edgeSize - clientY) / edgeSize) * maxSpeed);
-    } else if (clientY > viewportHeight - edgeSize) {
-      velocity = Math.ceil(((clientY - (viewportHeight - edgeSize)) / edgeSize) * maxSpeed);
-    }
-
-    const state = mobileAutoScrollRef.current;
-    state.source = source;
-    state.clientX = clientX;
-    state.clientY = clientY;
-    state.velocity = velocity;
-
-    if (velocity === 0) {
-      if (state.frame != null) cancelAnimationFrame(state.frame);
-      state.frame = null;
-      return;
-    }
-
-    if (state.frame == null) {
-      state.frame = requestAnimationFrame(runMobileAutoScroll);
-    }
-  };
-
-  const handleMobilePointerDown = (e: React.PointerEvent<HTMLElement>, source: MobileDragSource) => {
-    if (e.pointerType === "mouse") return;
-
-    stopMobileAutoScroll();
-    mobileDragRef.current = {
-      ...source,
-      pointerId: e.pointerId,
-      startX: e.clientX,
-      startY: e.clientY,
-      active: false,
-    };
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-
-  const handleMobilePointerMove = (e: React.PointerEvent<HTMLElement>) => {
-    const session = mobileDragRef.current;
-    if (!session || session.pointerId !== e.pointerId) return;
-
-    const moved = Math.hypot(e.clientX - session.startX, e.clientY - session.startY);
-    if (!session.active && moved < 10) return;
-
-    if (!session.active) {
-      session.active = true;
-      clearTapSelection();
-      setMobileDragSource({ type: session.type, id: session.id, label: session.label });
-      if (session.type === "income") setIsDragging(true);
-      else setIsDraggingAccount(true);
-    }
-
-    e.preventDefault();
-    updateMobileDragTarget(session, e.clientX, e.clientY);
-    updateMobileAutoScroll(session, e.clientX, e.clientY);
-  };
-
-  const handleMobilePointerEnd = (e: React.PointerEvent<HTMLElement>) => {
-    const session = mobileDragRef.current;
-    if (!session || session.pointerId !== e.pointerId) return;
-
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId);
-    }
-
-    if (session.active) {
-      e.preventDefault();
-      suppressNextTapRef.current = true;
-      stopMobileAutoScroll();
-      const target = getMobileDropTarget(session, e.clientX, e.clientY);
-
-      if (session.type === "income" && target?.type === "account") {
-        openIncomeTransferModal(session.id, target.id);
-      } else if (session.type === "account" && target?.type === "expense") {
-        const expense = expenseIcons.find((item) => item.id === target.id);
-        if (expense) openExpenseAllocationModal(session.id, expense);
-      } else if (session.type === "account" && target?.type === "account") {
-        openAccountTransferModal(session.id, target.id);
-      }
-
-      window.setTimeout(() => {
-        suppressNextTapRef.current = false;
-      }, 0);
-    }
-
-    mobileDragRef.current = null;
-    stopMobileAutoScroll();
-    resetDragState();
   };
 
   const handleDropOnExpense = (e: React.DragEvent, expItem: IconItem) => {
@@ -1218,6 +1024,10 @@ export default function BudgetManager() {
                 {accountsOfType.map((acc) => {
                   const items = getItemsForAccount(acc.id);
                   const accountIncome = getAccountIncome(acc.id);
+                  const transferIn = getAccountTransferIn(acc.id);
+                  const transferOut = getAccountTransferOut(acc.id);
+                  const accountExpenses = getAccountExpenses(acc.id);
+                  const accountAllocated = getAccountAllocated(acc.id);
                   const total = getAccountTotal(acc.id);
                   const isOver = dragOverTarget === acc.id;
                   const isSelectedSource = selectedSourceAccountId === acc.id;
@@ -1225,16 +1035,11 @@ export default function BudgetManager() {
                   return (
                     <div
                       key={acc.id}
-                      data-drop-account-id={acc.id}
                       draggable
                       onClick={() => handleAccountTap(acc)}
-                      onPointerDown={(e) => handleMobilePointerDown(e, { type: "account", id: acc.id, label: acc.name })}
-                      onPointerMove={handleMobilePointerMove}
-                      onPointerUp={handleMobilePointerEnd}
-                      onPointerCancel={handleMobilePointerEnd}
                       onDragStart={(e) => { e.stopPropagation(); handleAccountDragStart(e, acc); }}
                       onDragEnd={handleDragEnd}
-                      className={`w-full rounded-xl border-2 p-3 transition-all cursor-grab active:cursor-grabbing select-none touch-none ${
+                      className={`w-full rounded-xl border-2 p-3 transition-all cursor-grab active:cursor-grabbing select-none touch-manipulation ${
                         isOver
                           ? `${c.border} ${c.ring} ring-2 scale-[1.02]`
                           : isSelectedSource
@@ -1263,27 +1068,27 @@ export default function BudgetManager() {
                               +R {accountIncome.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                             </span>
                           )}
-                          {getAccountTransferIn(acc.id) > 0 && (
+                          {transferIn > 0 && (
                             <span className="text-[10px] font-medium text-emerald-600">
-                              +R {getAccountTransferIn(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} transfer in
+                              +R {transferIn.toLocaleString(undefined, { maximumFractionDigits: 0 })} transfer in
                             </span>
                           )}
-                          {getAccountTransferOut(acc.id) > 0 && (
+                          {transferOut > 0 && (
                             <span className="text-[10px] font-medium text-amber-600">
-                              −R {getAccountTransferOut(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} transfer out
+                              −R {transferOut.toLocaleString(undefined, { maximumFractionDigits: 0 })} transfer out
                             </span>
                           )}
-                          {getAccountExpenses(acc.id) > 0 && (
+                          {accountExpenses > 0 && (
                             <span className="text-[10px] font-medium text-red-500">
-                              −R {getAccountExpenses(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })} spent
+                              −R {accountExpenses.toLocaleString(undefined, { maximumFractionDigits: 0 })} spent
                             </span>
                           )}
-                          {getAccountAllocated(acc.id) > 0 && (
+                          {accountAllocated > 0 && (
                             <span className="text-[10px] font-medium text-orange-500">
-                              −R {getAccountAllocated(acc.id).toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                              −R {accountAllocated.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                             </span>
                           )}
-                          {accountIncome > 0 && !hideIncomeItems && (
+                          {(accountIncome > 0 || transferIn > 0 || accountAllocated > 0 || accountExpenses > 0 || transferOut > 0) && !hideIncomeItems && (
                             <span className={`text-[10px] font-bold border-t border-gray-200 dark:border-gray-600 pt-0.5 mt-0.5 ${total < 0 ? "text-red-600" : "text-gray-700 dark:text-gray-200"}`}>
                               R {total.toLocaleString(undefined, { maximumFractionDigits: 0 })} left
                             </span>
@@ -1336,6 +1141,22 @@ export default function BudgetManager() {
                               </span>
                             </div>
                           ))}
+                          <div className={`rounded-lg border px-2 py-1.5 text-center ${c.bg} ${c.border}`}>
+                            <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight block">
+                              Remaining
+                            </span>
+                            <span
+                              className={`text-[12px] font-semibold block ${
+                                total < 0
+                                  ? "text-red-600 dark:text-red-400"
+                                  : total === 0
+                                    ? "text-gray-400 dark:text-gray-500"
+                                    : c.text
+                              }`}
+                            >
+                              Left: R {total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </span>
+                          </div>
                         </div>
                       ) : (
                         <div className="flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg min-h-[40px]">
@@ -1423,10 +1244,6 @@ export default function BudgetManager() {
                       disabled={isFullyAllocated}
                       onDragStart={(e) => handleDragStart(e, inc)}
                       onDragEnd={handleDragEnd}
-                      onPointerDown={(e) => handleMobilePointerDown(e, { type: "income", id: inc.id, label: inc.category ?? inc.label })}
-                      onPointerMove={handleMobilePointerMove}
-                      onPointerUp={handleMobilePointerEnd}
-                      onPointerCancel={handleMobilePointerEnd}
                       onClick={() => handleIncomeTap(inc)}
                       selected={selectedIncomeId === inc.id}
                       liveAmount={remaining}
@@ -1480,7 +1297,6 @@ export default function BudgetManager() {
                   return (
                     <div
                       key={exp.id}
-                      data-drop-expense-id={exp.id}
                       className={`relative flex w-[104px] flex-none snap-start flex-col items-center gap-1 rounded-xl border-2 transition-all duration-150 sm:w-auto ${
                         isDropOver
                           ? "border-orange-400 ring-2 ring-orange-300 bg-orange-50 dark:bg-orange-900/20 scale-105 p-3"
@@ -1550,12 +1366,6 @@ export default function BudgetManager() {
           </div>
         </main>
       </div>
-
-      {mobileDragSource && (
-        <div className="pointer-events-none fixed bottom-5 left-1/2 z-40 -translate-x-1/2 rounded-full bg-gray-900 px-4 py-2 text-xs font-semibold text-white shadow-lg dark:bg-white dark:text-gray-900 sm:hidden">
-          Dragging {mobileDragSource.label}
-        </div>
-      )}
 
       {/* ── Delete confirmation modal ── */}
       {deleteConfirm && (
