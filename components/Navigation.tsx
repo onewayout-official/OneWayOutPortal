@@ -113,6 +113,7 @@ const navSections = [
       { href: "/earn", label: "Earn", icon: DollarSign },
       { href: "/budget", label: "Budget", icon: Wallet },
       { href: "/help-me", label: "Help me", icon: HelpCircle },
+      { href: "/my-sessions", label: "My Sessions", icon: CalendarCheck },
       { href: "/course", label: "Course", icon: GraduationCap },
       { href: "/spend", label: "Spend", icon: ShoppingCart },
       { href: "/review-debt", label: "Review debt", icon: FileText },

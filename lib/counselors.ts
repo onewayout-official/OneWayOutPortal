@@ -57,6 +57,11 @@ export type CounselorAppointment = {
   userName?: string;
   userEmail?: string;
   userPhone?: string | null;
+  counselorName?: string;
+  counselorTitle?: string;
+  counselorSpecialty?: string;
+  counselorImage?: string;
+  counselorLocation?: string;
 };
 
 export type CounselorAppointmentRow = {
@@ -92,7 +97,14 @@ export function counselorFromRow(row: CounselorRow): Counselor {
 
 export function appointmentFromRow(
   row: CounselorAppointmentRow,
-  user?: { name?: string | null; email?: string | null; phone?: string | null }
+  user?: { name?: string | null; email?: string | null; phone?: string | null },
+  counselor?: {
+    name?: string | null;
+    title?: string | null;
+    specialty?: string | null;
+    image?: string | null;
+    location?: string | null;
+  }
 ): CounselorAppointment {
   return {
     id: row.id,
@@ -106,6 +118,11 @@ export function appointmentFromRow(
     userName: user?.name ?? undefined,
     userEmail: user?.email ?? undefined,
     userPhone: user?.phone ?? null,
+    counselorName: counselor?.name ?? undefined,
+    counselorTitle: counselor?.title ?? undefined,
+    counselorSpecialty: counselor?.specialty ?? undefined,
+    counselorImage: counselor ? resolveCounselorImage(counselor.image) : undefined,
+    counselorLocation: counselor?.location ?? undefined,
   };
 }
 

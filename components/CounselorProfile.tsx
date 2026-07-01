@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   Clock3,
@@ -10,7 +10,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from "lucide-react";
-import { Counselor, resolveCounselorImage } from "@/lib/counselors";
+import { Counselor, CounselorAppointment, resolveCounselorImage } from "@/lib/counselors";
 import { getAuthHeader } from "@/lib/authHeader";
 
 const WEEKDAY_TO_INDEX: Record<string, number> = {
@@ -32,6 +32,11 @@ const toISODate = (date: Date) => {
   const day = String(date.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
 };
+
+const slotKey = (date: string, time: string) => `${date}|${time}`;
+
+const isPastSlot = (date: string, time: string) =>
+  new Date(`${date}T${time}:00`).getTime() < Date.now();
 
 const addMinutes = (time: string, minutesToAdd: number) => {
   const [hourText, minuteText] = time.split(":");
@@ -58,10 +63,17 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
   });
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
-  const [bookingPopup, setBookingPopup] = useState<{
+  const [pendingBooking, setPendingBooking] = useState<{
     date: string;
     time: string;
   } | null>(null);
+  const [bookingPopup, setBookingPopup] = useState<{
+    date: string;
+    time: string;
+    meetingLink: string;
+  } | null>(null);
+  const [bookedSlotKeys, setBookedSlotKeys] = useState<Set<string>>(() => new Set());
+  const [isLoadingBookedSlots, setIsLoadingBookedSlots] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
 
@@ -79,6 +91,49 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
     return map;
   }, [counselor.availability]);
 
+  const monthRange = useMemo(() => {
+    const year = visibleMonth.getFullYear();
+    const month = visibleMonth.getMonth();
+    return {
+      from: toISODate(new Date(year, month, 1)),
+      to: toISODate(new Date(year, month + 1, 0)),
+    };
+  }, [visibleMonth]);
+
+  const loadBookedSlots = useCallback(async () => {
+    setIsLoadingBookedSlots(true);
+    try {
+      const headers = await getAuthHeader();
+      const params = new URLSearchParams({
+        counselorId: counselor.id,
+        from: monthRange.from,
+        to: monthRange.to,
+      });
+      const response = await fetch(`/api/counselor-appointments?${params.toString()}`, {
+        method: "GET",
+        headers,
+      });
+      const json = (await response.json()) as {
+        bookedSlots?: Array<{ key: string; date: string; time: string }>;
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(json.error ?? "Failed to load booked slots.");
+      }
+
+      setBookedSlotKeys(new Set((json.bookedSlots ?? []).map((slot) => slot.key)));
+    } catch (err) {
+      setBookingError(err instanceof Error ? err.message : "Failed to load booked slots.");
+    } finally {
+      setIsLoadingBookedSlots(false);
+    }
+  }, [counselor.id, monthRange.from, monthRange.to]);
+
+  useEffect(() => {
+    loadBookedSlots();
+  }, [loadBookedSlots]);
+
   const monthDays = useMemo(() => {
     const year = visibleMonth.getFullYear();
     const month = visibleMonth.getMonth();
@@ -93,20 +148,26 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
     for (let day = 1; day <= daysInMonth; day += 1) {
       const date = new Date(year, month, day);
       const isoDate = toISODate(date);
-      const hasAvailability = (availabilityByWeekday.get(date.getDay()) ?? []).length > 0;
+      const hasAvailability = (availabilityByWeekday.get(date.getDay()) ?? []).some(
+        (time) => !bookedSlotKeys.has(slotKey(isoDate, time)) && !isPastSlot(isoDate, time),
+      );
       cells.push({ isoDate, dayNumber: day, hasAvailability });
     }
 
     return { firstDayWeekIndex, cells };
-  }, [availabilityByWeekday, visibleMonth]);
+  }, [availabilityByWeekday, bookedSlotKeys, visibleMonth]);
 
   const selectedDateSlots = useMemo(() => {
     if (!selectedDate) {
       return [];
     }
     const selected = new Date(`${selectedDate}T00:00:00`);
-    return availabilityByWeekday.get(selected.getDay()) ?? [];
-  }, [availabilityByWeekday, selectedDate]);
+    return (availabilityByWeekday.get(selected.getDay()) ?? []).map((time) => ({
+      time,
+      isBooked: bookedSlotKeys.has(slotKey(selectedDate, time)),
+      isPast: isPastSlot(selectedDate, time),
+    }));
+  }, [availabilityByWeekday, bookedSlotKeys, selectedDate]);
 
   const weeklySlots = useMemo(
     () =>
@@ -124,16 +185,41 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
             time,
             endTime: addMinutes(time, 20),
             nextDate: toISODate(nextDate),
+            isBooked: bookedSlotKeys.has(slotKey(toISODate(nextDate), time)),
+            isPast: isPastSlot(toISODate(nextDate), time),
           };
         })
         .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot)),
-    [counselor.availability],
+    [bookedSlotKeys, counselor.availability],
   );
 
   const todayDayLabel = WEEKDAY_LABELS[new Date().getDay()];
   const todaySlots = weeklySlots.filter((slot) => slot.dayLabel === todayDayLabel);
 
-  const openBookingPopup = async (date: string, time: string) => {
+  const openBookingConfirm = (date: string, time: string) => {
+    setBookingError(null);
+    setBookingPopup(null);
+    setSelectedDate(date);
+    setSelectedTime(time);
+
+    if (bookedSlotKeys.has(slotKey(date, time))) {
+      setBookingError("This slot is already booked. Please choose another time.");
+      return;
+    }
+
+    if (isPastSlot(date, time)) {
+      setBookingError("Choose a future appointment slot.");
+      return;
+    }
+
+    setPendingBooking({ date, time });
+  };
+
+  const confirmBooking = async () => {
+    if (!pendingBooking) {
+      return;
+    }
+
     setBookingError(null);
     setIsBooking(true);
 
@@ -144,18 +230,27 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
         headers,
         body: JSON.stringify({
           counselorId: counselor.id,
-          appointmentDate: date,
-          appointmentTime: time,
+          appointmentDate: pendingBooking.date,
+          appointmentTime: pendingBooking.time,
           meetingLink: "",
         }),
       });
 
-      const json = (await response.json()) as { error?: string };
+      const json = (await response.json()) as {
+        appointment?: CounselorAppointment;
+        error?: string;
+      };
       if (!response.ok) {
         throw new Error(json.error ?? "Failed to book appointment.");
       }
 
-      setBookingPopup({ date, time });
+      setBookedSlotKeys((prev) => new Set(prev).add(slotKey(pendingBooking.date, pendingBooking.time)));
+      setBookingPopup({
+        date: pendingBooking.date,
+        time: pendingBooking.time,
+        meetingLink: json.appointment?.meetingLink ?? "",
+      });
+      setPendingBooking(null);
     } catch (err) {
       setBookingError(err instanceof Error ? err.message : "Failed to book appointment.");
     } finally {
@@ -174,6 +269,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={resolveCounselorImage(counselor.image)}
             alt={counselor.name}
@@ -220,16 +316,15 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                     </div>
                     <button
                       type="button"
+                      disabled={slot.isBooked || slot.isPast || isLoadingBookedSlots}
                       onClick={() => {
-                        setSelectedDate(slot.nextDate);
-                        setSelectedTime(slot.time);
                         const date = new Date(`${slot.nextDate}T00:00:00`);
                         setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-                        openBookingPopup(slot.nextDate, slot.time);
+                        openBookingConfirm(slot.nextDate, slot.time);
                       }}
-                      className="mt-2 w-full rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700"
+                      className="mt-2 w-full rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      Book 20 min session
+                      {slot.isBooked ? "Booked" : "Book 20 min session"}
                     </button>
                   </div>
                 ))
@@ -255,16 +350,15 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                   </div>
                   <button
                     type="button"
+                    disabled={slot.isBooked || slot.isPast || isLoadingBookedSlots}
                     onClick={() => {
-                      setSelectedDate(slot.nextDate);
-                      setSelectedTime(slot.time);
                       const date = new Date(`${slot.nextDate}T00:00:00`);
                       setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-                      openBookingPopup(slot.nextDate, slot.time);
+                      openBookingConfirm(slot.nextDate, slot.time);
                     }}
-                    className="mt-2 w-full rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                    className="mt-2 w-full rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
                   >
-                    Book 20 min session
+                    {slot.isBooked ? "Booked" : "Book 20 min session"}
                   </button>
                 </div>
               ))}
@@ -346,20 +440,29 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
 
             <div className="mt-3">
               <p className="text-xs text-gray-500 dark:text-gray-400">Available time slots</p>
+              {isLoadingBookedSlots && (
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                  Refreshing booked slots...
+                </p>
+              )}
               {selectedDateSlots.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {selectedDateSlots.map((slot) => (
                     <button
-                      key={slot}
+                      key={slot.time}
                       type="button"
-                      onClick={() => setSelectedTime(slot)}
+                      disabled={slot.isBooked || slot.isPast}
+                      onClick={() => setSelectedTime(slot.time)}
                       className={`rounded-full border px-3 py-1 text-xs ${
-                        selectedTime === slot
+                        slot.isBooked || slot.isPast
+                          ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500"
+                          : selectedTime === slot.time
                           ? "border-blue-600 bg-blue-600 text-white"
                           : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300"
                       }`}
                     >
-                      {slot}
+                      {slot.time}
+                      {slot.isBooked ? " booked" : slot.isPast ? " unavailable" : ""}
                     </button>
                   ))}
                 </div>
@@ -371,11 +474,17 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
 
               <button
                 type="button"
-                disabled={!selectedDate || !selectedTime || isBooking}
-                onClick={() => openBookingPopup(selectedDate, selectedTime)}
+                disabled={
+                  !selectedDate ||
+                  !selectedTime ||
+                  isBooking ||
+                  bookedSlotKeys.has(slotKey(selectedDate, selectedTime)) ||
+                  isPastSlot(selectedDate, selectedTime)
+                }
+                onClick={() => openBookingConfirm(selectedDate, selectedTime)}
                 className="mt-3 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                {isBooking ? "Booking..." : "Book selected 20 min session"}
+                Review selected 20 min session
               </button>
               {bookingError && (
                 <p className="mt-2 text-xs text-red-600 dark:text-red-400">{bookingError}</p>
@@ -385,6 +494,41 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
         </div>
       </section>
 
+      {pendingBooking && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-800">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Confirm session</h3>
+            <p className="mt-2 text-sm text-gray-600 dark:text-gray-300">
+              Book a 20-minute session with {counselor.name} on {pendingBooking.date} at{" "}
+              {pendingBooking.time}?
+            </p>
+            {bookingError && (
+              <p className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/40 dark:bg-red-900/20 dark:text-red-300">
+                {bookingError}
+              </p>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={isBooking}
+                onClick={() => setPendingBooking(null)}
+                className="rounded-md border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-50 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={isBooking}
+                onClick={confirmBooking}
+                className="rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {isBooking ? "Booking..." : "Confirm booking"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {bookingPopup && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
           <div className="w-full max-w-md rounded-xl border border-gray-200 bg-white p-5 shadow-xl dark:border-gray-700 dark:bg-gray-800">
@@ -393,12 +537,23 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
               Your 20-minute session with {counselor.name} is confirmed for {bookingPopup.date} at{" "}
               {bookingPopup.time}.
             </p>
-            <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-              <p className="font-medium">Meeting room coming soon</p>
-              <p className="mt-1">
-                We will add the in-portal meeting room before video sessions go live.
-              </p>
-            </div>
+            {bookingPopup.meetingLink ? (
+              <a
+                href={bookingPopup.meetingLink}
+                target="_blank"
+                rel="noreferrer"
+                className="mt-3 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
+              >
+                Join Google Meet
+              </a>
+            ) : (
+              <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
+                <p className="font-medium">Meeting room coming soon</p>
+                <p className="mt-1">
+                  We will add the meeting link before video sessions go live.
+                </p>
+              </div>
+            )}
             <div className="mt-4 flex justify-end gap-2">
               <button
                 type="button"
