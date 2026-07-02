@@ -12,23 +12,12 @@ export default function LoginPage() {
     <AuthRedirect>
       <div className="auth-page">
         <aside className="auth-hero">
-          <div className="hero-brand">
-            <div className="hero-brand-icon">
-              <svg
-                width="22"
-                height="22"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M5 12h14" />
-                <path d="m12 5 7 7-7 7" />
-              </svg>
-            </div>
-            <span className="hero-brand-name">One Way Out</span>
+          <div className="hero-brand hero-brand-centered">
+            <img
+              src="/onewayout-logo.png"
+              alt="One Way Out"
+              className="hero-logo-image"
+            />
           </div>
 
           <h2 className="hero-tagline">

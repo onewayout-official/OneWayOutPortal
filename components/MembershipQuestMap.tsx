@@ -517,7 +517,7 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
                 }`}
                 style={active ? { boxShadow: `0 0 0 2px ${v.accent}` } : undefined}
               >
-                <span className="leading-none sm:leading-normal">{v.emoji}</span>
+                <span className="leading-none sm:text-base sm:leading-normal">{v.emoji}</span>
                 <span className="hidden sm:inline">{tier}</span>
               </div>
             );
