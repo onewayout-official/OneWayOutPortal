@@ -1,19 +1,12 @@
 "use client";
 
-
-
 import { useEffect } from "react";
-
 import { useRouter } from "next/navigation";
-
 import Navigation from "@/components/Navigation";
-
 import DashboardTopBar from "@/components/DashboardTopBar";
-
 import OnboardingPortalGate from "@/components/OnboardingPortalGate";
-
 import { useAuth } from "@/contexts/AuthContext";
-
+import RespondIoWidget from "@/components/RespondIoWidget";
 
 
 interface AppLayoutProps {
@@ -21,7 +14,6 @@ interface AppLayoutProps {
   children: React.ReactNode;
 
 }
-
 
 
 export default function AppLayout({ children }: AppLayoutProps) {
@@ -87,6 +79,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </main>
 
       </div>
+
+      <RespondIoWidget />
 
     </div>
 
