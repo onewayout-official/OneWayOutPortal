@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { Counselor, resolveCounselorImage, splitCounselorName } from "@/lib/counselors";
 import { getAuthHeader } from "@/lib/authHeader";
+import AvailabilitySlotBuilder from "@/components/AvailabilitySlotBuilder";
 
 interface CoachFormState {
   firstName: string;
@@ -467,13 +468,16 @@ export default function AdminCoachesPanel() {
         onChange={(e) => setForm((prev) => ({ ...prev, languages: e.target.value }))}
         className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:col-span-2"
       />
-      <input
-        type="text"
-        placeholder="Availability (e.g. Mon 09:00, Wed 14:00)"
-        value={form.availability}
-        onChange={(e) => setForm((prev) => ({ ...prev, availability: e.target.value }))}
-        className="rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white sm:col-span-2"
-      />
+      <FormField
+        label="Availability"
+        hint="Select a weekday and time, then add each recurring meeting slot."
+        className="sm:col-span-2"
+      >
+        <AvailabilitySlotBuilder
+          value={form.availability}
+          onChange={(availability) => setForm((prev) => ({ ...prev, availability }))}
+        />
+      </FormField>
       <textarea
         placeholder="Short bio"
         value={form.bio}

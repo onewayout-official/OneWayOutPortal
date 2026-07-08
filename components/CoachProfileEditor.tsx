@@ -5,6 +5,7 @@ import Image from "next/image";
 import { Save, UserCog } from "lucide-react";
 import { Counselor, resolveCounselorImage, splitCounselorName } from "@/lib/counselors";
 import { getAuthHeader } from "@/lib/authHeader";
+import AvailabilitySlotBuilder from "@/components/AvailabilitySlotBuilder";
 
 type CoachProfileFormState = {
   firstName: string;
@@ -307,14 +308,12 @@ export default function CoachProfileEditor() {
           </FormField>
           <FormField
             label="Availability"
-            hint="Comma-separated, e.g. Mon 09:00, Wed 14:00"
+            hint="Select a weekday and time, then add each recurring meeting slot."
             className="sm:col-span-2"
           >
-            <input
-              type="text"
+            <AvailabilitySlotBuilder
               value={form.availability}
-              onChange={(e) => setForm((prev) => ({ ...prev, availability: e.target.value }))}
-              className={inputClass}
+              onChange={(availability) => setForm((prev) => ({ ...prev, availability }))}
             />
           </FormField>
           <FormField label="Short bio" className="sm:col-span-2">
