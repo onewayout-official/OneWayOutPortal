@@ -5,6 +5,8 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
+import PhoneOTPForm from "@/components/PhoneOTPForm";
+import { formatE164 } from "@/lib/phone";
 
 function GoogleIcon() {
   return (
@@ -65,23 +67,6 @@ function MailIcon() {
   );
 }
 
-function PhoneIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07A19.5 19.5 0 0 1 4.88 13.5a19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 3.99 2.8h3a2 2 0 0 1 2 1.72c.127.96.361 1.903.7 2.81a2 2 0 0 1-.45 2.11L8.09 10.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0 1 22 17v-.08Z" />
-    </svg>
-  );
-}
-
 function LockIcon() {
   return (
     <svg
@@ -133,29 +118,74 @@ function EyeIcon({ off }: { off?: boolean }) {
   );
 }
 
+type RegisterTab = "phone" | "email";
+type RegisterStep = "details" | "otp" | "optional";
+
 export default function RegisterForm() {
   const router = useRouter();
-  const { register } = useAuth();
+  const { register, updatePassword } = useAuth();
+  const [activeTab, setActiveTab] = useState<RegisterTab>("phone");
+  const [step, setStep] = useState<RegisterStep>("details");
+  const [phone, setPhone] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
     firstName: "",
     lastName: "",
     email: "",
-    phone: "",
     password: "",
+    optionalEmail: "",
+    optionalPassword: "",
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+
+  const firstName = form.firstName.trim();
+  const lastName = form.lastName.trim();
+  const fullName = `${firstName} ${lastName}`.trim();
+
+  const otpMetadata = {
+    firstName,
+    lastName,
+    name: fullName,
+    email: form.optionalEmail.trim() || undefined,
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleOtpSuccess = async () => {
+    try {
+      const session = await storage.getSession();
+      if (session) {
+        const e164 = formatE164(phone) ?? phone;
+        await storage.saveProfile({
+          id: session.userId,
+          name: fullName,
+          firstName,
+          lastName,
+          email: session.email || form.optionalEmail.trim(),
+          phone: e164,
+          monthlyIncome: 0,
+          createdAt: new Date().toISOString(),
+        });
+      }
+    } catch (err) {
+      console.error("Error saving initial profile:", err);
+    }
+
+    if (form.optionalPassword.trim().length >= 6) {
+      await updatePassword(form.optionalPassword);
+    }
+
+    router.push("/onboarding");
+  };
+
+  const handleEmailRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
 
-    if (!form.firstName.trim() || !form.lastName.trim()) {
+    if (!firstName || !lastName) {
       setError("Please enter your first and last name.");
       return;
     }
@@ -163,7 +193,7 @@ export default function RegisterForm() {
       setError("Please enter your email address.");
       return;
     }
-    if (!form.phone.trim()) {
+    if (!phone.trim()) {
       setError("Please enter your phone number.");
       return;
     }
@@ -172,17 +202,12 @@ export default function RegisterForm() {
       return;
     }
 
-    const firstName = form.firstName.trim();
-    const lastName = form.lastName.trim();
-    const fullName = `${firstName} ${lastName}`.trim();
-    const email = form.email.trim();
-    const phone = form.phone.trim();
     setIsLoading(true);
     const result = await register({
       firstName,
       lastName,
-      email,
-      phone,
+      email: form.email.trim(),
+      phone: formatE164(phone) ?? phone.trim(),
       password: form.password,
     });
 
@@ -190,22 +215,20 @@ export default function RegisterForm() {
       try {
         const session = await storage.getSession();
         if (session) {
-          const profile = {
+          await storage.saveProfile({
             id: session.userId,
             name: fullName,
             firstName,
             lastName,
-            email: session.email || email,
-            phone,
+            email: session.email || form.email.trim(),
+            phone: formatE164(phone) ?? phone.trim(),
             monthlyIncome: 0,
             createdAt: new Date().toISOString(),
-          };
-          await storage.saveProfile(profile);
+          });
         }
       } catch (err) {
         console.error("Error saving initial profile:", err);
       }
-
       router.push("/onboarding");
     } else {
       setError(result.error || "Failed to create account");
@@ -218,7 +241,7 @@ export default function RegisterForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} noValidate>
+    <div>
       <button
         id="btn-google-signup"
         type="button"
@@ -230,145 +253,302 @@ export default function RegisterForm() {
       </button>
 
       <div className="auth-divider">
-        <span>or sign up with email</span>
+        <span>or sign up with</span>
       </div>
 
-      <div className="form-row">
-        <div className="form-group">
-          <label htmlFor="firstName">First Name</label>
-          <div className="input-wrapper">
-            <span className="input-icon">
-              <UserIcon />
-            </span>
-            <input
-              id="firstName"
-              name="firstName"
-              type="text"
-              className="form-input"
-              placeholder="John"
-              value={form.firstName}
-              onChange={handleChange}
-              autoComplete="given-name"
-              required
-            />
-          </div>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="lastName">Last Name</label>
-          <div className="input-wrapper">
-            <span className="input-icon">
-              <UserIcon />
-            </span>
-            <input
-              id="lastName"
-              name="lastName"
-              type="text"
-              className="form-input"
-              placeholder="Doe"
-              value={form.lastName}
-              onChange={handleChange}
-              autoComplete="family-name"
-              required
-            />
-          </div>
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="email">Email Address</label>
-        <div className="input-wrapper">
-          <span className="input-icon">
-            <MailIcon />
-          </span>
-          <input
-            id="email"
-            name="email"
-            type="email"
-            className="form-input"
-            placeholder="john@example.com"
-            value={form.email}
-            onChange={handleChange}
-            autoComplete="email"
-            required
-          />
-        </div>
-      </div>
-
-      <div className="form-group">
-        <label htmlFor="phone">Phone Number</label>
-        <div className="input-wrapper">
-          <span className="input-icon">
-            <PhoneIcon />
-          </span>
-          <input
-            id="phone"
-            name="phone"
-            type="tel"
-            className="form-input"
-            placeholder="+264 81 123 4567"
-            value={form.phone}
-            onChange={handleChange}
-            autoComplete="tel"
-            required
-          />
-        </div>
-      </div>
-
-      <div className="form-group">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <label htmlFor="password">Password</label>
-          <Link
-            href="/forgot-password"
-            className="form-link"
-            id="link-forgot-password"
-          >
-            Forgot password?
-          </Link>
-        </div>
-        <div className="input-wrapper">
-          <span className="input-icon">
-            <LockIcon />
-          </span>
-          <input
-            id="password"
-            name="password"
-            type={showPassword ? "text" : "password"}
-            className="form-input"
-            placeholder="Create a strong password"
-            value={form.password}
-            onChange={handleChange}
-            autoComplete="new-password"
-            required
-          />
-          <button
-            type="button"
-            className="input-toggle"
-            onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            id="btn-toggle-password"
-          >
-            <EyeIcon off={showPassword} />
-          </button>
-        </div>
-      </div>
-
-      {error ? <p className="field-error">{error}</p> : null}
-
-      <button
-        id="btn-signup-submit"
-        type="submit"
-        className="btn-primary"
-        disabled={isLoading}
+      <div
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          marginBottom: "1.25rem",
+        }}
       >
-        {isLoading ? "Creating account..." : "Create Account"}
-      </button>
+        <button
+          type="button"
+          className={activeTab === "phone" ? "btn-primary" : "btn-google"}
+          style={{ flex: 1, fontSize: "0.85rem" }}
+          onClick={() => {
+            setActiveTab("phone");
+            setStep("details");
+            setError("");
+          }}
+          id="tab-register-phone"
+        >
+          Mobile
+        </button>
+        <button
+          type="button"
+          className={activeTab === "email" ? "btn-primary" : "btn-google"}
+          style={{ flex: 1, fontSize: "0.85rem" }}
+          onClick={() => {
+            setActiveTab("email");
+            setError("");
+          }}
+          id="tab-register-email"
+        >
+          Email
+        </button>
+      </div>
+
+      {activeTab === "phone" ? (
+        <>
+          {step === "details" ? (
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setError("");
+                if (!firstName || !lastName) {
+                  setError("Please enter your first and last name.");
+                  return;
+                }
+              }}
+              noValidate
+            >
+              <div className="form-row">
+                <div className="form-group">
+                  <label htmlFor="firstName">First Name</label>
+                  <div className="input-wrapper">
+                    <span className="input-icon">
+                      <UserIcon />
+                    </span>
+                    <input
+                      id="firstName"
+                      name="firstName"
+                      type="text"
+                      className="form-input"
+                      placeholder="John"
+                      value={form.firstName}
+                      onChange={handleChange}
+                      autoComplete="given-name"
+                      required
+                    />
+                  </div>
+                </div>
+                <div className="form-group">
+                  <label htmlFor="lastName">Last Name</label>
+                  <div className="input-wrapper">
+                    <span className="input-icon">
+                      <UserIcon />
+                    </span>
+                    <input
+                      id="lastName"
+                      name="lastName"
+                      type="text"
+                      className="form-input"
+                      placeholder="Doe"
+                      value={form.lastName}
+                      onChange={handleChange}
+                      autoComplete="family-name"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label htmlFor="optionalEmail">Email (optional)</label>
+                <div className="input-wrapper">
+                  <span className="input-icon">
+                    <MailIcon />
+                  </span>
+                  <input
+                    id="optionalEmail"
+                    name="optionalEmail"
+                    type="email"
+                    className="form-input"
+                    placeholder="john@example.com"
+                    value={form.optionalEmail}
+                    onChange={handleChange}
+                    autoComplete="email"
+                  />
+                </div>
+              </div>
+
+              {error ? <p className="field-error">{error}</p> : null}
+
+              <PhoneOTPForm
+                mode="signup"
+                metadata={otpMetadata}
+                submitLabel="Send WhatsApp code"
+                beforeSend={() => {
+                  if (!firstName || !lastName) {
+                    return "Please enter your first and last name.";
+                  }
+                  return null;
+                }}
+                onCodeSent={(p) => {
+                  setPhone(p);
+                  setStep("otp");
+                }}
+              />
+            </form>
+          ) : (
+            <>
+              <PhoneOTPForm
+                mode="signup"
+                metadata={otpMetadata}
+                initialPhone={phone}
+                initialStep="otp"
+                hidePhoneStep
+                onSuccess={handleOtpSuccess}
+                submitLabel="Verify & Create Account"
+              />
+              <div className="form-group" style={{ marginTop: "1rem" }}>
+                <label htmlFor="optionalPassword">Password (optional fallback)</label>
+                <div className="input-wrapper">
+                  <span className="input-icon">
+                    <LockIcon />
+                  </span>
+                  <input
+                    id="optionalPassword"
+                    name="optionalPassword"
+                    type={showPassword ? "text" : "password"}
+                    className="form-input"
+                    placeholder="Set a password for email login"
+                    value={form.optionalPassword}
+                    onChange={handleChange}
+                    autoComplete="new-password"
+                  />
+                  <button
+                    type="button"
+                    className="input-toggle"
+                    onClick={() => setShowPassword((v) => !v)}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    <EyeIcon off={showPassword} />
+                  </button>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="form-link"
+                style={{ marginTop: "0.75rem" }}
+                onClick={() => setStep("details")}
+              >
+                Back to details
+              </button>
+            </>
+          )}
+        </>
+      ) : (
+        <form onSubmit={handleEmailRegister} noValidate>
+          <div className="form-row">
+            <div className="form-group">
+              <label htmlFor="reg-firstName">First Name</label>
+              <div className="input-wrapper">
+                <span className="input-icon">
+                  <UserIcon />
+                </span>
+                <input
+                  id="reg-firstName"
+                  name="firstName"
+                  type="text"
+                  className="form-input"
+                  placeholder="John"
+                  value={form.firstName}
+                  onChange={handleChange}
+                  autoComplete="given-name"
+                  required
+                />
+              </div>
+            </div>
+            <div className="form-group">
+              <label htmlFor="reg-lastName">Last Name</label>
+              <div className="input-wrapper">
+                <span className="input-icon">
+                  <UserIcon />
+                </span>
+                <input
+                  id="reg-lastName"
+                  name="lastName"
+                  type="text"
+                  className="form-input"
+                  placeholder="Doe"
+                  value={form.lastName}
+                  onChange={handleChange}
+                  autoComplete="family-name"
+                  required
+                />
+              </div>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="email">Email Address</label>
+            <div className="input-wrapper">
+              <span className="input-icon">
+                <MailIcon />
+              </span>
+              <input
+                id="email"
+                name="email"
+                type="email"
+                className="form-input"
+                placeholder="john@example.com"
+                value={form.email}
+                onChange={handleChange}
+                autoComplete="email"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="reg-phone">Phone Number</label>
+            <input
+              id="reg-phone"
+              name="phone"
+              type="tel"
+              className="form-input"
+              placeholder="+27 79 123 4567"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+              autoComplete="tel"
+              required
+            />
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="password">Password</label>
+            <div className="input-wrapper">
+              <span className="input-icon">
+                <LockIcon />
+              </span>
+              <input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                className="form-input"
+                placeholder="Create a strong password"
+                value={form.password}
+                onChange={handleChange}
+                autoComplete="new-password"
+                required
+              />
+              <button
+                type="button"
+                className="input-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                id="btn-toggle-password"
+              >
+                <EyeIcon off={showPassword} />
+              </button>
+            </div>
+          </div>
+
+          {error ? <p className="field-error">{error}</p> : null}
+
+          <button
+            id="btn-signup-submit"
+            type="submit"
+            className="btn-primary"
+            disabled={isLoading}
+          >
+            {isLoading ? "Creating account..." : "Create Account"}
+          </button>
+        </form>
+      )}
 
       <div className="form-footer-links">
         <Link href="/login" className="form-link primary" id="link-sign-in">
@@ -387,6 +567,6 @@ export default function RegisterForm() {
         </Link>
         .
       </p>
-    </form>
+    </div>
   );
 }

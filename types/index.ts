@@ -224,6 +224,7 @@ export interface User {
 export interface AuthSession {
   userId: string;
   email: string;
+  phone?: string;
   expiresAt: number;
 }
 

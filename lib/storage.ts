@@ -11,6 +11,7 @@ import {
   SpendCategory,
 } from "@/types";
 import { supabase } from "@/lib/supabase";
+import { formatE164 } from "@/lib/phone";
 import { SIGNUP_BONUS_POINTS } from "@/lib/gamification/config";
 import { tryAwardTask } from "@/lib/gamification/rewards";
 import { computeAccountTypeBalances } from "@/lib/budgetAccountBalances";
@@ -191,6 +192,9 @@ export const storage = {
     const firstName = (profile.firstName ?? fallbackNameParts.firstName).trim();
     const lastName = (profile.lastName ?? fallbackNameParts.lastName).trim();
     const fullName = profile.name?.trim() || `${firstName} ${lastName}`.trim();
+    const normalizedPhone = profile.phone?.trim()
+      ? formatE164(profile.phone) ?? profile.phone.trim()
+      : null;
     const { error } = await supabase.from("profiles").upsert({
       id: userId,
       name: fullName,
@@ -198,7 +202,7 @@ export const storage = {
       last_name: lastName,
       initials: profile.initials ?? null,
       email: profile.email,
-      phone: profile.phone ?? null,
+      phone: normalizedPhone,
       monthly_income: profile.monthlyIncome,
       savings_goal: profile.savingsGoal ?? null,
       created_at: profile.createdAt,
@@ -242,7 +246,13 @@ export const storage = {
       bank_account_number: profile.bankAccountNumber ?? null,
       crm_profile_data: profile.crmProfileData ?? {},
     });
-    if (error) console.error("[storage] saveProfile error:", error.message);
+    if (error) {
+      if (error.code === "23505" && error.message.includes("profiles_phone_unique")) {
+        throw new Error("This mobile number is already registered to another account.");
+      }
+      console.error("[storage] saveProfile error:", error.message);
+      throw error;
+    }
   },
 
   // Expenses

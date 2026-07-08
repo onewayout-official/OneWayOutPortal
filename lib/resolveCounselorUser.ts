@@ -1,6 +1,8 @@
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAppUrl } from "@/lib/siteUrl";
+import { sendEmail, getCoachSetupEmailMode, isSmtpConfigured } from "@/lib/email";
+import { coachWelcomeEmail } from "@/lib/emailTemplates";
 
 function randomPassword(length = 16) {
   return randomBytes(length).toString("base64url").slice(0, length);
@@ -34,7 +36,8 @@ async function updatePasswordAndSendSetupEmail(
   adminClient: SupabaseClient,
   userId: string,
   email: string,
-  password: string
+  password: string,
+  coachName: string
 ): Promise<{ passwordUpdated: boolean; setupEmailSent?: boolean } | { error: string }> {
   if (!password) {
     return { passwordUpdated: false };
@@ -47,11 +50,57 @@ async function updatePasswordAndSendSetupEmail(
     return { error: passwordError.message };
   }
 
-  const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email, {
-    redirectTo: getAppUrl("/reset-password"),
-  });
+  const mode = getCoachSetupEmailMode();
+  let setupEmailSent = false;
 
-  return { passwordUpdated: true, setupEmailSent: !emailError };
+  if (mode === "supabase" || mode === "both") {
+    const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email, {
+      redirectTo: getAppUrl("/reset-password"),
+    });
+    setupEmailSent = !emailError;
+  }
+
+  if ((mode === "smtp" || mode === "both") && isSmtpConfigured()) {
+    const template = coachWelcomeEmail({ name: coachName, email });
+    const smtpResult = await sendEmail({
+      to: email,
+      subject: template.subject,
+      html: template.html,
+      text: template.text,
+    });
+    setupEmailSent = setupEmailSent || smtpResult.success;
+  }
+
+  return { passwordUpdated: true, setupEmailSent };
+}
+
+async function sendCoachSetupEmail(
+  adminClient: SupabaseClient,
+  email: string,
+  coachName: string
+): Promise<boolean> {
+  const mode = getCoachSetupEmailMode();
+  let setupEmailSent = false;
+
+  if (mode === "supabase" || mode === "both") {
+    const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email, {
+      redirectTo: getAppUrl("/reset-password"),
+    });
+    setupEmailSent = !emailError;
+  }
+
+  if ((mode === "smtp" || mode === "both") && isSmtpConfigured()) {
+    const template = coachWelcomeEmail({ name: coachName, email });
+    const smtpResult = await sendEmail({
+      to: email,
+      subject: template.subject,
+      html: template.html,
+      text: template.text,
+    });
+    setupEmailSent = setupEmailSent || smtpResult.success;
+  }
+
+  return setupEmailSent;
 }
 
 export async function resolveOrCreateCounselorUser(
@@ -102,7 +151,8 @@ export async function resolveOrCreateCounselorUser(
       adminClient,
       existingProfile.id,
       email,
-      password
+      password,
+      name
     );
     if ("error" in passwordUpdate) {
       return { error: passwordUpdate.error };
@@ -142,15 +192,13 @@ export async function resolveOrCreateCounselorUser(
       return { error: upsertError.message };
     }
 
-    const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email, {
-      redirectTo: getAppUrl("/reset-password"),
-    });
+    const setupEmailSent = await sendCoachSetupEmail(adminClient, email, name);
 
     return {
       linkedUserId: createdUser.user.id,
       email,
       accountCreated: true,
-      setupEmailSent: !emailError,
+      setupEmailSent,
     };
   }
 
@@ -184,7 +232,8 @@ export async function resolveOrCreateCounselorUser(
       adminClient,
       authUser.id,
       email,
-      password
+      password,
+      name
     );
     if ("error" in passwordUpdate) {
       return { error: passwordUpdate.error };

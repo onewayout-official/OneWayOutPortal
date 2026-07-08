@@ -1,4 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
+import { sendEmail, isSmtpConfigured } from "@/lib/email";
+import { appointmentConfirmationEmail } from "@/lib/emailTemplates";
 import crypto from "crypto";
 import { createClient } from "@supabase/supabase-js";
 import { appointmentFromRow, type CounselorAppointmentRow } from "@/lib/counselors";
@@ -395,6 +397,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "This slot was just booked. Please choose another time." }, { status: 409 });
     }
     return NextResponse.json({ error: error.message }, { status: 400 });
+  }
+
+  const userEmail = auth.user!.email;
+  if (userEmail && isSmtpConfigured()) {
+    const { data: userProfile } = await auth.adminClient!
+      .from("profiles")
+      .select("name, first_name")
+      .eq("id", auth.user!.id)
+      .maybeSingle();
+
+    const userName =
+      (userProfile as { name?: string; first_name?: string } | null)?.first_name ||
+      (userProfile as { name?: string } | null)?.name ||
+      "there";
+
+    const template = appointmentConfirmationEmail({
+      userName,
+      coachName: (counselor as { name?: string }).name ?? "your coach",
+      appointmentDate,
+      appointmentTime,
+      meetingLink: generatedMeetingLink,
+    });
+
+    await sendEmail({
+      to: userEmail,
+      subject: template.subject,
+      html: template.html,
+      text: template.text,
+    });
   }
 
   return NextResponse.json(

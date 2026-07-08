@@ -34,10 +34,11 @@ A comprehensive Next.js application for managing your personal finances, trackin
 - Savings guidance
 
 ### 🔐 Authentication
-- Email/password registration and login
+- **Mobile number (primary)** — WhatsApp OTP sign-in via Twilio
+- **Email/password (fallback)** — traditional sign-in and registration
 - Google OAuth login (optional, requires setup)
-- Secure session management
-- User-specific data isolation
+- Secure session management via Supabase Auth
+- Unique mobile number per account
 
 ## Tech Stack
 
@@ -48,6 +49,24 @@ A comprehensive Next.js application for managing your personal finances, trackin
 - **date-fns** - Date formatting utilities
 - **@react-oauth/google** - Google OAuth integration
 - **Supabase** - Auth, database, and data persistence
+
+- **Twilio** - WhatsApp OTP delivery
+- **Nodemailer** - App-level transactional email (SMTP)
+
+## Environment Variables
+
+Copy `.env.local.example` to `.env.local` and fill in values:
+
+| Variable | Purpose |
+|----------|---------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase anon key (client) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Server-only key for OTP verify and admin APIs |
+| `TWILIO_ACCOUNT_SID` | Twilio account SID |
+| `TWILIO_AUTH_TOKEN` | Twilio auth token |
+| `TWILIO_WHATSAPP_FROM` | Twilio WhatsApp sender (e.g. `whatsapp:+14155238886`) |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | App SMTP for coach welcome and appointment emails |
+| `COACH_SETUP_EMAIL_MODE` | `supabase`, `smtp`, or `both` (default: `both`) |
 
 ## Getting Started
 
@@ -65,15 +84,24 @@ npm install
 2. **Set up Supabase** (required for auth and data):
    - Create a project at [supabase.com](https://supabase.com)
    - In the Supabase dashboard, go to **SQL Editor** and run the migration in `supabase/migrations/20250217000000_initial_schema.sql`
-   - Go to **Project Settings** → **API** and copy the project URL and anon (public) key
-   - Create a `.env.local` file and add:
-     ```
-     NEXT_PUBLIC_SUPABASE_URL=https://your-project-ref.supabase.co
-     NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-     ```
-   - (Optional) In **Authentication** → **Providers**, disable "Confirm email" if you want immediate sign-in without verification.
+   - Run all migrations in `supabase/migrations/` (including `20260706000000_phone_unique_and_otp.sql`)
+   - Go to **Project Settings** → **API** and copy the project URL, anon key, and service role key
+   - Copy `.env.local.example` to `.env.local` and set Supabase variables
 
-3. (Optional) Set up Google OAuth:
+3. **WhatsApp OTP (Twilio)**:
+   - Create a [Twilio](https://www.twilio.com/) account and enable WhatsApp (sandbox for dev, or approved business template for production)
+   - Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_WHATSAPP_FROM` in `.env.local`
+   - For sandbox: join the sandbox from your phone and use the sandbox WhatsApp number as `TWILIO_WHATSAPP_FROM`
+
+4. **SMTP (two layers)**:
+   - **Supabase auth emails** (password reset): Supabase Dashboard → **Authentication** → **Email** → enable **Custom SMTP** and enter your SMTP credentials
+   - **App transactional emails** (coach welcome, appointment confirmations): set `SMTP_*` variables in `.env.local`
+
+5. **Supabase phone auth**:
+   - Dashboard → **Authentication** → **Providers** → enable **Phone**
+   - This allows phone-based users in `auth.users`; OTP delivery is handled by this app via Twilio WhatsApp
+
+6. (Optional) Set up Google OAuth:
    - Create a `.env.local` file in the root directory
    - Get your Google OAuth Client ID from [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
    - Add the following to `.env.local`:
@@ -91,12 +119,12 @@ npm install
      8. Copy the Client ID and add it to `.env.local`
    - **Note:** Google login will only appear if the Client ID is configured. The app works fine without it using email/password authentication.
 
-3. Run the development server:
+7. Run the development server:
 ```bash
 npm run dev
 ```
 
-4. Open [http://localhost:3000](http://localhost:3000) in your browser
+8. Open [http://localhost:3000](http://localhost:3000) in your browser
 
 ### Building for Production
 

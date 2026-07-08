@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
+import PhoneOTPForm from "@/components/PhoneOTPForm";
 
 function GoogleIcon() {
   return (
@@ -98,13 +99,21 @@ function EyeIcon({ off }: { off?: boolean }) {
   );
 }
 
+type AuthTab = "phone" | "email";
+
 export default function LoginForm() {
+  const [activeTab, setActiveTab] = useState<AuthTab>("phone");
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
   const { login } = useAuth();
+
+  const redirectAfterAuth = async () => {
+    const profile = await storage.getProfile();
+    router.push(profile?.role === "counselor" ? "/coach" : "/");
+  };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -123,8 +132,7 @@ export default function LoginForm() {
     const result = await login(form.email, form.password);
 
     if (result.success) {
-      const profile = await storage.getProfile();
-      router.push(profile?.role === "counselor" ? "/coach" : "/");
+      await redirectAfterAuth();
     } else {
       setError(result.error || "Invalid email or password");
       setIsLoading(false);
@@ -136,7 +144,7 @@ export default function LoginForm() {
   };
 
   return (
-    <form onSubmit={handleSubmit} noValidate>
+    <div>
       <button
         id="btn-google-login"
         type="button"
@@ -148,83 +156,116 @@ export default function LoginForm() {
       </button>
 
       <div className="auth-divider">
-        <span>or sign in with email</span>
+        <span>or continue with</span>
       </div>
 
-      <div className="form-group">
-        <label htmlFor="login-email">Email Address</label>
-        <div className="input-wrapper">
-          <span className="input-icon">
-            <MailIcon />
-          </span>
-          <input
-            id="login-email"
-            name="email"
-            type="email"
-            className="form-input"
-            placeholder="john@example.com"
-            value={form.email}
-            onChange={handleChange}
-            autoComplete="email"
-            required
-          />
-        </div>
-      </div>
-
-      <div className="form-group">
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-          }}
-        >
-          <label htmlFor="login-password">Password</label>
-          <Link
-            href="/forgot-password"
-            className="form-link"
-            id="link-forgot-password-login"
-          >
-            Forgot password?
-          </Link>
-        </div>
-        <div className="input-wrapper">
-          <span className="input-icon">
-            <LockIcon />
-          </span>
-          <input
-            id="login-password"
-            name="password"
-            type={showPassword ? "text" : "password"}
-            className="form-input"
-            placeholder="Enter your password"
-            value={form.password}
-            onChange={handleChange}
-            autoComplete="current-password"
-            required
-          />
-          <button
-            type="button"
-            className="input-toggle"
-            onClick={() => setShowPassword((v) => !v)}
-            aria-label={showPassword ? "Hide password" : "Show password"}
-            id="btn-toggle-login-password"
-          >
-            <EyeIcon off={showPassword} />
-          </button>
-        </div>
-      </div>
-
-      {error ? <p className="terms-note">{error}</p> : null}
-
-      <button
-        id="btn-login-submit"
-        type="submit"
-        className="btn-primary"
-        disabled={isLoading}
+      <div
+        style={{
+          display: "flex",
+          gap: "0.5rem",
+          marginBottom: "1.25rem",
+        }}
       >
-        {isLoading ? "Signing in..." : "Sign In"}
-      </button>
+        <button
+          type="button"
+          className={activeTab === "phone" ? "btn-primary" : "btn-google"}
+          style={{ flex: 1, fontSize: "0.85rem" }}
+          onClick={() => setActiveTab("phone")}
+          id="tab-login-phone"
+        >
+          Mobile
+        </button>
+        <button
+          type="button"
+          className={activeTab === "email" ? "btn-primary" : "btn-google"}
+          style={{ flex: 1, fontSize: "0.85rem" }}
+          onClick={() => setActiveTab("email")}
+          id="tab-login-email"
+        >
+          Email
+        </button>
+      </div>
+
+      {activeTab === "phone" ? (
+        <PhoneOTPForm mode="login" onSuccess={redirectAfterAuth} submitLabel="Send WhatsApp code" />
+      ) : (
+        <form onSubmit={handleSubmit} noValidate>
+          <div className="form-group">
+            <label htmlFor="login-email">Email Address</label>
+            <div className="input-wrapper">
+              <span className="input-icon">
+                <MailIcon />
+              </span>
+              <input
+                id="login-email"
+                name="email"
+                type="email"
+                className="form-input"
+                placeholder="john@example.com"
+                value={form.email}
+                onChange={handleChange}
+                autoComplete="email"
+                required
+              />
+            </div>
+          </div>
+
+          <div className="form-group">
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <label htmlFor="login-password">Password</label>
+              <Link
+                href="/forgot-password"
+                className="form-link"
+                id="link-forgot-password-login"
+              >
+                Forgot password?
+              </Link>
+            </div>
+            <div className="input-wrapper">
+              <span className="input-icon">
+                <LockIcon />
+              </span>
+              <input
+                id="login-password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                className="form-input"
+                placeholder="Enter your password"
+                value={form.password}
+                onChange={handleChange}
+                autoComplete="current-password"
+                required
+              />
+              <button
+                type="button"
+                className="input-toggle"
+                onClick={() => setShowPassword((v) => !v)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                id="btn-toggle-login-password"
+              >
+                <EyeIcon off={showPassword} />
+              </button>
+            </div>
+          </div>
+
+          {error ? <p className="terms-note">{error}</p> : null}
+
+          <button
+            id="btn-login-submit"
+            type="submit"
+            className="btn-primary"
+            disabled={isLoading}
+          >
+            {isLoading ? "Signing in..." : "Sign In with Email"}
+          </button>
+        </form>
+      )}
 
       <div
         className="form-footer-links"
@@ -249,6 +290,6 @@ export default function LoginForm() {
         </Link>
         .
       </p>
-    </form>
+    </div>
   );
 }

@@ -22,9 +22,18 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (payload: RegisterPayload) => Promise<{ success: boolean; error?: string }>;
   loginWithGoogle: (googleUser: { email: string; name: string; picture?: string }) => Promise<{ success: boolean; error?: string }>;
-  // Phone OTP methods (metadata optional for signup so new user gets name/email in auth)
-  sendOTP: (phone: string, metadata?: { name?: string; email?: string }) => Promise<{ success: boolean; error?: string }>;
-  verifyOTP: (phone: string, token: string) => Promise<{ success: boolean; error?: string; session?: any }>;
+  // Phone OTP via WhatsApp (metadata optional for signup so new user gets name/email in auth)
+  sendOTP: (
+    phone: string,
+    metadata?: { name?: string; email?: string; firstName?: string; lastName?: string },
+    mode?: "login" | "signup"
+  ) => Promise<{ success: boolean; error?: string }>;
+  verifyOTP: (
+    phone: string,
+    token: string,
+    metadata?: { name?: string; email?: string; firstName?: string; lastName?: string },
+    mode?: "login" | "signup"
+  ) => Promise<{ success: boolean; error?: string; session?: unknown }>;
   loginWithPhone: (phone: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
   resetPasswordForEmail: (email: string) => Promise<{ success: boolean; error?: string }>;
@@ -37,11 +46,27 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-function toAuthSession(session: { user: { id: string; email?: string }; expires_at?: number } | null): AuthSession | null {
+function toAuthSession(
+  session: {
+    user: {
+      id: string;
+      email?: string;
+      phone?: string;
+      user_metadata?: { phone?: string };
+    };
+    expires_at?: number;
+  } | null
+): AuthSession | null {
   if (!session?.user) return null;
+  const phone =
+    session.user.phone ??
+    (typeof session.user.user_metadata?.phone === "string"
+      ? session.user.user_metadata.phone
+      : undefined);
   return {
     userId: session.user.id,
     email: session.user.email ?? "",
+    phone,
     expiresAt: session.expires_at ? session.expires_at * 1000 : 0,
   };
 }
@@ -170,80 +195,69 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // Send OTP to phone number (for signup); optional metadata so new user gets name/email when created
-  const sendOTP = async (phone: string, metadata?: { name?: string; email?: string }): Promise<{ success: boolean; error?: string }> => {
+  const sendOTP = async (
+    phone: string,
+    metadata?: { name?: string; email?: string; firstName?: string; lastName?: string },
+    mode: "login" | "signup" = "login"
+  ): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured()) {
       return { success: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (same folder as package.json), then restart the dev server." };
     }
     try {
-      // Format phone number (ensure it starts with +)
-      const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
-
-      const { error } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
-        options: {
-          channel: "sms",
-          data: metadata ?? undefined,
-        },
+      const response = await fetch("/api/auth/whatsapp-otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, metadata, mode }),
       });
-
-      if (error) {
-        const isRateLimit = error.message.toLowerCase().includes("too many") || error.message.includes("429");
-        return {
-          success: false,
-          error: isRateLimit
-            ? "Too many OTP requests. Please wait a few minutes and try again."
-            : error.message,
-        };
+      const data = await response.json();
+      if (!response.ok) {
+        return { success: false, error: data.error ?? "Failed to send OTP." };
       }
       return { success: true };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An error occurred while sending OTP.";
-      const isRateLimit = msg.includes("429") || msg.toLowerCase().includes("too many");
-      const isNetwork = msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
-      return {
-        success: false,
-        error: isRateLimit
-          ? "Too many OTP requests. Please wait a few minutes and try again."
-          : isNetwork
-            ? "Cannot reach Supabase. Check .env.local and that your Supabase project is not paused."
-            : msg,
-      };
+      return { success: false, error: msg };
     }
   };
 
-  // Verify OTP token (for signup and login)
-  const verifyOTP = async (phone: string, token: string): Promise<{ success: boolean; error?: string; session?: any }> => {
+  const verifyOTP = async (
+    phone: string,
+    token: string,
+    metadata?: { name?: string; email?: string; firstName?: string; lastName?: string },
+    mode: "login" | "signup" = "login"
+  ): Promise<{ success: boolean; error?: string; session?: unknown }> => {
     if (!isSupabaseConfigured()) {
       return { success: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (same folder as package.json), then restart the dev server." };
     }
     try {
-      const formattedPhone = phone.startsWith("+") ? phone : `+${phone}`;
-
-      const { data, error } = await supabase.auth.verifyOtp({
-        phone: formattedPhone,
-        token,
-        type: "sms",
+      const response = await fetch("/api/auth/whatsapp-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, code: token, metadata, mode }),
       });
-
-      if (error) {
-        return { success: false, error: error.message === "Invalid token" ? "Invalid OTP code. Please try again." : error.message };
+      const data = await response.json();
+      if (!response.ok) {
+        return { success: false, error: data.error ?? "Failed to verify OTP." };
       }
 
-      if (data.session) {
-        setUser(toAuthSession(data.session));
+      if (data.access_token && data.refresh_token) {
+        const { data: sessionData, error } = await supabase.auth.setSession({
+          access_token: data.access_token,
+          refresh_token: data.refresh_token,
+        });
+        if (error) {
+          return { success: false, error: error.message };
+        }
+        if (sessionData.session) {
+          setUser(toAuthSession(sessionData.session));
+        }
+        return { success: true, session: sessionData.session };
       }
 
-      return { success: true, session: data.session };
+      return { success: false, error: "Failed to establish session." };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An error occurred while verifying OTP.";
-      const isNetwork = msg.toLowerCase().includes("fetch") || msg.toLowerCase().includes("network");
-      return {
-        success: false,
-        error: isNetwork
-          ? "Cannot reach Supabase. Check .env.local and that your Supabase project is not paused."
-          : msg,
-      };
+      return { success: false, error: msg };
     }
   };
 
