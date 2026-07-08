@@ -13,13 +13,21 @@ export interface YoyoGiftcardCampaign {
   merchantId?: string;
 }
 
+/** Yoyo giftcard stateId: A Active, D Deactivated, E Expired, R Redeemed fully */
+export type YoyoGiftcardStateId = "A" | "D" | "E" | "R" | string;
+
 export interface YoyoGiftcard {
   id: string;
   balance?: number;
   wiCode?: string;
-  stateId?: string;
+  stateId?: YoyoGiftcardStateId;
   campaignId?: number | string;
   userRef?: string;
+  /** ISO / Yoyo date string when the gift card expires */
+  expiryDate?: string;
+  createDate?: string;
+  redeemedAmount?: number;
+  issuedAmount?: number;
 }
 
 export interface YoyoApiEnvelope {
@@ -28,6 +36,17 @@ export interface YoyoApiEnvelope {
   giftcardCampaigns?: YoyoGiftcardCampaign[];
   campaigns?: YoyoGiftcardCampaign[];
   giftcard?: YoyoGiftcard;
+  giftcards?: YoyoGiftcard[];
+}
+
+export interface GiftcardStatusItem {
+  id: string;
+  stateId?: YoyoGiftcardStateId;
+  expiryDate?: string;
+  balance?: number;
+  redeemedAmount?: number;
+  statusLabel: "Active" | "Redeemed" | "Expired" | "Deactivated" | "Unknown";
+  isActive: boolean;
 }
 
 export interface IssueGiftcardBody {

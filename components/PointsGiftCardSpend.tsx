@@ -213,6 +213,24 @@ export default function PointsGiftCardSpend({
           </div>
         )}
 
+        {issued.expiryDate && (
+          <p className="text-sm text-amber-700 dark:text-amber-400">
+            Expires{" "}
+            {(() => {
+              const parsed = new Date(issued.expiryDate);
+              return Number.isNaN(parsed.getTime())
+                ? issued.expiryDate
+                : parsed.toLocaleDateString(undefined, { dateStyle: "medium" });
+            })()}
+          </p>
+        )}
+
+        <p className="text-sm">
+          <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-medium text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300">
+            Active · not redeemed yet
+          </span>
+        </p>
+
         <p className="text-xs text-gray-500 dark:text-gray-400">
           Gift card ID: {issued.id}
         </p>

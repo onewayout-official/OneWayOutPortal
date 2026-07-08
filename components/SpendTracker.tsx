@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useState, useEffect } from "react";
-import { RewardTransaction, SpendCategory, UserProfile } from "@/types";
-import { storage } from "@/lib/storage";
-import { rewards } from "@/lib/gamification/rewards";
-import { Clock3, Copy, ShoppingCart, Settings2, Coins } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
+import { Clock3, Coins, Copy, Settings2, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import PointsGiftCardSpend from "@/components/PointsGiftCardSpend";
+import { rewards } from "@/lib/gamification/rewards";
+import { storage } from "@/lib/storage";
+import { fetchGiftcardStatuses } from "@/lib/yoyo/client";
+import { giftcardStatusFromState } from "@/lib/yoyo/giftcardStatus";
+import type { GiftcardStatusItem } from "@/lib/yoyo/types";
+import { RewardTransaction, SpendCategory, UserProfile } from "@/types";
 
 const SPEND_CATEGORIES: { id: SpendCategory; label: string }[] = [
   { id: "Grocery", label: "Grocery" },
@@ -43,10 +46,36 @@ function getMetadataNumber(
   return null;
 }
 
+function formatExpiryDate(value: string): string | null {
+  if (!value.trim()) return null;
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleDateString(undefined, {
+      dateStyle: "medium",
+    });
+  }
+  return value.trim();
+}
+
+function statusBadgeClass(label: GiftcardStatusItem["statusLabel"]): string {
+  switch (label) {
+    case "Active":
+      return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300";
+    case "Redeemed":
+      return "bg-gray-200 text-gray-700 dark:bg-gray-700 dark:text-gray-300";
+    case "Expired":
+      return "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300";
+    case "Deactivated":
+      return "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300";
+    default:
+      return "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400";
+  }
+}
+
 export default function SpendTracker() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [spendingHistory, setSpendingHistory] = useState<RewardTransaction[]>([]);
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
+  const [giftcardStatuses, setGiftcardStatuses] = useState<Record<string, GiftcardStatusItem>>({});
   const [editBudgets, setEditBudgets] = useState<Record<SpendCategory, number>>({
     Grocery: 0,
     Fuel: 0,
@@ -57,7 +86,28 @@ export default function SpendTracker() {
     Transport: 0,
     "Send to others": 0,
   });
+  const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+
+  const loadGiftcardStatuses = useCallback(async (history: RewardTransaction[]) => {
+    const giftcardIds = history
+      .map((transaction) =>
+        getMetadataString(transaction.metadata, ["giftcard_id", "giftcardId"])
+      )
+      .filter(Boolean);
+
+    if (giftcardIds.length === 0) {
+      setGiftcardStatuses({});
+      return;
+    }
+
+    try {
+      const result = await fetchGiftcardStatuses(giftcardIds);
+      setGiftcardStatuses(result.statuses);
+    } catch (err) {
+      console.error("[SpendTracker] giftcard statuses:", err);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
@@ -70,11 +120,13 @@ export default function SpendTracker() {
     if (userProfile) {
       userProfile.userPoints = gamification.balance;
     }
+    const spendHistory = rewardHistory.filter((transaction) => transaction.pointsDelta < 0);
     setProfile(userProfile);
     setEditBudgets(budgetMap);
-    setSpendingHistory(rewardHistory.filter((transaction) => transaction.pointsDelta < 0));
+    setSpendingHistory(spendHistory);
     setIsLoading(false);
-  }, []);
+    void loadGiftcardStatuses(spendHistory);
+  }, [loadGiftcardStatuses]);
 
   useEffect(() => {
     void Promise.resolve().then(loadData);
@@ -82,7 +134,9 @@ export default function SpendTracker() {
 
   const refreshSpendingHistory = async () => {
     const rewardHistory = await rewards.getRewardHistory(30);
-    setSpendingHistory(rewardHistory.filter((transaction) => transaction.pointsDelta < 0));
+    const spendHistory = rewardHistory.filter((transaction) => transaction.pointsDelta < 0);
+    setSpendingHistory(spendHistory);
+    await loadGiftcardStatuses(spendHistory);
   };
 
   const copyRedeemCode = async (code: string) => {
@@ -174,10 +228,46 @@ export default function SpendTracker() {
           <div className="divide-y divide-gray-200 dark:divide-gray-700">
             {spendingHistory.map((transaction) => {
               const storeName = getMetadataString(transaction.metadata, ["store_name", "storeName"]);
-              const campaignName = getMetadataString(transaction.metadata, ["campaign_name", "campaignName"]);
-              const redeemCode = getMetadataString(transaction.metadata, ["wi_code", "wiCode", "wicode"]);
-              const amountRand = getMetadataNumber(transaction.metadata, ["amount_rand", "amountRand"]);
-              const title = storeName || campaignName || (transaction.kind === "redeem" ? "Points redeemed" : transaction.source || "Points spent");
+              const campaignName = getMetadataString(transaction.metadata, [
+                "campaign_name",
+                "campaignName",
+              ]);
+              const redeemCode = getMetadataString(transaction.metadata, [
+                "wi_code",
+                "wiCode",
+                "wicode",
+              ]);
+              const amountRand = getMetadataNumber(transaction.metadata, [
+                "amount_rand",
+                "amountRand",
+              ]);
+              const giftcardId = getMetadataString(transaction.metadata, [
+                "giftcard_id",
+                "giftcardId",
+              ]);
+              const fallbackStateId = getMetadataString(transaction.metadata, [
+                "state_id",
+                "stateId",
+              ]);
+              const liveStatus = giftcardId ? giftcardStatuses[giftcardId] : undefined;
+              const status =
+                liveStatus ??
+                (fallbackStateId
+                  ? {
+                      ...giftcardStatusFromState(fallbackStateId),
+                      id: giftcardId,
+                    }
+                  : null);
+              const expiryDateRaw =
+                liveStatus?.expiryDate ||
+                getMetadataString(transaction.metadata, ["expiry_date", "expiryDate"]);
+              const expiryDate = formatExpiryDate(expiryDateRaw);
+              const title =
+                storeName ||
+                campaignName ||
+                (transaction.kind === "redeem"
+                  ? "Points redeemed"
+                  : transaction.source || "Points spent");
 
               return (
                 <div
@@ -185,9 +275,20 @@ export default function SpendTracker() {
                   className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0"
                 >
                   <div className="min-w-0">
-                    <p className="font-medium text-gray-900 dark:text-white">
-                      {title}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-medium text-gray-900 dark:text-white">{title}</p>
+                      {status && status.statusLabel !== "Unknown" && (
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${statusBadgeClass(status.statusLabel)}`}
+                        >
+                          {status.statusLabel === "Active"
+                            ? "Active · not redeemed"
+                            : status.statusLabel === "Redeemed"
+                              ? "Redeemed · used"
+                              : status.statusLabel}
+                        </span>
+                      )}
+                    </div>
                     <p className="text-xs text-gray-500 dark:text-gray-400">
                       {new Date(transaction.createdAt).toLocaleString(undefined, {
                         dateStyle: "medium",
@@ -195,6 +296,11 @@ export default function SpendTracker() {
                       })}
                       {amountRand != null ? ` · R ${amountRand.toFixed(2)}` : ""}
                     </p>
+                    {expiryDate && status?.statusLabel === "Active" && (
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                        Expires {expiryDate}
+                      </p>
+                    )}
                     {redeemCode && (
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="rounded-md bg-gray-100 dark:bg-gray-900 px-2 py-1 font-mono text-xs text-gray-900 dark:text-white">

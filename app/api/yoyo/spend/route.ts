@@ -89,7 +89,16 @@ export async function POST(request: NextRequest) {
   let campaignId = body.campaignId;
   let campaignName = "";
 
-  const campaignsResult = await listGiftcardCampaigns(user.id);
+  const profilePhone = (profile as { phone?: string } | null)?.phone;
+  const mobileNumber =
+    formatYoyoMobileNumber(body.mobileNumber) ??
+    formatYoyoMobileNumber(profilePhone);
+
+  // Prefer mobile as Yoyo userRef when available (Yoyo docs use mobile-style refs).
+  // Fall back to Supabase user id so redeem still works without a phone.
+  const userRef = mobileNumber ?? user.id;
+
+  const campaignsResult = await listGiftcardCampaigns(userRef);
   const campaigns = extractCampaigns(campaignsResult.data);
 
   if (campaignId) {
@@ -112,15 +121,10 @@ export async function POST(request: NextRequest) {
     campaignName = matched.name ?? matched.description ?? String(matched.id);
   }
 
-  const profilePhone = (profile as { phone?: string } | null)?.phone;
-  const mobileNumber =
-    formatYoyoMobileNumber(body.mobileNumber) ??
-    formatYoyoMobileNumber(profilePhone);
-
   const issueBody: IssueGiftcardBody = {
     campaignId: Number(campaignId),
     balance: balanceCents,
-    userRef: user.id,
+    userRef,
     stateId: "A",
     ...(mobileNumber ? { mobileNumber, sendSMS: false } : {}),
   };
@@ -160,6 +164,10 @@ export async function POST(request: NextRequest) {
       campaign_id: campaignId,
       campaign_name: campaignName,
       mobile_number: mobileNumber ?? null,
+      user_ref: userRef,
+      expiry_date: giftcard.expiryDate ?? null,
+      create_date: giftcard.createDate ?? null,
+      state_id: giftcard.stateId ?? "A",
     },
   });
 

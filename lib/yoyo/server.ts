@@ -1,5 +1,13 @@
 import { isYoyoSuccess } from "@/lib/yoyo/campaignMatch";
-import type { IssueGiftcardBody, YoyoApiEnvelope, YoyoProxyResult } from "@/lib/yoyo/types";
+import { toGiftcardStatusItem } from "@/lib/yoyo/giftcardStatus";
+import type {
+  IssueGiftcardBody,
+  YoyoApiEnvelope,
+  YoyoGiftcard,
+  YoyoProxyResult,
+} from "@/lib/yoyo/types";
+
+export { giftcardStatusFromState, toGiftcardStatusItem } from "@/lib/yoyo/giftcardStatus";
 
 export function getYoyoConfig() {
   return {
@@ -130,18 +138,63 @@ export async function issueGiftcardWithRetry(
   return last;
 }
 
+function pickDateString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
 export function normalizeGiftcard(
   raw: Record<string, unknown> | undefined
-): { id: string; balance?: number; wiCode?: string; stateId?: string; campaignId?: number | string } | undefined {
+): YoyoGiftcard | undefined {
   if (!raw || raw.id == null) return undefined;
   const wiCode = (raw.wiCode ?? raw.wicode ?? raw.wiQR) as string | undefined;
   return {
     id: String(raw.id),
     balance: raw.balance != null ? Number(raw.balance) : undefined,
     wiCode: wiCode != null ? String(wiCode) : undefined,
-    stateId: raw.stateId as string | undefined,
+    stateId: raw.stateId != null ? String(raw.stateId) : undefined,
     campaignId: raw.campaignId as number | string | undefined,
+    expiryDate: pickDateString(raw.expiryDate, raw.expiry_date),
+    createDate: pickDateString(raw.createDate, raw.create_date),
+    redeemedAmount: raw.redeemedAmount != null ? Number(raw.redeemedAmount) : undefined,
+    issuedAmount: raw.issuedAmount != null ? Number(raw.issuedAmount) : undefined,
   };
+}
+
+export async function getGiftcardById(giftcardId: string) {
+  return yoyoRequest<YoyoApiEnvelope>("GET", `/giftcards/${encodeURIComponent(giftcardId)}`);
+}
+
+export async function listUserGiftcards(userRef: string) {
+  return yoyoRequest<YoyoApiEnvelope>(
+    "GET",
+    `/user/${encodeURIComponent(userRef)}/giftcards`
+  );
+}
+
+export function extractGiftcards(data: YoyoApiEnvelope | Record<string, unknown>): YoyoGiftcard[] {
+  const envelope = data as YoyoApiEnvelope & { giftCards?: unknown };
+  const rawList =
+    envelope.giftcards ??
+    envelope.giftCards ??
+    (Array.isArray((data as { data?: unknown }).data)
+      ? (data as { data: unknown[] }).data
+      : null);
+
+  if (Array.isArray(rawList)) {
+    return rawList
+      .map((item) => normalizeGiftcard(item as Record<string, unknown>))
+      .filter((card): card is YoyoGiftcard => Boolean(card));
+  }
+
+  if (envelope.giftcard) {
+    const single = normalizeGiftcard(envelope.giftcard as unknown as Record<string, unknown>);
+    return single ? [single] : [];
+  }
+
+  return [];
 }
 
 export function extractCampaigns(data: YoyoApiEnvelope) {

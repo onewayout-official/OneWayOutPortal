@@ -1,6 +1,10 @@
 import { supabase } from "@/lib/supabase";
-import type { SpendGiftcardRequest, SpendGiftcardResponse } from "@/lib/yoyo/types";
-import type { YoyoGiftcardCampaign } from "@/lib/yoyo/types";
+import type {
+  GiftcardStatusItem,
+  SpendGiftcardRequest,
+  SpendGiftcardResponse,
+  YoyoGiftcardCampaign,
+} from "@/lib/yoyo/types";
 
 async function authHeaders(): Promise<HeadersInit> {
   const { data } = await supabase.auth.getSession();
@@ -27,6 +31,43 @@ export async function fetchYoyoCampaigns(): Promise<{
     ok: Boolean(json.ok),
     campaigns: json.campaigns ?? [],
     error: json.ok ? undefined : json.responseDesc,
+  };
+}
+
+export async function fetchGiftcardStatuses(
+  giftcardIds: string[]
+): Promise<{
+  ok: boolean;
+  statuses: Record<string, GiftcardStatusItem>;
+  error?: string;
+}> {
+  const ids = [...new Set(giftcardIds.filter(Boolean))];
+  if (ids.length === 0) {
+    return { ok: true, statuses: {} };
+  }
+
+  const headers = await authHeaders();
+  const res = await fetch(`/api/yoyo/giftcards?ids=${encodeURIComponent(ids.join(","))}`, {
+    headers,
+  });
+  const json = (await res.json()) as {
+    ok?: boolean;
+    statuses?: Record<string, GiftcardStatusItem>;
+    error?: string;
+  };
+
+  if (!res.ok) {
+    return {
+      ok: false,
+      statuses: {},
+      error: json.error ?? "Failed to load gift card statuses",
+    };
+  }
+
+  return {
+    ok: Boolean(json.ok),
+    statuses: json.statuses ?? {},
+    error: json.ok ? undefined : json.error,
   };
 }
 
