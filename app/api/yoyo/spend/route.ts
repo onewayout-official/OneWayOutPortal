@@ -3,6 +3,9 @@ import { createClient } from "@supabase/supabase-js";
 import { matchCampaignForStore, isYoyoSuccess } from "@/lib/yoyo/campaignMatch";
 import { randToCents, randToPoints } from "@/lib/yoyo/retailFootprint";
 import {
+  fetchRewardTotalPoints,
+} from "@/lib/gamification/rewardPoints";
+import {
   extractCampaigns,
   issueGiftcardWithRetry,
   isYoyoConfigured,
@@ -72,19 +75,24 @@ export async function POST(request: NextRequest) {
   const pointsRequired = randToPoints(amountRand);
   const balanceCents = randToCents(amountRand);
 
-  const { data: profile } = await client
-    .from("profiles")
-    .select("user_points, phone")
-    .eq("id", user.id)
-    .maybeSingle();
+  const rewardTotal = await fetchRewardTotalPoints(client, user.id);
 
-  const userPoints = Number((profile as { user_points?: number } | null)?.user_points ?? 0);
-  if (pointsRequired > userPoints) {
+  if (pointsRequired > rewardTotal) {
     return NextResponse.json(
-      { ok: false, error: "insufficient_points", pointsBalance: userPoints },
+      {
+        ok: false,
+        error: "insufficient_points",
+        pointsBalance: rewardTotal,
+      },
       { status: 400 }
     );
   }
+
+  const { data: profile } = await client
+    .from("profiles")
+    .select("phone")
+    .eq("id", user.id)
+    .maybeSingle();
 
   let campaignId = body.campaignId;
   let campaignName = "";
@@ -205,7 +213,7 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     giftcard,
-    pointsBalance: Number(redeem.balance ?? 0),
+    pointsBalance: await fetchRewardTotalPoints(client, user.id),
     pointsRedeemed: Number(redeem.redeemed ?? pointsRequired),
     campaignName,
     amountRand,

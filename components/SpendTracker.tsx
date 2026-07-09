@@ -1,26 +1,15 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Clock3, Coins, Copy, Settings2, ShoppingCart } from "lucide-react";
+import { Clock3, Coins, Copy, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import PointsGiftCardSpend from "@/components/PointsGiftCardSpend";
 import { rewards } from "@/lib/gamification/rewards";
-import { storage } from "@/lib/storage";
 import { fetchGiftcardStatuses } from "@/lib/yoyo/client";
+import { notifyRewardPointsUpdated } from "@/lib/gamification/rewardPoints";
 import { giftcardStatusFromState } from "@/lib/yoyo/giftcardStatus";
 import type { GiftcardStatusItem } from "@/lib/yoyo/types";
-import { RewardTransaction, SpendCategory, UserProfile } from "@/types";
-
-const SPEND_CATEGORIES: { id: SpendCategory; label: string }[] = [
-  { id: "Grocery", label: "Grocery" },
-  { id: "Fuel", label: "Fuel" },
-  { id: "Electricity", label: "Electricity" },
-  { id: "Airtime", label: "Airtime" },
-  { id: "Water", label: "Water" },
-  { id: "Rent", label: "Rent" },
-  { id: "Transport", label: "Transport" },
-  { id: "Send to others", label: "Send to others" },
-];
+import { RewardTransaction } from "@/types";
 
 function getMetadataString(
   metadata: Record<string, unknown> | undefined,
@@ -73,20 +62,9 @@ function statusBadgeClass(label: GiftcardStatusItem["statusLabel"]): string {
 }
 
 export default function SpendTracker() {
-  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [pointsBalance, setPointsBalance] = useState(0);
   const [spendingHistory, setSpendingHistory] = useState<RewardTransaction[]>([]);
   const [giftcardStatuses, setGiftcardStatuses] = useState<Record<string, GiftcardStatusItem>>({});
-  const [editBudgets, setEditBudgets] = useState<Record<SpendCategory, number>>({
-    Grocery: 0,
-    Fuel: 0,
-    Electricity: 0,
-    Airtime: 0,
-    Water: 0,
-    Rent: 0,
-    Transport: 0,
-    "Send to others": 0,
-  });
-  const [showBudgetModal, setShowBudgetModal] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const loadGiftcardStatuses = useCallback(async (history: RewardTransaction[]) => {
@@ -109,20 +87,20 @@ export default function SpendTracker() {
     }
   }, []);
 
+  const refreshPointsBalance = useCallback(async () => {
+    const totalPoints = await rewards.getRewardTotalPoints();
+    setPointsBalance(totalPoints);
+    return totalPoints;
+  }, []);
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    const [userProfile, budgetMap, rewardHistory] = await Promise.all([
-      storage.getProfile(),
-      storage.getSpendBudgets(),
+    const [rewardHistory, totalPoints] = await Promise.all([
       rewards.getRewardHistory(30),
+      rewards.getRewardTotalPoints(),
     ]);
-    const gamification = await rewards.getGamificationState();
-    if (userProfile) {
-      userProfile.userPoints = gamification.balance;
-    }
     const spendHistory = rewardHistory.filter((transaction) => transaction.pointsDelta < 0);
-    setProfile(userProfile);
-    setEditBudgets(budgetMap);
+    setPointsBalance(totalPoints);
     setSpendingHistory(spendHistory);
     setIsLoading(false);
     void loadGiftcardStatuses(spendHistory);
@@ -132,11 +110,26 @@ export default function SpendTracker() {
     void Promise.resolve().then(loadData);
   }, [loadData]);
 
-  const refreshSpendingHistory = async () => {
-    const rewardHistory = await rewards.getRewardHistory(30);
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void refreshPointsBalance();
+      }
+    };
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => document.removeEventListener("visibilitychange", handleVisibility);
+  }, [refreshPointsBalance]);
+
+  const refreshSpendData = async () => {
+    const [rewardHistory, totalPoints] = await Promise.all([
+      rewards.getRewardHistory(30),
+      refreshPointsBalance(),
+    ]);
     const spendHistory = rewardHistory.filter((transaction) => transaction.pointsDelta < 0);
     setSpendingHistory(spendHistory);
+    setPointsBalance(totalPoints);
     await loadGiftcardStatuses(spendHistory);
+    notifyRewardPointsUpdated();
   };
 
   const copyRedeemCode = async (code: string) => {
@@ -145,11 +138,6 @@ export default function SpendTracker() {
     } catch {
       /* ignore clipboard failures */
     }
-  };
-
-  const handleSaveBudgets = async () => {
-    await storage.saveSpendBudgets(editBudgets);
-    setShowBudgetModal(false);
   };
 
   if (isLoading) {
@@ -165,24 +153,14 @@ export default function SpendTracker() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-3 rounded-full bg-rose-100 dark:bg-rose-900/30">
-            <ShoppingCart className="h-6 w-6 text-rose-600 dark:text-rose-400" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Spend</h1>
-            <p className="text-sm text-gray-600 dark:text-gray-400">Redeem your earned points</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <div className="p-3 rounded-full bg-rose-100 dark:bg-rose-900/30">
+          <ShoppingCart className="h-6 w-6 text-rose-600 dark:text-rose-400" />
         </div>
-        <button
-          type="button"
-          onClick={() => setShowBudgetModal(true)}
-          className="p-2 rounded-lg border border-gray-300 dark:border-gray-600 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700"
-          title="Set budgets"
-        >
-          <Settings2 className="h-5 w-5" />
-        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Spend</h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Redeem your earned points</p>
+        </div>
       </div>
 
       {/* Points balance (earned on Earn screen, redeem here) */}
@@ -190,8 +168,10 @@ export default function SpendTracker() {
         <div className="flex items-center justify-between">
           <div>
             <p className="text-sm opacity-90">Your points</p>
-            <p className="text-3xl font-bold">{(profile?.userPoints ?? 0).toLocaleString()}</p>
-            <p className="text-xs opacity-80 mt-1">Earned on Earn screen · redeem below</p>
+            <p className="text-3xl font-bold">{pointsBalance.toLocaleString()}</p>
+            <p className="text-xs opacity-80 mt-1">
+              Same as Rewards Tracker total · redeem below
+            </p>
           </div>
           <Coins className="h-10 w-10 opacity-80" />
         </div>
@@ -204,11 +184,11 @@ export default function SpendTracker() {
       </div>
 
       <PointsGiftCardSpend
-        pointsBalance={profile?.userPoints ?? 0}
-        onPointsChange={(balance) => {
-          if (profile) setProfile({ ...profile, userPoints: balance });
+        pointsBalance={pointsBalance}
+        onPointsChange={() => {
+          void refreshPointsBalance();
         }}
-        onSpendComplete={refreshSpendingHistory}
+        onSpendComplete={refreshSpendData}
       />
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
@@ -344,61 +324,6 @@ export default function SpendTracker() {
           View all expenses →
         </Link>
       </div>
-
-      {/* Set budgets modal */}
-      {showBudgetModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-          <div className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
-            <div className="p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">
-                Set monthly budget
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Enter budget amount for each category (this month).
-              </p>
-              <div className="space-y-4">
-                {SPEND_CATEGORIES.map(({ id, label }) => (
-                  <div key={id}>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                      {label}
-                    </label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="1"
-                      value={editBudgets[id] || ""}
-                      onChange={(e) =>
-                        setEditBudgets({
-                          ...editBudgets,
-                          [id]: parseFloat(e.target.value) || 0,
-                        })
-                      }
-                      className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-rose-500"
-                      placeholder="0"
-                    />
-                  </div>
-                ))}
-              </div>
-              <div className="flex gap-2 mt-6">
-                <button
-                  type="button"
-                  onClick={handleSaveBudgets}
-                  className="flex-1 px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
-                >
-                  Save
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowBudgetModal(false)}
-                  className="px-4 py-2 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

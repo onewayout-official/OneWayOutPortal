@@ -6,9 +6,9 @@ import { usePathname } from "next/navigation";
 import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap, CalendarCheck, ClipboardList, UserCog, Eye, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { rewards } from "@/lib/gamification/rewards";
+import { REWARD_POINTS_UPDATED_EVENT } from "@/lib/gamification/rewardPoints";
 import { getLocalDateString, isTaskCompleted } from "@/lib/gamification/config";
 import { storage } from "@/lib/storage";
-import { supabase } from "@/lib/supabase";
 import { UserProfile } from "@/types";
 
 const financialAdvisorAppointmentKey = (userId: string) =>
@@ -221,26 +221,18 @@ export default function Navigation() {
           return;
         }
 
-        const [gamification, txnsResult] = await Promise.all([
+        const [gamification, totalPoints, todayPoints] = await Promise.all([
           rewards.getGamificationState(todayStr),
-          supabase
-            .from("reward_transactions")
-            .select("points_delta, created_at")
-            .eq("user_id", userId)
-            .gt("points_delta", 0),
+          rewards.getRewardTotalPoints(),
+          rewards.getRewardTodayPoints(todayStr),
         ]);
 
         if (cancelled) return;
 
-        const txns = txnsResult.data ?? [];
-        const total = txns.reduce((sum, row) => sum + Number(row.points_delta), 0);
-        const today = txns
-          .filter((row) => row.created_at.slice(0, 10) === todayStr)
-          .reduce((sum, row) => sum + Number(row.points_delta), 0);
         const nextFinancialData = {
           profile: userProfile,
-          rewardTotalPoints: total,
-          rewardTodayPoints: today,
+          rewardTotalPoints: totalPoints,
+          rewardTodayPoints: todayPoints,
           hasAppointedFinancialAdvisor:
             localAppointmentRecorded ||
             isTaskCompleted("appoint-financial-advisor", gamification.completedTaskKeys),
@@ -264,8 +256,14 @@ export default function Navigation() {
       }
     }
 
+    const handlePointsUpdated = () => {
+      if (!cancelled) void loadFinancialData();
+    };
+    window.addEventListener(REWARD_POINTS_UPDATED_EVENT, handlePointsUpdated);
+
     return () => {
       cancelled = true;
+      window.removeEventListener(REWARD_POINTS_UPDATED_EVENT, handlePointsUpdated);
     };
   }, [authUser?.userId, pathname]);
 

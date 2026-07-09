@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 import { Counselor, CounselorAppointment, resolveCounselorImage } from "@/lib/counselors";
 import { getAuthHeader } from "@/lib/authHeader";
+import { rewards } from "@/lib/gamification/rewards";
+import { notifyRewardPointsUpdated } from "@/lib/gamification/rewardPoints";
+import { storage } from "@/lib/storage";
 
 const WEEKDAY_TO_INDEX: Record<string, number> = {
   Sun: 0,
@@ -251,6 +254,15 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
         meetingLink: json.appointment?.meetingLink ?? "",
       });
       setPendingBooking(null);
+
+      // Reward the "Book Life Coaching Session" earn task (idempotent per month).
+      try {
+        await rewards.awardTask("book-life-counseling");
+        await storage.logEarnActivity();
+        notifyRewardPointsUpdated();
+      } catch {
+        // Booking succeeded; a points hiccup shouldn't surface as a booking error.
+      }
     } catch (err) {
       setBookingError(err instanceof Error ? err.message : "Failed to book appointment.");
     } finally {

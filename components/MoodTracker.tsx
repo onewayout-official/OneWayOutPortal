@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { UserProfile, DailyMood } from "@/types";
 import { storage } from "@/lib/storage";
+import { notifyRewardPointsUpdated } from "@/lib/gamification/rewardPoints";
 import { Smile, Calendar, TrendingUp, Star, X } from "lucide-react";
 import { format, subDays, parseISO } from "date-fns";
 import {
@@ -143,6 +144,8 @@ export default function MoodTracker() {
       setSelectedMood(mood);
       const dailyMoods = await storage.getDailyMoods();
       setMoodHistory(dailyMoods);
+
+      notifyRewardPointsUpdated();
 
       setPointsPopup({ visible: true, mood });
       setTimeout(() => setPointsPopup({ visible: false, mood: null }), 3500);

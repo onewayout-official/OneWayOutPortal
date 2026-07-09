@@ -249,6 +249,7 @@ export const GAMIFICATION_TASKS: GamificationTask[] = [
     label: "Last Month Budget Review",
     points: 1500,
     icon: ClipboardCheck,
+    manualClaim: true,
     showOnEarn: true,
     category: "monthly",
   },
@@ -383,6 +384,8 @@ export function isTaskCompleted(
       return completedKeys.includes(`monthly-expenses-update-${month}`);
     case "monthly-review-complete":
       return completedKeys.includes(`monthly-review-${month}`);
+    case "book-life-counseling":
+      return completedKeys.includes(`book-life-counseling-${month}`);
     case "month-ended-green":
       return completedKeys.includes(`month-ended-green-${month}`);
     case "month-ended-red-logged":

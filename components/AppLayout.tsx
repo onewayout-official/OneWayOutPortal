@@ -7,6 +7,7 @@ import DashboardTopBar from "@/components/DashboardTopBar";
 import OnboardingPortalGate from "@/components/OnboardingPortalGate";
 import { useAuth } from "@/contexts/AuthContext";
 import RespondIoWidget from "@/components/RespondIoWidget";
+import PointsToast from "@/components/PointsToast";
 
 
 interface AppLayoutProps {
@@ -81,6 +82,8 @@ export default function AppLayout({ children }: AppLayoutProps) {
       </div>
 
       <RespondIoWidget />
+
+      <PointsToast />
 
     </div>
 

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { Expense, ExpenseCategoryOld, RegistrationExpense } from "@/types";
 import { storage } from "@/lib/storage";
+import { rewards } from "@/lib/gamification/rewards";
 import { Wallet, Info, TrendingDown, BarChart3, PieChart } from "lucide-react";
 import BudgetExpensesForm from "@/components/BudgetExpensesForm";
 import {
@@ -130,6 +131,7 @@ export default function ExpenseList() {
 
   const handleBudgetSaved = async () => {
     await loadBudgetExpenses();
+    await rewards.awardTask("monthly-expenses-update");
     setShowBudgetForm(false);
   };
 
@@ -221,6 +223,7 @@ export default function ExpenseList() {
       }));
 
       await storage.saveBudgetExpenses(itemsToSave);
+      await rewards.awardTask("monthly-expenses-update");
       setOnboardingExpenses(editingExpenses.map((item) => ({ ...item, total: item.personal || 0 })));
       setIsEditModalOpen(false);
     } catch (error) {

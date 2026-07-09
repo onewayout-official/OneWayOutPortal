@@ -13,6 +13,7 @@ import {
   type TaskCategory,
 } from "@/lib/gamification/config";
 import { rewards } from "@/lib/gamification/rewards";
+import { notifyRewardPointsUpdated, REWARD_POINTS_UPDATED_EVENT } from "@/lib/gamification/rewardPoints";
 import type { GamificationState } from "@/types";
 import SpinWheel from "@/components/SpinWheel";
 
@@ -53,6 +54,7 @@ const UPCOMING_WEBINARS = [
 
 export default function EarnTracker() {
   const [gamification, setGamification] = useState<GamificationState | null>(null);
+  const [rewardPoints, setRewardPoints] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [completingId, setCompletingId] = useState<GamificationTaskId | null>(null);
   const [showClaimed, setShowClaimed] = useState<GamificationTaskId | null>(null);
@@ -77,14 +79,29 @@ export default function EarnTracker() {
 
   const loadData = useCallback(async () => {
     setIsLoading(true);
-    const state = await rewards.getGamificationState();
+    const [state, totalPoints] = await Promise.all([
+      rewards.getGamificationState(),
+      rewards.getRewardTotalPoints(),
+    ]);
     setGamification(state);
+    setRewardPoints(totalPoints);
     setIsLoading(false);
   }, []);
 
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  // Keep the displayed reward total in sync with the top bar / Spend screen
+  // after spins, task claims, or redemptions elsewhere in the app.
+  useEffect(() => {
+    const refresh = async () => {
+      const totalPoints = await rewards.getRewardTotalPoints();
+      setRewardPoints(totalPoints);
+    };
+    window.addEventListener(REWARD_POINTS_UPDATED_EVENT, refresh);
+    return () => window.removeEventListener(REWARD_POINTS_UPDATED_EVENT, refresh);
+  }, []);
 
   const handleGamificationUpdate = (next: Partial<GamificationState> & { balance: number }) => {
     setGamification((prev) =>
@@ -128,6 +145,40 @@ export default function EarnTracker() {
       return;
     }
 
+    // Composite task: awards the two underlying connection sub-tasks.
+    if (task.id === "connect-transunion-astute") {
+      const alreadyDone = gamification
+        ? isTaskCompleted(task.id, gamification.completedTaskKeys)
+        : false;
+      if (alreadyDone) return;
+
+      const confirmed = window.confirm(
+        `Confirm you've connected Transunion & Astute? You will earn ${task.points ?? 4500} points.`
+      );
+      if (!confirmed) return;
+
+      setCompletingId(task.id);
+      const [tu, as] = await Promise.all([
+        rewards.awardTask("transunion-connection"),
+        rewards.awardTask("astute-connection"),
+      ]);
+      storage.logEarnActivity();
+      setCompletingId(null);
+
+      if ((!tu.ok && tu.error) || (!as.ok && as.error)) {
+        setTaskError(tu.error ?? as.error ?? "Could not award points.");
+        await loadData();
+        notifyRewardPointsUpdated();
+        return;
+      }
+
+      setShowClaimed(task.id);
+      setTimeout(() => setShowClaimed(null), 2000);
+      await loadData();
+      notifyRewardPointsUpdated();
+      return;
+    }
+
     if (task.manualClaim && task.points !== null && task.points > 0) {
       const completed = gamification
         ? isTaskCompleted(task.id, gamification.completedTaskKeys)
@@ -164,6 +215,7 @@ export default function EarnTracker() {
       }
 
       await loadData();
+      notifyRewardPointsUpdated();
       return;
     }
 
@@ -212,7 +264,7 @@ export default function EarnTracker() {
     );
   }
 
-  const userPoints = gamification.balance;
+  const userPoints = rewardPoints;
 
   const renderTaskCard = (task: (typeof EARN_SCREEN_TASKS)[0]) => {
     const Icon = task.icon;
@@ -303,11 +355,6 @@ export default function EarnTracker() {
             <p className="text-3xl font-bold text-blue-900 dark:text-sky-50">
               {userPoints.toLocaleString()}
             </p>
-            {gamification.spinTokens > 0 && (
-              <p className="text-xs text-sky-600 dark:text-sky-400 mt-1">
-                {gamification.spinTokens} spin token{gamification.spinTokens !== 1 ? "s" : ""}
-              </p>
-            )}
           </div>
           <Coins className="h-10 w-10 text-sky-500 dark:text-sky-400 opacity-90" />
         </div>

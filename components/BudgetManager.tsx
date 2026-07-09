@@ -897,6 +897,8 @@ export default function BudgetManager() {
         name: newItem.name,
       };
       setExpenseIcons((prev) => [...prev, iconItem]);
+      // Counts as a budget activity → earns the daily "Log Today's Expenses" task.
+      await storage.logBudgetActivity();
     } catch (err) {
       console.error(err);
     }

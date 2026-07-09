@@ -6,8 +6,8 @@ import Image from "next/image";
 import { usePathname } from "next/navigation";
 import { User, ChevronDown, LogOut } from "lucide-react";
 import { storage } from "@/lib/storage";
-import { supabase } from "@/lib/supabase";
 import { rewards } from "@/lib/gamification/rewards";
+import { REWARD_POINTS_UPDATED_EVENT } from "@/lib/gamification/rewardPoints";
 import { getLocalDateString, isTaskCompleted } from "@/lib/gamification/config";
 import { useAuth } from "@/contexts/AuthContext";
 import { UserProfile } from "@/types";
@@ -136,26 +136,18 @@ export default function DashboardTopBar() {
           return;
         }
 
-        const [gamification, txnsResult] = await Promise.all([
+        const [gamification, totalPoints, todayPoints] = await Promise.all([
           rewards.getGamificationState(todayStr),
-          supabase
-            .from("reward_transactions")
-            .select("points_delta, created_at")
-            .eq("user_id", userId)
-            .gt("points_delta", 0),
+          rewards.getRewardTotalPoints(),
+          rewards.getRewardTodayPoints(todayStr),
         ]);
 
         if (cancelled) return;
 
-        const txns = txnsResult.data ?? [];
-        const total = txns.reduce((s, r) => s + Number(r.points_delta), 0);
-        const today = txns
-          .filter((r) => r.created_at.slice(0, 10) === todayStr)
-          .reduce((s, r) => s + Number(r.points_delta), 0);
         const nextTopBarData = {
           profile: userProfile,
-          rewardTotalPoints: total,
-          rewardTodayPoints: today,
+          rewardTotalPoints: totalPoints,
+          rewardTodayPoints: todayPoints,
           hasAppointedFinancialAdvisor:
             localAppointmentRecorded ||
             isTaskCompleted("appoint-financial-advisor", gamification.completedTaskKeys),
@@ -203,10 +195,16 @@ export default function DashboardTopBar() {
     schedulePoll();
     document.addEventListener("visibilitychange", handleVisibility);
 
+    const handlePointsUpdated = () => {
+      if (!cancelled) void loadTopBarData();
+    };
+    window.addEventListener(REWARD_POINTS_UPDATED_EVENT, handlePointsUpdated);
+
     return () => {
       cancelled = true;
       if (intervalId) clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibility);
+      window.removeEventListener(REWARD_POINTS_UPDATED_EVENT, handlePointsUpdated);
     };
   }, [authUser?.userId, pathname]);
 

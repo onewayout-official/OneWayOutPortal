@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabase";
+import { fetchRewardTotalPoints, notifyRewardPointsAwarded } from "@/lib/gamification/rewardPoints";
 import type { AwardTaskResult, GamificationState, RedeemResult, SpinResult } from "@/types";
 import { getLocalDateString, type GamificationTaskId, type SpinMode } from "./config";
 
@@ -99,7 +100,11 @@ export const rewards = {
         error: error.message,
       };
     }
-    return parseAward(data as Record<string, unknown>);
+    const award = parseAward(data as Record<string, unknown>);
+    if (award.ok && award.pointsAwarded > 0) {
+      notifyRewardPointsAwarded(award.pointsAwarded, taskId);
+    }
+    return award;
   },
 
   redeemPoints: async (amount: number): Promise<RedeemResult> => {
@@ -125,24 +130,48 @@ export const rewards = {
     return parseSpin(data as Record<string, unknown>);
   },
 
-  /** Wallet available balance (R) — sum of earned reward points ÷ 100, same as DashboardTopBar. */
-  getAvailableWalletBalance: async (): Promise<number> => {
+  /**
+   * Current rewards balance (earned minus gift-card redemptions).
+   * Same metric as DashboardTopBar "Total Points" and Spend screen.
+   */
+  getRewardTotalPoints: async (): Promise<number> => {
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData.user?.id;
+    if (!userId) return 0;
+    return fetchRewardTotalPoints(supabase, userId);
+  },
+
+  /** Same as getRewardTotalPoints */
+  getRewardSpendablePoints: async (): Promise<number> => {
+    return rewards.getRewardTotalPoints();
+  },
+
+  /** Points earned today (positive transactions only), same as DashboardTopBar. */
+  getRewardTodayPoints: async (localDate?: string): Promise<number> => {
+    const dateStr = localDate ?? getLocalDateString();
     const { data: userData } = await supabase.auth.getUser();
     const userId = userData.user?.id;
     if (!userId) return 0;
 
     const { data: txns, error } = await supabase
       .from("reward_transactions")
-      .select("points_delta")
+      .select("points_delta, created_at")
       .eq("user_id", userId)
       .gt("points_delta", 0);
 
     if (error) {
-      console.error("[rewards] getAvailableWalletBalance:", error.message);
+      console.error("[rewards] getRewardTodayPoints:", error.message);
       return 0;
     }
 
-    const totalPoints = (txns ?? []).reduce((sum, row) => sum + Number(row.points_delta), 0);
+    return (txns ?? [])
+      .filter((row) => String(row.created_at).slice(0, 10) === dateStr)
+      .reduce((sum, row) => sum + Number(row.points_delta), 0);
+  },
+
+  /** Wallet available balance (R) — total earned reward points ÷ 100, same as DashboardTopBar. */
+  getAvailableWalletBalance: async (): Promise<number> => {
+    const totalPoints = await rewards.getRewardTotalPoints();
     return totalPoints / 100;
   },
 

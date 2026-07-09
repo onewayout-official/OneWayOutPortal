@@ -308,8 +308,6 @@ export const storage = {
       description: expense.description ?? null,
       account_id: expense.accountId ?? null,
     });
-    const expenseDate = normalizePgDateKey(expense.date);
-    await tryAwardTask("expense-log", { localDate: expenseDate });
   },
 
   deleteExpense: async (id: string): Promise<void> => {
@@ -555,6 +553,7 @@ export const storage = {
       { onConflict: "id" }
     );
     if (upsertError) console.error("[storage] saveIncome upsert error:", upsertError.message);
+    await tryAwardTask("monthly-budget-update");
   },
 
   // Budget expenses (onboarding / registration expense categories)
@@ -597,7 +596,6 @@ export const storage = {
       console.error("[storage] saveBudgetExpenses upsert error:", upsertError.message);
       return;
     }
-    await tryAwardTask("monthly-budget-update");
   },
 
   /** Spend screen: budget amount per category (from budget_expenses where category is one of the 7). */
@@ -941,6 +939,7 @@ export const storage = {
   /**
    * Record that the user visited/updated their budget today.
    * Upserts into `budget_activities (user_id, date)` — one row per day.
+   * Any budget-page activity also earns the daily "Log Today's Expenses" task.
    */
   logBudgetActivity: async (): Promise<void> => {
     const userId = await getCurrentUserId();
@@ -950,6 +949,7 @@ export const storage = {
       .from("budget_activities")
       .upsert({ user_id: userId, date: today }, { onConflict: "user_id,date" });
     if (error) console.error("[logBudgetActivity]", error.message);
+    await tryAwardTask("expense-log");
   },
 
   /**
@@ -1156,7 +1156,7 @@ export const storage = {
       supabase.from("income_allocations").select("income_id, account_id, amount").eq("user_id", userId),
       supabase.from("account_expense_allocations").select("account_id, expense_id, amount").eq("user_id", userId),
       supabase.from("account_transfers").select("from_account_id, to_account_id, amount").eq("user_id", userId),
-      supabase.from("reward_transactions").select("points_delta").eq("user_id", userId).gt("points_delta", 0),
+      supabase.from("reward_transactions").select("points_delta, created_at").eq("user_id", userId).gt("points_delta", 0),
     ]);
 
     const profile =
@@ -1185,11 +1185,24 @@ export const storage = {
       toAccountId: r.to_account_id,
       amount: Number(r.amount) || 0,
     }));
+    const rewardTransactionRows = (rewardTransactionsData.data ?? []) as {
+      points_delta: number;
+      created_at?: string;
+    }[];
     const walletBalance =
-      (rewardTransactionsData.data ?? []).reduce(
-        (sum: number, row: { points_delta: number }) => sum + Number(row.points_delta),
+      rewardTransactionRows.reduce(
+        (sum: number, row) => sum + Number(row.points_delta),
         0
       ) / 100;
+
+    // Calendar "Earn" ring: union of explicit earn_activities rows and any day the
+    // user actually earned reward points (positive reward_transactions).
+    const earnDateSet = new Set<string>(
+      (earnActivitiesData.data ?? []).map((r: { date: string }) => normalizePgDateKey(r.date))
+    );
+    for (const row of rewardTransactionRows) {
+      if (row.created_at) earnDateSet.add(String(row.created_at).slice(0, 10));
+    }
 
     return {
       profile,
@@ -1203,7 +1216,7 @@ export const storage = {
         date: normalizePgDateKey(r.date),
         mood: r.mood as DailyMood["mood"],
       })),
-      earnDates: (earnActivitiesData.data ?? []).map((r: { date: string }) => normalizePgDateKey(r.date)),
+      earnDates: Array.from(earnDateSet),
       budgetActivityDates: (budgetActivitiesData.data ?? []).map((r: { date: string }) => normalizePgDateKey(r.date)),
       onboarding:
         onboardingData.data && !onboardingData.error

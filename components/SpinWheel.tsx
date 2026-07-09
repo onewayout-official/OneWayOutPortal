@@ -7,6 +7,7 @@ import {
   SPIN_WHEEL_BRAND,
 } from "@/lib/gamification/config";
 import { rewards } from "@/lib/gamification/rewards";
+import { notifyRewardPointsUpdated } from "@/lib/gamification/rewardPoints";
 import type { GamificationState, SpinResult } from "@/types";
 import type { SpinMode } from "@/lib/gamification/config";
 import { Sparkles } from "lucide-react";
@@ -82,6 +83,7 @@ export default function SpinWheel({
         freeSpinAvailable: mode === "free" ? false : state.freeSpinAvailable,
         spinTokens: mode === "token" ? Math.max(0, state.spinTokens - 1) : state.spinTokens,
       });
+      notifyRewardPointsUpdated();
       if (mode === "free") {
         onFreeSpinComplete?.();
       }
