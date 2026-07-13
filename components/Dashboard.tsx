@@ -4,11 +4,12 @@ import { useState, useEffect } from "react";
 import { UserProfile, Asset } from "@/types";
 import { storage } from "@/lib/storage";
 import { computePooledExpenses, computePooledIncome } from "@/lib/budgetTotals";
-import { computeMembershipProgress } from "@/lib/membershipProgress";
+import { computeMembershipProgress, promoteMembershipTierIfEligible } from "@/lib/membershipProgress";
 import MembershipQuestMap from "@/components/MembershipQuestMap";
 import { Counselor, resolveCounselorImage } from "@/lib/counselors";
 import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
 import { getAuthHeader } from "@/lib/authHeader";
+import { getLocalDateString } from "@/lib/gamification/config";
 import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile } from "lucide-react";
 import Link from "next/link";
 import {
@@ -242,6 +243,29 @@ export default function Dashboard() {
       const totalMinPayments = debts.reduce((sum, debt) => sum + debt.minimumPayment, 0);
       setTotalDebt(totalDebtAmount);
       setMonthlyMinimumPayments(totalMinPayments);
+
+      const financialSavingsTotal = loadedAccountTypeBalances
+        .filter((b) => ["Cash", "Savings", "Bank"].includes(b.type))
+        .reduce((sum, b) => sum + Math.max(0, b.total), 0);
+
+      const investmentAssetTotal =
+        Math.max(0, loadedAccountTypeBalances.find((b) => b.type === "Investment")?.total ?? 0) +
+        (assetsForCharts || [])
+          .filter((a: { expenseType?: string; expenses?: string }) =>
+            /invest/i.test(a.expenseType ?? a.expenses ?? "")
+          )
+          .reduce((sum: number, a: { personal?: number }) => sum + (a.personal ?? 0), 0);
+
+      const promotion = await promoteMembershipTierIfEligible({
+        profile: userProfile,
+        totalDebt: totalDebtAmount,
+        totalSavings: financialSavingsTotal,
+        investmentAssetTotal,
+      });
+
+      if (promotion.promoted) {
+        setProfile(promotion.profile);
+      }
       } catch (error) {
         console.error("Failed to load dashboard data:", error);
       } finally {
@@ -352,7 +376,7 @@ export default function Dashboard() {
   const today = new Date();
 
   const getDateStatus = (date: Date): { mood: boolean; earned: boolean; budget: boolean } => {
-    const key = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+    const key = getLocalDateString(date);
     return {
       mood: moodDates.has(key),
       earned: earnDates.has(key),
@@ -409,6 +433,8 @@ export default function Dashboard() {
   // Ring with color portions: yellow = mood, red = earned, green = budget (each 120°)
   const DateCircle = ({ status }: { status: { mood: boolean; earned: boolean; budget: boolean } }) => {
     const { mood, earned, budget } = status;
+    if (!mood && !earned && !budget) return null;
+
     const r = 14;
     const circ = 2 * Math.PI * r;
     const segment = circ / 3; // 120° each
@@ -549,8 +575,8 @@ export default function Dashboard() {
     }
   };
 
-  const totalSavings = accountTypeBalances
-    .filter((b) => ["Cash", "Savings", "Bank", "Wallet"].includes(b.type))
+  const financialSavingsTotal = accountTypeBalances
+    .filter((b) => ["Cash", "Savings", "Bank"].includes(b.type))
     .reduce((sum, b) => sum + Math.max(0, b.total), 0);
 
   const investmentAssetTotal =
@@ -564,7 +590,7 @@ export default function Dashboard() {
   const membershipProgress = computeMembershipProgress({
     profile,
     totalDebt,
-    totalSavings,
+    totalSavings: financialSavingsTotal,
     investmentAssetTotal,
   });
 

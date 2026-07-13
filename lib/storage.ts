@@ -12,7 +12,7 @@ import {
 } from "@/types";
 import { supabase } from "@/lib/supabase";
 import { formatE164 } from "@/lib/phone";
-import { SIGNUP_BONUS_POINTS } from "@/lib/gamification/config";
+import { SIGNUP_BONUS_POINTS, getLocalDateString, getLocalDateStringFromTimestamp } from "@/lib/gamification/config";
 import { tryAwardTask } from "@/lib/gamification/rewards";
 import { computeAccountTypeBalances } from "@/lib/budgetAccountBalances";
 
@@ -41,6 +41,59 @@ function normalizePgDateKey(d: string): string {
   const s = String(d).trim();
   if (s.length >= 10) return s.slice(0, 10);
   return s;
+}
+
+/** Reward tasks that represent user-driven earn activity on the dashboard calendar. */
+const CALENDAR_EARN_TASK_SOURCES = new Set([
+  "daily-login",
+  "daily-mood",
+  "expense-log",
+  "video-quiz",
+  "counselling-session",
+  "counselling-reflection",
+  "book-life-counseling",
+  "plan-line-item",
+  "plan-section-complete",
+  "full-plan-complete",
+  "monthly-budget-update",
+  "monthly-expenses-update",
+  "update-budget",
+  "monthly-review-complete",
+  "month-ended-green",
+  "month-ended-red-logged",
+  "buddy-mentor-session",
+  "leave-feedback",
+  "register-webinar",
+  "book-financial-planning",
+  "connect-transunion-astute",
+  "transunion-connection",
+  "astute-connection",
+]);
+
+function shouldSuppressCalendarActivityDate(
+  activityDate: string,
+  accountCreatedAt?: string
+): boolean {
+  const key = normalizePgDateKey(activityDate);
+  if (!key) return true;
+
+  const localToday = getLocalDateString();
+  const utcToday = new Date().toISOString().slice(0, 10);
+
+  // Rows stamped with UTC date while the local calendar had already rolled forward.
+  if (localToday > utcToday && key === utcToday) {
+    return true;
+  }
+
+  // Activity dated before the account existed in the user's local timezone.
+  if (accountCreatedAt) {
+    const accountCreatedLocal = getLocalDateStringFromTimestamp(accountCreatedAt);
+    if (key < accountCreatedLocal) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 function splitNameParts(name: string): { firstName: string; lastName: string } {
@@ -151,7 +204,10 @@ export const storage = {
     // If no profile exists (e.g. trigger didn't run or user created before migration), create one
     if (!data) {
       const authUserPhone = (authUser as { phone?: string }).phone ?? null;
-      const metadataName = (authUser.user_metadata?.name as string) || "";
+      const metadataName =
+        (authUser.user_metadata?.name as string) ||
+        (authUser.user_metadata?.full_name as string) ||
+        "";
       const metadataFirstName = (authUser.user_metadata?.first_name as string) || "";
       const metadataLastName = (authUser.user_metadata?.last_name as string) || "";
       const fallbackNameParts = splitNameParts(metadataName);
@@ -944,7 +1000,7 @@ export const storage = {
   logBudgetActivity: async (): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString();
     const { error } = await supabase
       .from("budget_activities")
       .upsert({ user_id: userId, date: today }, { onConflict: "user_id,date" });
@@ -959,7 +1015,7 @@ export const storage = {
   logEarnActivity: async (): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) return;
-    const today = new Date().toISOString().slice(0, 10);
+    const today = getLocalDateString();
     const { error } = await supabase
       .from("earn_activities")
       .upsert({ user_id: userId, date: today }, { onConflict: "user_id,date" });
@@ -985,7 +1041,7 @@ export const storage = {
     const month = now.getMonth();
     const monthStart = `${year}-${String(month + 1).padStart(2, "0")}-01`;
     const nextMonthStart = `${month === 11 ? year + 1 : year}-${String(month === 11 ? 1 : month + 2).padStart(2, "0")}-01`;
-    const today = `${year}-${String(month + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+    const today = getLocalDateString();
 
     const [
       profileRow,
@@ -1156,7 +1212,7 @@ export const storage = {
       supabase.from("income_allocations").select("income_id, account_id, amount").eq("user_id", userId),
       supabase.from("account_expense_allocations").select("account_id, expense_id, amount").eq("user_id", userId),
       supabase.from("account_transfers").select("from_account_id, to_account_id, amount").eq("user_id", userId),
-      supabase.from("reward_transactions").select("points_delta, created_at").eq("user_id", userId).gt("points_delta", 0),
+      supabase.from("reward_transactions").select("points_delta, created_at, source").eq("user_id", userId).gt("points_delta", 0),
     ]);
 
     const profile =
@@ -1195,13 +1251,24 @@ export const storage = {
         0
       ) / 100;
 
-    // Calendar "Earn" ring: union of explicit earn_activities rows and any day the
-    // user actually earned reward points (positive reward_transactions).
-    const earnDateSet = new Set<string>(
-      (earnActivitiesData.data ?? []).map((r: { date: string }) => normalizePgDateKey(r.date))
-    );
+    const accountCreatedAt = profile?.createdAt;
+
+    // Calendar "Earn" ring: explicit earn_activities rows plus user-driven reward tasks.
+    const earnDateSet = new Set<string>();
+    for (const row of earnActivitiesData.data ?? []) {
+      const date = normalizePgDateKey((row as { date: string }).date);
+      if (!shouldSuppressCalendarActivityDate(date, accountCreatedAt)) {
+        earnDateSet.add(date);
+      }
+    }
     for (const row of rewardTransactionRows) {
-      if (row.created_at) earnDateSet.add(String(row.created_at).slice(0, 10));
+      const source = String((row as { source?: string }).source ?? "");
+      if (!CALENDAR_EARN_TASK_SOURCES.has(source)) continue;
+      if (!row.created_at) continue;
+      const date = getLocalDateStringFromTimestamp(String(row.created_at));
+      if (!shouldSuppressCalendarActivityDate(date, accountCreatedAt)) {
+        earnDateSet.add(date);
+      }
     }
 
     return {
@@ -1217,7 +1284,9 @@ export const storage = {
         mood: r.mood as DailyMood["mood"],
       })),
       earnDates: Array.from(earnDateSet),
-      budgetActivityDates: (budgetActivitiesData.data ?? []).map((r: { date: string }) => normalizePgDateKey(r.date)),
+      budgetActivityDates: (budgetActivitiesData.data ?? [])
+        .map((r: { date: string }) => normalizePgDateKey(r.date))
+        .filter((date) => !shouldSuppressCalendarActivityDate(date, accountCreatedAt)),
       onboarding:
         onboardingData.data && !onboardingData.error
           ? {

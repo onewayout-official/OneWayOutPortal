@@ -1,7 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import { fetchRewardTotalPoints, notifyRewardPointsAwarded } from "@/lib/gamification/rewardPoints";
 import type { AwardTaskResult, GamificationState, RedeemResult, SpinResult } from "@/types";
-import { getLocalDateString, type GamificationTaskId, type SpinMode } from "./config";
+import { getLocalDateString, getLocalDateStringFromTimestamp, type GamificationTaskId, type SpinMode } from "./config";
 
 export interface AwardTaskOptions {
   localDate?: string;
@@ -165,7 +165,7 @@ export const rewards = {
     }
 
     return (txns ?? [])
-      .filter((row) => String(row.created_at).slice(0, 10) === dateStr)
+      .filter((row) => getLocalDateStringFromTimestamp(String(row.created_at)) === dateStr)
       .reduce((sum, row) => sum + Number(row.points_delta), 0);
   },
 

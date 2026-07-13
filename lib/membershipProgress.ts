@@ -3,6 +3,8 @@ import {
   DESKTOP_TIER_ANCHORS,
   journeyProgressAtTier,
 } from "@/lib/membershipQuestPaths";
+import { storage } from "@/lib/storage";
+import { tryAwardTask } from "@/lib/gamification/rewards";
 import type {
   DebtStatus,
   InvestmentStatus,
@@ -40,6 +42,7 @@ export interface MembershipProgress {
 export interface MembershipProgressContext {
   profile: UserProfile;
   totalDebt?: number;
+  /** Cash, savings, and bank balances only — excludes gamification wallet points. */
   totalSavings?: number;
   investmentAssetTotal?: number;
 }
@@ -54,8 +57,8 @@ function normalizeTier(membership?: MembershipTier): MembershipTier {
   return "Debt Crusher";
 }
 
-function hasSavings(savingsStatus?: SavingsStatus, totalSavings = 0): boolean {
-  return savingsStatus === "started" || savingsStatus === "growing" || totalSavings > 0;
+function hasSavings(savingsStatus?: SavingsStatus, cashSavingsTotal = 0): boolean {
+  return savingsStatus === "started" || savingsStatus === "growing" || cashSavingsTotal > 0;
 }
 
 function debtOnTrack(debtStatus?: DebtStatus): boolean {
@@ -178,5 +181,44 @@ export function computeMembershipProgress(ctx: MembershipProgressContext): Membe
     nextMilestoneTitle: tierContent.nextMilestoneTitle,
     nextMilestoneBody: tierContent.nextMilestoneBody,
     memberSinceLabel,
+  };
+}
+
+export interface MembershipPromotionResult {
+  profile: UserProfile;
+  promoted: boolean;
+  promotedTiers: MembershipTier[];
+}
+
+/**
+ * When every quest for the current tier is complete, advance membership to the
+ * next tier, persist the profile, and award tier-promotion points (once per tier).
+ */
+export async function promoteMembershipTierIfEligible(
+  ctx: MembershipProgressContext
+): Promise<MembershipPromotionResult> {
+  let profile = ctx.profile;
+  const promotedTiers: MembershipTier[] = [];
+  const financialCtx = {
+    totalDebt: ctx.totalDebt,
+    totalSavings: ctx.totalSavings,
+    investmentAssetTotal: ctx.investmentAssetTotal,
+  };
+
+  while (true) {
+    const progress = computeMembershipProgress({ profile, ...financialCtx });
+    if (!progress.nextTier || progress.tierProgress < 100) break;
+
+    const nextTier = progress.nextTier;
+    profile = { ...profile, membership: nextTier };
+    await storage.saveProfile(profile);
+    await tryAwardTask("tier-promotion", { metadata: { tier: nextTier } });
+    promotedTiers.push(nextTier);
+  }
+
+  return {
+    profile,
+    promoted: promotedTiers.length > 0,
+    promotedTiers,
   };
 }

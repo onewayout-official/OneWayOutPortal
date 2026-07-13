@@ -18,3 +18,20 @@ export function journeyProgressAtTier(
 
   return Math.min(99, Math.round(blended));
 }
+
+/** Player marker stays on the current tier's island until membership advances. */
+export function playerProgressAtTier(
+  tierIndex: number,
+  tierProgress: number,
+  anchors: readonly number[]
+): number {
+  if (tierIndex >= anchors.length - 1) return 100;
+
+  const start = anchors[tierIndex] ?? 0;
+  const end = anchors[tierIndex + 1] ?? 100;
+  const segmentSpan = end - start;
+  const maxInSegment = segmentSpan * 0.88;
+  const blended = start + (tierProgress / 100) * maxInSegment;
+
+  return Math.min(Math.round(end) - 1, Math.round(blended));
+}

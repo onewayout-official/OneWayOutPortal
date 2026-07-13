@@ -344,6 +344,13 @@ export function getLocalDateString(date = new Date()): string {
   return `${y}-${m}-${d}`;
 }
 
+/** Map a DB timestamptz (UTC ISO string) to the user's local yyyy-MM-dd. */
+export function getLocalDateStringFromTimestamp(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso.slice(0, 10);
+  return getLocalDateString(d);
+}
+
 function getMonthKey(localDate: string): string {
   return localDate.slice(0, 7);
 }

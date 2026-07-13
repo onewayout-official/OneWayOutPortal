@@ -9,6 +9,7 @@ import {
   DESKTOP_TIER_ANCHORS,
   MOBILE_TIER_ANCHORS,
   journeyProgressAtTier,
+  playerProgressAtTier,
 } from "@/lib/membershipQuestPaths";
 
 const TIER_VISUALS: Record<
@@ -116,6 +117,14 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
     currentTierIndex >= MEMBERSHIP_TIERS.length - 1
       ? 100
       : journeyProgressAtTier(currentTierIndex, tierProgress, MOBILE_TIER_ANCHORS);
+  const desktopPlayerProgress =
+    currentTierIndex >= MEMBERSHIP_TIERS.length - 1
+      ? 100
+      : playerProgressAtTier(currentTierIndex, tierProgress, DESKTOP_TIER_ANCHORS);
+  const mobilePlayerProgress =
+    currentTierIndex >= MEMBERSHIP_TIERS.length - 1
+      ? 100
+      : playerProgressAtTier(currentTierIndex, tierProgress, MOBILE_TIER_ANCHORS);
 
   useEffect(() => {
     const updatePathProgress = (
@@ -133,17 +142,17 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
 
     updatePathProgress(
       desktopPathRef.current,
-      desktopJourneyProgress,
+      desktopPlayerProgress,
       setDesktopPathLength,
       setDesktopPlayerPos
     );
     updatePathProgress(
       mobilePathRef.current,
-      mobileJourneyProgress,
+      mobilePlayerProgress,
       setMobilePathLength,
       setMobilePlayerPos
     );
-  }, [desktopJourneyProgress, mobileJourneyProgress]);
+  }, [desktopPlayerProgress, mobilePlayerProgress]);
 
   const currentVisual = TIER_VISUALS[currentTier];
 

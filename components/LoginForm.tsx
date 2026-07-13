@@ -108,7 +108,7 @@ export default function LoginForm() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
-  const { login } = useAuth();
+  const { login, loginWithGoogle } = useAuth();
 
   const redirectAfterAuth = async () => {
     const profile = await storage.getProfile();
@@ -139,8 +139,14 @@ export default function LoginForm() {
     }
   };
 
-  const handleGoogleLogin = () => {
-    console.log("Google sign-in triggered");
+  const handleGoogleLogin = async () => {
+    setError("");
+    setIsLoading(true);
+    const result = await loginWithGoogle();
+    if (!result.success) {
+      setError(result.error || "Google sign-in failed.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -150,10 +156,13 @@ export default function LoginForm() {
         type="button"
         className="btn-google"
         onClick={handleGoogleLogin}
+        disabled={isLoading}
       >
         <GoogleIcon />
         Continue with Google
       </button>
+
+      {error && activeTab !== "email" ? <p className="terms-note">{error}</p> : null}
 
       <div className="auth-divider">
         <span>or continue with</span>

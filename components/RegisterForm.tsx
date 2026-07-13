@@ -123,7 +123,7 @@ type RegisterStep = "details" | "otp" | "optional";
 
 export default function RegisterForm() {
   const router = useRouter();
-  const { register, updatePassword } = useAuth();
+  const { register, updatePassword, loginWithGoogle } = useAuth();
   const [activeTab, setActiveTab] = useState<RegisterTab>("phone");
   const [step, setStep] = useState<RegisterStep>("details");
   const [phone, setPhone] = useState("");
@@ -236,8 +236,14 @@ export default function RegisterForm() {
     }
   };
 
-  const handleGoogleSignup = () => {
-    console.log("Google sign-up triggered");
+  const handleGoogleSignup = async () => {
+    setError("");
+    setIsLoading(true);
+    const result = await loginWithGoogle();
+    if (!result.success) {
+      setError(result.error || "Google sign-up failed.");
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -247,10 +253,13 @@ export default function RegisterForm() {
         type="button"
         className="btn-google"
         onClick={handleGoogleSignup}
+        disabled={isLoading}
       >
         <GoogleIcon />
         Continue with Google
       </button>
+
+      {error ? <p className="field-error">{error}</p> : null}
 
       <div className="auth-divider">
         <span>or sign up with</span>
@@ -363,8 +372,6 @@ export default function RegisterForm() {
                   />
                 </div>
               </div>
-
-              {error ? <p className="field-error">{error}</p> : null}
 
               <PhoneOTPForm
                 mode="signup"
@@ -535,11 +542,9 @@ export default function RegisterForm() {
                 <EyeIcon off={showPassword} />
               </button>
             </div>
-          </div>
+              </div>
 
-          {error ? <p className="field-error">{error}</p> : null}
-
-          <button
+              <button
             id="btn-signup-submit"
             type="submit"
             className="btn-primary"
