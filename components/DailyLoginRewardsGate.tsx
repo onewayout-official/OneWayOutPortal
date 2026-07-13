@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import { rewards } from "@/lib/gamification/rewards";
+import { storage } from "@/lib/storage";
 import { wasDailyPopupDismissed, markDailyPopupDismissed } from "@/lib/gamification/dailyPopup";
 import type { GamificationState } from "@/types";
 import DailyLoginRewardsModal from "@/components/DailyLoginRewardsModal";
@@ -31,6 +32,15 @@ export default function DailyLoginRewardsGate({ children }: { children: React.Re
 
     async function run() {
       if (wasDailyPopupDismissed()) return;
+
+      // Do not fire the daily-login reward / spin wheel until the user has
+      // finished onboarding, otherwise it pops up mid-signup on /onboarding.
+      const profile = await storage.getProfile();
+      if (cancelled) return;
+      const onboarded = Boolean(
+        profile && (profile.onboardingCompleted || profile.onboardingSkipped)
+      );
+      if (!onboarded) return;
 
       const loginResult = await rewards.awardTask("daily-login");
       const state = await rewards.getGamificationState();

@@ -5,6 +5,11 @@ import { Shield, Crown, Building2, Gem, Lock, MapPin, Check, Sparkles } from "lu
 import type { MembershipTier } from "@/types";
 import type { MembershipProgress } from "@/lib/membershipProgress";
 import { MEMBERSHIP_TIERS } from "@/lib/membershipProgress";
+import {
+  DESKTOP_TIER_ANCHORS,
+  MOBILE_TIER_ANCHORS,
+  journeyProgressAtTier,
+} from "@/lib/membershipQuestPaths";
 
 const TIER_VISUALS: Record<
   MembershipTier,
@@ -103,22 +108,42 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
     memberSinceLabel,
   } = progress;
 
+  const desktopJourneyProgress =
+    currentTierIndex >= MEMBERSHIP_TIERS.length - 1
+      ? 100
+      : journeyProgressAtTier(currentTierIndex, tierProgress, DESKTOP_TIER_ANCHORS);
+  const mobileJourneyProgress =
+    currentTierIndex >= MEMBERSHIP_TIERS.length - 1
+      ? 100
+      : journeyProgressAtTier(currentTierIndex, tierProgress, MOBILE_TIER_ANCHORS);
+
   useEffect(() => {
     const updatePathProgress = (
       path: SVGPathElement | null,
+      journeyPercent: number,
       setLength: (length: number) => void,
       setPosition: (position: { x: number; y: number }) => void
     ) => {
       if (!path) return;
       const len = path.getTotalLength();
       setLength(len);
-      const pt = path.getPointAtLength((journeyProgress / 100) * len);
+      const pt = path.getPointAtLength((journeyPercent / 100) * len);
       setPosition({ x: pt.x, y: pt.y });
     };
 
-    updatePathProgress(desktopPathRef.current, setDesktopPathLength, setDesktopPlayerPos);
-    updatePathProgress(mobilePathRef.current, setMobilePathLength, setMobilePlayerPos);
-  }, [journeyProgress]);
+    updatePathProgress(
+      desktopPathRef.current,
+      desktopJourneyProgress,
+      setDesktopPathLength,
+      setDesktopPlayerPos
+    );
+    updatePathProgress(
+      mobilePathRef.current,
+      mobileJourneyProgress,
+      setMobilePathLength,
+      setMobilePlayerPos
+    );
+  }, [desktopJourneyProgress, mobileJourneyProgress]);
 
   const currentVisual = TIER_VISUALS[currentTier];
 
@@ -220,7 +245,7 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
                 stroke={currentVisual.pathFill}
                 strokeWidth="8"
                 strokeLinecap="round"
-                strokeDasharray={`${(journeyProgress / 100) * desktopPathLength} ${desktopPathLength}`}
+                strokeDasharray={`${(desktopJourneyProgress / 100) * desktopPathLength} ${desktopPathLength}`}
                 className="transition-all duration-700 ease-out"
               />
             )}
@@ -390,7 +415,7 @@ export default function MembershipQuestMap({ progress }: MembershipQuestMapProps
                 stroke={currentVisual.pathFill}
                 strokeWidth="8"
                 strokeLinecap="round"
-                strokeDasharray={`${(journeyProgress / 100) * mobilePathLength} ${mobilePathLength}`}
+                strokeDasharray={`${(mobileJourneyProgress / 100) * mobilePathLength} ${mobilePathLength}`}
                 className="transition-all duration-700 ease-out"
               />
             )}

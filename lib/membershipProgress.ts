@@ -1,4 +1,8 @@
 import { getMembershipTierContent } from "@/lib/membershipTierContent";
+import {
+  DESKTOP_TIER_ANCHORS,
+  journeyProgressAtTier,
+} from "@/lib/membershipQuestPaths";
 import type {
   DebtStatus,
   InvestmentStatus,
@@ -153,14 +157,10 @@ export function computeMembershipProgress(ctx: MembershipProgressContext): Membe
   const tierProgress =
     currentTier === "Legacy Builder" ? 100 : questProgress(questSteps);
 
-  const segmentSize = 100 / (MEMBERSHIP_TIERS.length - 1);
   const journeyProgress =
     currentTier === "Legacy Builder"
       ? 100
-      : Math.min(
-          99,
-          Math.round(currentTierIndex * segmentSize + (tierProgress / 100) * segmentSize)
-        );
+      : journeyProgressAtTier(currentTierIndex, tierProgress, DESKTOP_TIER_ANCHORS);
 
   const tierContent = getMembershipTierContent(currentTier);
   const memberSinceLabel = new Date(ctx.profile.createdAt).toLocaleDateString("en-US", {
