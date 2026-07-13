@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { storage } from "@/lib/storage";
+import { getPostAuthDestination } from "@/lib/authRouting";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -54,17 +55,7 @@ export default function AuthCallbackPage() {
         const profile = await storage.getProfile();
         if (!isMounted) return;
 
-        if (profile?.role === "counselor") {
-          router.replace("/coach");
-          return;
-        }
-
-        if (profile?.onboardingCompleted || profile?.onboardingSkipped) {
-          router.replace("/");
-          return;
-        }
-
-        router.replace("/onboarding");
+        router.replace(getPostAuthDestination(profile));
       } catch (err) {
         if (!isMounted) return;
         const message = err instanceof Error ? err.message : "Sign-in failed.";

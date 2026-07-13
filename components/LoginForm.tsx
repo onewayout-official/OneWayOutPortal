@@ -6,6 +6,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
 import PhoneOTPForm from "@/components/PhoneOTPForm";
+import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
+import { getPostAuthDestination } from "@/lib/authRouting";
 
 function GoogleIcon() {
   return (
@@ -102,7 +104,10 @@ function EyeIcon({ off }: { off?: boolean }) {
 type AuthTab = "phone" | "email";
 
 export default function LoginForm() {
-  const [activeTab, setActiveTab] = useState<AuthTab>("phone");
+  // Default to email while WhatsApp OTP is disabled.
+  const [activeTab, setActiveTab] = useState<AuthTab>(
+    WHATSAPP_OTP_ENABLED ? "phone" : "email"
+  );
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
@@ -112,7 +117,7 @@ export default function LoginForm() {
 
   const redirectAfterAuth = async () => {
     const profile = await storage.getProfile();
-    router.push(profile?.role === "counselor" ? "/coach" : "/");
+    router.push(getPostAuthDestination(profile));
   };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -168,34 +173,37 @@ export default function LoginForm() {
         <span>or continue with</span>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          marginBottom: "1.25rem",
-        }}
-      >
-        <button
-          type="button"
-          className={activeTab === "phone" ? "btn-primary" : "btn-google"}
-          style={{ flex: 1, fontSize: "0.85rem" }}
-          onClick={() => setActiveTab("phone")}
-          id="tab-login-phone"
+      {WHATSAPP_OTP_ENABLED ? (
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            marginBottom: "1.25rem",
+          }}
         >
-          Mobile
-        </button>
-        <button
-          type="button"
-          className={activeTab === "email" ? "btn-primary" : "btn-google"}
-          style={{ flex: 1, fontSize: "0.85rem" }}
-          onClick={() => setActiveTab("email")}
-          id="tab-login-email"
-        >
-          Email
-        </button>
-      </div>
+          <button
+            type="button"
+            className={activeTab === "phone" ? "btn-primary" : "btn-google"}
+            style={{ flex: 1, fontSize: "0.85rem" }}
+            onClick={() => setActiveTab("phone")}
+            id="tab-login-phone"
+          >
+            Mobile
+          </button>
+          <button
+            type="button"
+            className={activeTab === "email" ? "btn-primary" : "btn-google"}
+            style={{ flex: 1, fontSize: "0.85rem" }}
+            onClick={() => setActiveTab("email")}
+            id="tab-login-email"
+          >
+            Email
+          </button>
+        </div>
+      ) : null}
 
-      {activeTab === "phone" ? (
+      {/* WhatsApp OTP mobile login — re-enable with WHATSAPP_OTP_ENABLED */}
+      {WHATSAPP_OTP_ENABLED && activeTab === "phone" ? (
         <PhoneOTPForm mode="login" onSuccess={redirectAfterAuth} submitLabel="Send WhatsApp code" />
       ) : (
         <form onSubmit={handleSubmit} noValidate>

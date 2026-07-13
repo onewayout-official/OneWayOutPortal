@@ -23,16 +23,17 @@ interface AuthContextType {
   register: (payload: RegisterPayload) => Promise<{ success: boolean; error?: string }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   // Phone OTP via WhatsApp (metadata optional for signup so new user gets name/email in auth)
+  // mode "link" attaches a verified phone to the current session (e.g. after Google OAuth)
   sendOTP: (
     phone: string,
     metadata?: { name?: string; email?: string; firstName?: string; lastName?: string },
-    mode?: "login" | "signup"
+    mode?: "login" | "signup" | "link"
   ) => Promise<{ success: boolean; error?: string }>;
   verifyOTP: (
     phone: string,
     token: string,
     metadata?: { name?: string; email?: string; firstName?: string; lastName?: string },
-    mode?: "login" | "signup"
+    mode?: "login" | "signup" | "link"
   ) => Promise<{ success: boolean; error?: string; session?: unknown }>;
   loginWithPhone: (phone: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => void;
@@ -210,15 +211,26 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const sendOTP = async (
     phone: string,
     metadata?: { name?: string; email?: string; firstName?: string; lastName?: string },
-    mode: "login" | "signup" = "login"
+    mode: "login" | "signup" | "link" = "login"
   ): Promise<{ success: boolean; error?: string }> => {
     if (!isSupabaseConfigured()) {
       return { success: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (same folder as package.json), then restart the dev server." };
     }
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (mode === "link") {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          return { success: false, error: "You must be signed in to add a phone number." };
+        }
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
       const response = await fetch("/api/auth/whatsapp-otp/send", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ phone, metadata, mode }),
       });
       const data = await response.json();
@@ -236,20 +248,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     phone: string,
     token: string,
     metadata?: { name?: string; email?: string; firstName?: string; lastName?: string },
-    mode: "login" | "signup" = "login"
+    mode: "login" | "signup" | "link" = "login"
   ): Promise<{ success: boolean; error?: string; session?: unknown }> => {
     if (!isSupabaseConfigured()) {
       return { success: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (same folder as package.json), then restart the dev server." };
     }
     try {
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (mode === "link") {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+        if (!session?.access_token) {
+          return { success: false, error: "You must be signed in to add a phone number." };
+        }
+        headers.Authorization = `Bearer ${session.access_token}`;
+      }
+
       const response = await fetch("/api/auth/whatsapp-otp/verify", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({ phone, code: token, metadata, mode }),
       });
       const data = await response.json();
       if (!response.ok) {
         return { success: false, error: data.error ?? "Failed to verify OTP." };
+      }
+
+      // Link mode keeps the existing Google (or email) session; no new tokens.
+      if (mode === "link" && data.linked) {
+        return { success: true };
       }
 
       if (data.access_token && data.refresh_token) {

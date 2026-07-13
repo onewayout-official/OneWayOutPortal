@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter, usePathname } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
+import { getPostAuthDestination } from "@/lib/authRouting";
 
 export default function AuthRedirect({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -15,17 +16,7 @@ export default function AuthRedirect({ children }: { children: React.ReactNode }
       if (pathname === "/register") return;
 
       storage.getProfile().then((profile) => {
-        if (profile?.role === "counselor") {
-          router.push("/coach");
-          return;
-        }
-        const canUseApp =
-          profile && (profile.onboardingCompleted || profile.onboardingSkipped);
-        if (canUseApp) {
-          router.push("/");
-        } else if (pathname !== "/register") {
-          router.push("/onboarding");
-        }
+        router.push(getPostAuthDestination(profile));
       });
     }
   }, [isAuthenticated, isLoading, router, pathname]);
@@ -55,5 +46,3 @@ export default function AuthRedirect({ children }: { children: React.ReactNode }
 
   return <>{children}</>;
 }
-
-

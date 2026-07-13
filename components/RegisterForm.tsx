@@ -6,7 +6,8 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
 import PhoneOTPForm from "@/components/PhoneOTPForm";
-import { formatE164 } from "@/lib/phone";
+import { formatE164, isValidPhone } from "@/lib/phone";
+import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
 
 function GoogleIcon() {
   return (
@@ -124,7 +125,10 @@ type RegisterStep = "details" | "otp" | "optional";
 export default function RegisterForm() {
   const router = useRouter();
   const { register, updatePassword, loginWithGoogle } = useAuth();
-  const [activeTab, setActiveTab] = useState<RegisterTab>("phone");
+  // Default to email while WhatsApp OTP is disabled; Mobile tab needs OTP for account creation.
+  const [activeTab, setActiveTab] = useState<RegisterTab>(
+    WHATSAPP_OTP_ENABLED ? "phone" : "email"
+  );
   const [step, setStep] = useState<RegisterStep>("details");
   const [phone, setPhone] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -197,6 +201,10 @@ export default function RegisterForm() {
       setError("Please enter your phone number.");
       return;
     }
+    if (!isValidPhone(phone)) {
+      setError("Please enter a valid mobile number (e.g. +27 79 123 4567).");
+      return;
+    }
     if (form.password.length < 6) {
       setError("Password must be at least 6 characters long.");
       return;
@@ -265,41 +273,44 @@ export default function RegisterForm() {
         <span>or sign up with</span>
       </div>
 
-      <div
-        style={{
-          display: "flex",
-          gap: "0.5rem",
-          marginBottom: "1.25rem",
-        }}
-      >
-        <button
-          type="button"
-          className={activeTab === "phone" ? "btn-primary" : "btn-google"}
-          style={{ flex: 1, fontSize: "0.85rem" }}
-          onClick={() => {
-            setActiveTab("phone");
-            setStep("details");
-            setError("");
+      {WHATSAPP_OTP_ENABLED ? (
+        <div
+          style={{
+            display: "flex",
+            gap: "0.5rem",
+            marginBottom: "1.25rem",
           }}
-          id="tab-register-phone"
         >
-          Mobile
-        </button>
-        <button
-          type="button"
-          className={activeTab === "email" ? "btn-primary" : "btn-google"}
-          style={{ flex: 1, fontSize: "0.85rem" }}
-          onClick={() => {
-            setActiveTab("email");
-            setError("");
-          }}
-          id="tab-register-email"
-        >
-          Email
-        </button>
-      </div>
+          <button
+            type="button"
+            className={activeTab === "phone" ? "btn-primary" : "btn-google"}
+            style={{ flex: 1, fontSize: "0.85rem" }}
+            onClick={() => {
+              setActiveTab("phone");
+              setStep("details");
+              setError("");
+            }}
+            id="tab-register-phone"
+          >
+            Mobile
+          </button>
+          <button
+            type="button"
+            className={activeTab === "email" ? "btn-primary" : "btn-google"}
+            style={{ flex: 1, fontSize: "0.85rem" }}
+            onClick={() => {
+              setActiveTab("email");
+              setError("");
+            }}
+            id="tab-register-email"
+          >
+            Email
+          </button>
+        </div>
+      ) : null}
 
-      {activeTab === "phone" ? (
+      {/* WhatsApp OTP mobile signup — re-enable with WHATSAPP_OTP_ENABLED */}
+      {WHATSAPP_OTP_ENABLED && activeTab === "phone" ? (
         <>
           {step === "details" ? (
             <form

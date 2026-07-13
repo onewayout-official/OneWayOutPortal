@@ -3,6 +3,7 @@ import { formatE164, isValidPhone } from "@/lib/phone";
 import { createAndStoreOTP } from "@/lib/otp";
 import { sendWhatsAppOTP, isTwilioConfigured } from "@/lib/twilio";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getAuthUserFromRequest } from "@/lib/requestAuth";
 
 interface SendBody {
   phone?: string;
@@ -12,7 +13,7 @@ interface SendBody {
     email?: string;
     name?: string;
   };
-  mode?: "login" | "signup";
+  mode?: "login" | "signup" | "link";
 }
 
 export async function POST(request: NextRequest) {
@@ -39,24 +40,44 @@ export async function POST(request: NextRequest) {
   }
 
   const mode = body.mode ?? "login";
+  const admin = getSupabaseAdmin();
 
-  if (mode === "signup") {
-    const admin = getSupabaseAdmin();
+  if (mode === "signup" || mode === "link") {
     if (!admin) {
       return NextResponse.json({ error: "Server auth is not configured." }, { status: 503 });
     }
 
-    const { data: existingProfile } = await admin
-      .from("profiles")
-      .select("id")
-      .eq("phone", e164)
-      .maybeSingle();
+    if (mode === "link") {
+      const user = await getAuthUserFromRequest(request);
+      if (!user) {
+        return NextResponse.json({ error: "You must be signed in to add a phone number." }, { status: 401 });
+      }
 
-    if (existingProfile) {
-      return NextResponse.json(
-        { error: "This number is already registered. Please sign in instead." },
-        { status: 409 }
-      );
+      const { data: existingProfile } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("phone", e164)
+        .maybeSingle();
+
+      if (existingProfile && existingProfile.id !== user.id) {
+        return NextResponse.json(
+          { error: "This number is already registered to another account." },
+          { status: 409 }
+        );
+      }
+    } else {
+      const { data: existingProfile } = await admin
+        .from("profiles")
+        .select("id")
+        .eq("phone", e164)
+        .maybeSingle();
+
+      if (existingProfile) {
+        return NextResponse.json(
+          { error: "This number is already registered. Please sign in instead." },
+          { status: 409 }
+        );
+      }
     }
   }
 

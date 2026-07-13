@@ -29,15 +29,22 @@ export interface PhoneOTPMetadata {
 }
 
 interface PhoneOTPFormProps {
-  mode: "login" | "signup";
+  mode: "login" | "signup" | "link";
   metadata?: PhoneOTPMetadata;
   onSuccess?: () => void;
   onCodeSent?: (phone: string) => void;
   beforeSend?: () => string | null;
   submitLabel?: string;
+  verifyLabel?: string;
   initialPhone?: string;
   initialStep?: "phone" | "otp";
   hidePhoneStep?: boolean;
+}
+
+function defaultVerifyLabel(mode: PhoneOTPFormProps["mode"]) {
+  if (mode === "signup") return "Verify & Create Account";
+  if (mode === "link") return "Verify & Continue";
+  return "Verify & Sign In";
 }
 
 export default function PhoneOTPForm({
@@ -47,6 +54,7 @@ export default function PhoneOTPForm({
   onCodeSent,
   beforeSend,
   submitLabel,
+  verifyLabel,
   initialPhone = "",
   initialStep = "phone",
   hidePhoneStep = false,
@@ -186,7 +194,7 @@ export default function PhoneOTPForm({
         disabled={isLoading}
         id="btn-verify-whatsapp-otp"
       >
-        {isLoading ? "Verifying..." : mode === "signup" ? "Verify & Create Account" : "Verify & Sign In"}
+        {isLoading ? "Verifying..." : verifyLabel ?? defaultVerifyLabel(mode)}
       </button>
 
       <div className="form-footer-links" style={{ marginTop: "1rem" }}>

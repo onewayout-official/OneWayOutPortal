@@ -67,3 +67,7 @@ export function phonesMatch(
   if (!fa || !fb) return false;
   return fa === fb;
 }
+
+export function profileHasPhone(phone: string | null | undefined): boolean {
+  return Boolean(phone?.trim());
+}

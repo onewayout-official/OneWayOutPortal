@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { formatE164, isValidPhone } from "@/lib/phone";
 import { verifyStoredOTP } from "@/lib/otp";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getAuthUserFromRequest } from "@/lib/requestAuth";
 
 interface VerifyBody {
   phone?: string;
@@ -12,7 +13,7 @@ interface VerifyBody {
     email?: string;
     name?: string;
   };
-  mode?: "login" | "signup";
+  mode?: "login" | "signup" | "link";
 }
 
 async function findUserByPhone(phone: string) {
@@ -153,6 +154,68 @@ export async function POST(request: NextRequest) {
   }
 
   const mode = body.mode ?? "login";
+
+  // Link a verified phone to the currently signed-in user (e.g. Google OAuth).
+  if (mode === "link") {
+    const user = await getAuthUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json(
+        { error: "You must be signed in to add a phone number." },
+        { status: 401 }
+      );
+    }
+
+    const phoneOwner = await findUserByPhone(e164);
+    if (phoneOwner && phoneOwner.id !== user.id) {
+      return NextResponse.json(
+        { error: "This number is already registered to another account." },
+        { status: 409 }
+      );
+    }
+
+    const { data: authUserData } = await admin.auth.admin.getUserById(user.id);
+    const existingMeta = (authUserData.user?.user_metadata ?? {}) as Record<string, unknown>;
+
+    const { error: updateAuthError } = await admin.auth.admin.updateUserById(user.id, {
+      phone: e164,
+      phone_confirm: true,
+      user_metadata: {
+        ...existingMeta,
+        phone: e164,
+      },
+    });
+
+    if (updateAuthError) {
+      return NextResponse.json(
+        { error: updateAuthError.message ?? "Failed to update account phone." },
+        { status: 500 }
+      );
+    }
+
+    const { error: updateProfileError } = await admin
+      .from("profiles")
+      .update({ phone: e164 })
+      .eq("id", user.id);
+
+    if (updateProfileError) {
+      if (
+        updateProfileError.code === "23505" &&
+        updateProfileError.message.includes("profiles_phone_unique")
+      ) {
+        return NextResponse.json(
+          { error: "This number is already registered to another account." },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: updateProfileError.message ?? "Failed to save phone number." },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({ success: true, linked: true });
+  }
+
   const metadata = body.metadata ?? {};
   const firstName = metadata.firstName?.trim() ?? "";
   const lastName = metadata.lastName?.trim() ?? "";

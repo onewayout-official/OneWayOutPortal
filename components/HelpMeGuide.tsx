@@ -65,7 +65,7 @@ export default function HelpMeGuide() {
             No coaches are available right now. Please check back soon.
           </p>
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
             {counselors.map((counselor) => (
               <article
                 key={counselor.id}
@@ -75,31 +75,31 @@ export default function HelpMeGuide() {
                   <img
                     src={resolveCounselorImage(counselor.image)}
                     alt={counselor.name}
-                    className="h-14 w-14 rounded-full object-cover"
+                    className="h-16 w-16 rounded-full object-cover"
                   />
                   <div className="min-w-0">
-                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">{counselor.name}</h3>
-                    <p className="text-xs text-blue-600 dark:text-blue-400">Life Coach/Counsellor</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    <h3 className="text-base font-semibold text-gray-900 dark:text-white">{counselor.name}</h3>
+                    <p className="text-sm text-blue-600 dark:text-blue-400">Life Coach/Counsellor</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                       {counselor.experienceYears} yrs experience
                     </p>
                   </div>
                 </div>
-                <p className="mt-3 text-xs text-gray-600 dark:text-gray-300">{counselor.specialty}</p>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 line-clamp-3">{counselor.bio}</p>
+                <p className="mt-3 text-sm text-gray-600 dark:text-gray-300">{counselor.specialty}</p>
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400 line-clamp-3">{counselor.bio}</p>
                 <div className="mt-4 flex flex-wrap gap-2">
                   <Link
                     href={`/help-me/counselors/${counselor.id}?action=book`}
-                    className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-xs font-medium text-white hover:bg-blue-700 transition-colors"
+                    className="inline-flex items-center justify-center rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
                   >
                     Book appointment
                   </Link>
                   <Link
                     href={`/help-me/counselors/${counselor.id}`}
-                    className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-700 px-3 py-2 text-xs font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                    className="inline-flex items-center justify-center gap-1 rounded-lg border border-blue-200 dark:border-blue-700 px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
                   >
                     View details
-                    <ArrowRight className="h-3.5 w-3.5" />
+                    <ArrowRight className="h-4 w-4" />
                   </Link>
                 </div>
               </article>

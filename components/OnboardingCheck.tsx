@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { storage } from "@/lib/storage";
+import { getPostAuthDestination } from "@/lib/authRouting";
 
 export default function OnboardingCheck({ children }: { children: React.ReactNode }) {
   const router = useRouter();
@@ -16,14 +17,12 @@ export default function OnboardingCheck({ children }: { children: React.ReactNod
         setAllowed(true);
         return;
       }
-      const ok = Boolean(
-        profile &&
-          (profile.onboardingCompleted || profile.onboardingSkipped)
-      );
-      if (ok) {
+
+      const destination = getPostAuthDestination(profile);
+      if (destination === "/") {
         setAllowed(true);
       } else {
-        router.push("/onboarding");
+        router.push(destination);
         setAllowed(false);
       }
     });
@@ -47,4 +46,3 @@ export default function OnboardingCheck({ children }: { children: React.ReactNod
 
   return <>{children}</>;
 }
-
