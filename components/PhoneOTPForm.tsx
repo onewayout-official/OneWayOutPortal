@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@/contexts/AuthContext";
-import { isValidPhone } from "@/lib/phone";
+import { isValidPhone, PHONE_INPUT_PLACEHOLDER, PHONE_VALIDATION_HINT } from "@/lib/phone";
 
 function PhoneIcon() {
   return (
@@ -85,7 +85,7 @@ export default function PhoneOTPForm({
       return;
     }
     if (!isValidPhone(phone)) {
-      setError("Please enter a valid mobile number (e.g. +27 79 123 4567).");
+      setError(PHONE_VALIDATION_HINT);
       return;
     }
 
@@ -136,7 +136,7 @@ export default function PhoneOTPForm({
               name="phone"
               type="tel"
               className="form-input"
-              placeholder="+27 79 123 4567"
+              placeholder={PHONE_INPUT_PLACEHOLDER}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               autoComplete="tel"

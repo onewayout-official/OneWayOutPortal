@@ -4,10 +4,9 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { storage } from "@/lib/storage";
 import { getPostAuthDestination } from "@/lib/authRouting";
-import { formatE164, isValidPhone } from "@/lib/phone";
-// OTP linking (re-enable when WHATSAPP_OTP_ENABLED is true):
-// import PhoneOTPForm from "@/components/PhoneOTPForm";
-// import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
+import { formatE164, isValidPhone, PHONE_INPUT_PLACEHOLDER, PHONE_VALIDATION_HINT } from "@/lib/phone";
+import PhoneOTPForm from "@/components/PhoneOTPForm";
+import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
 
 function PhoneIcon() {
   return (
@@ -41,7 +40,7 @@ export default function CompleteProfileForm() {
       return;
     }
     if (!isValidPhone(phone)) {
-      setError("Please enter a valid mobile number (e.g. +27 79 123 4567).");
+      setError(PHONE_VALIDATION_HINT);
       return;
     }
 
@@ -70,20 +69,19 @@ export default function CompleteProfileForm() {
     }
   };
 
-  // --- WhatsApp OTP link flow (disabled until Twilio sender is approved) ---
-  // if (WHATSAPP_OTP_ENABLED) {
-  //   return (
-  //     <PhoneOTPForm
-  //       mode="link"
-  //       submitLabel="Send verification code"
-  //       verifyLabel="Verify & Continue"
-  //       onSuccess={async () => {
-  //         const profile = await storage.getProfile();
-  //         router.replace(getPostAuthDestination(profile));
-  //       }}
-  //     />
-  //   );
-  // }
+  if (WHATSAPP_OTP_ENABLED) {
+    return (
+      <PhoneOTPForm
+        mode="link"
+        submitLabel="Send verification code"
+        verifyLabel="Verify & Continue"
+        onSuccess={async () => {
+          const profile = await storage.getProfile();
+          router.replace(getPostAuthDestination(profile));
+        }}
+      />
+    );
+  }
 
   return (
     <form onSubmit={handleSubmit} noValidate>
@@ -98,7 +96,7 @@ export default function CompleteProfileForm() {
             name="phone"
             type="tel"
             className="form-input"
-            placeholder="+27 79 123 4567"
+            placeholder={PHONE_INPUT_PLACEHOLDER}
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             autoComplete="tel"
@@ -106,7 +104,7 @@ export default function CompleteProfileForm() {
           />
         </div>
         <p className="terms-note" style={{ marginTop: "0.35rem" }}>
-          Enter a South African mobile number in international format.
+          Enter your mobile number in international format (include country code).
         </p>
       </div>
 

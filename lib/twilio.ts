@@ -25,12 +25,18 @@ export function toWhatsAppAddress(e164Phone: string): string {
   return `whatsapp:${digits}`;
 }
 
+function buildOtpMessageBody(code: string): string {
+  const expiry = process.env.OTP_EXPIRY_MINUTES ?? "5";
+  return `Your OneWayOut verification code is: ${code}. It expires in ${expiry} minutes. Do not share this code.`;
+}
+
 export async function sendWhatsAppOTP(
   e164Phone: string,
   code: string
 ): Promise<{ success: boolean; error?: string }> {
   const client = getTwilioClient();
   const from = process.env.TWILIO_WHATSAPP_FROM;
+  const contentSid = process.env.TWILIO_WHATSAPP_CONTENT_SID?.trim();
 
   if (!client || !from) {
     return {
@@ -39,12 +45,29 @@ export async function sendWhatsAppOTP(
     };
   }
 
+  const to = toWhatsAppAddress(e164Phone);
+  const expiry = process.env.OTP_EXPIRY_MINUTES ?? "5";
+
   try {
-    await client.messages.create({
-      from,
-      to: toWhatsAppAddress(e164Phone),
-      body: `Your OneWayOut verification code is: ${code}. It expires in ${process.env.OTP_EXPIRY_MINUTES ?? "5"} minutes. Do not share this code.`,
-    });
+    if (contentSid) {
+      // Production: approved WhatsApp Content Template (variable keys must match your template).
+      await client.messages.create({
+        from,
+        to,
+        contentSid,
+        contentVariables: JSON.stringify({
+          "1": code,
+          "2": expiry,
+        }),
+      });
+    } else {
+      // Sandbox / dev: free-form body (not allowed outside Twilio sandbox in production).
+      await client.messages.create({
+        from,
+        to,
+        body: buildOtpMessageBody(code),
+      });
+    }
     return { success: true };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to send WhatsApp message.";

@@ -1,13 +1,19 @@
 /**
- * General E.164 phone formatting for auth and profiles.
- * Default country code: 27 (South Africa).
+ * Phone formatting and validation (E.164).
+ * International numbers (+...) are accepted globally.
+ * Local 0-prefix numbers default to South Africa (27) for backward compatibility.
  */
 
 const DEFAULT_COUNTRY_CODE = "27";
+const SA_MIN_NATIONAL_LENGTH = 9;
+const SA_MAX_NATIONAL_LENGTH = 10;
+const E164_MIN_DIGITS = 7;
+const E164_MAX_DIGITS = 15;
 
-/** Minimum digits after country code for a valid mobile number */
-const MIN_NATIONAL_LENGTH = 9;
-const MAX_NATIONAL_LENGTH = 10;
+export const PHONE_VALIDATION_HINT =
+  "Please enter a valid mobile number in international format (e.g. +1 555 000 0000).";
+
+export const PHONE_INPUT_PLACEHOLDER = "+1 555 000 0000";
 
 export function formatE164(
   raw: string | null | undefined,
@@ -15,25 +21,36 @@ export function formatE164(
 ): string | undefined {
   if (!raw?.trim()) return undefined;
 
-  let digits = raw.replace(/\D/g, "");
+  const trimmed = raw.trim();
+  let digits = trimmed.replace(/\D/g, "");
   if (!digits) return undefined;
 
-  if (digits.startsWith("00")) {
-    digits = digits.slice(2);
+  const isInternational = trimmed.startsWith("+") || digits.startsWith("00");
+
+  if (isInternational) {
+    if (digits.startsWith("00")) {
+      digits = digits.slice(2);
+    }
+    if (digits.length < E164_MIN_DIGITS || digits.length > E164_MAX_DIGITS) {
+      return undefined;
+    }
+    return `+${digits}`;
   }
 
   const country = defaultCountry.replace(/\D/g, "") || DEFAULT_COUNTRY_CODE;
 
-  if (digits.startsWith(country) && digits.length >= country.length + MIN_NATIONAL_LENGTH) {
-    digits = digits.slice(0, country.length + MAX_NATIONAL_LENGTH);
+  if (digits.startsWith(country) && digits.length >= country.length + SA_MIN_NATIONAL_LENGTH) {
+    digits = digits.slice(0, country.length + SA_MAX_NATIONAL_LENGTH);
   } else if (digits.startsWith("0") && digits.length >= 10) {
-    digits = `${country}${digits.slice(1, 1 + MAX_NATIONAL_LENGTH)}`;
+    digits = `${country}${digits.slice(1, 1 + SA_MAX_NATIONAL_LENGTH)}`;
   } else if (
-    digits.length >= MIN_NATIONAL_LENGTH &&
-    digits.length <= MAX_NATIONAL_LENGTH &&
+    digits.length >= SA_MIN_NATIONAL_LENGTH &&
+    digits.length <= SA_MAX_NATIONAL_LENGTH &&
     !digits.startsWith(country)
   ) {
     digits = `${country}${digits}`;
+  } else {
+    return undefined;
   }
 
   const nationalPart = digits.startsWith(country)
@@ -41,13 +58,13 @@ export function formatE164(
     : digits;
 
   if (
-    nationalPart.length < MIN_NATIONAL_LENGTH ||
-    nationalPart.length > MAX_NATIONAL_LENGTH
+    nationalPart.length < SA_MIN_NATIONAL_LENGTH ||
+    nationalPart.length > SA_MAX_NATIONAL_LENGTH
   ) {
     return undefined;
   }
 
-  return `+${country}${nationalPart}`;
+  return `+${digits}`;
 }
 
 export function isValidPhone(

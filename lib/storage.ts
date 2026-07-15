@@ -11,6 +11,7 @@ import {
   SpendCategory,
 } from "@/types";
 import { supabase } from "@/lib/supabase";
+import { SIGNUP_PHONE_TAKEN_ERROR } from "@/lib/authIdentity";
 import { formatE164 } from "@/lib/phone";
 import { SIGNUP_BONUS_POINTS, getLocalDateString, getLocalDateStringFromTimestamp } from "@/lib/gamification/config";
 import { tryAwardTask } from "@/lib/gamification/rewards";
@@ -304,7 +305,7 @@ export const storage = {
     });
     if (error) {
       if (error.code === "23505" && error.message.includes("profiles_phone_unique")) {
-        throw new Error("This mobile number is already registered to another account.");
+        throw new Error(SIGNUP_PHONE_TAKEN_ERROR);
       }
       console.error("[storage] saveProfile error:", error.message);
       throw error;

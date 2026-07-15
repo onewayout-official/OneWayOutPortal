@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
 import PhoneOTPForm from "@/components/PhoneOTPForm";
-import { formatE164, isValidPhone } from "@/lib/phone";
+import { formatE164, isValidPhone, PHONE_INPUT_PLACEHOLDER, PHONE_VALIDATION_HINT } from "@/lib/phone";
 import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
 
 function GoogleIcon() {
@@ -202,7 +202,7 @@ export default function RegisterForm() {
       return;
     }
     if (!isValidPhone(phone)) {
-      setError("Please enter a valid mobile number (e.g. +27 79 123 4567).");
+      setError(PHONE_VALIDATION_HINT);
       return;
     }
     if (form.password.length < 6) {
@@ -235,7 +235,11 @@ export default function RegisterForm() {
           });
         }
       } catch (err) {
-        console.error("Error saving initial profile:", err);
+        const message =
+          err instanceof Error ? err.message : "Failed to save profile details.";
+        setError(message);
+        setIsLoading(false);
+        return;
       }
       router.push("/onboarding");
     } else {
@@ -518,7 +522,7 @@ export default function RegisterForm() {
               name="phone"
               type="tel"
               className="form-input"
-              placeholder="+27 79 123 4567"
+              placeholder={PHONE_INPUT_PLACEHOLDER}
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               autoComplete="tel"

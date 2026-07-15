@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import { formatE164, isValidPhone } from "@/lib/phone";
+import { formatE164, isValidPhone, PHONE_VALIDATION_HINT } from "@/lib/phone";
 import { createAndStoreOTP } from "@/lib/otp";
 import { sendWhatsAppOTP, isTwilioConfigured } from "@/lib/twilio";
 import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
 import { getAuthUserFromRequest } from "@/lib/requestAuth";
-
+import { findSignupConflict, findUserByPhone, SIGNUP_PHONE_TAKEN_ERROR } from "@/lib/authIdentity";
 interface SendBody {
   phone?: string;
   metadata?: {
@@ -34,7 +34,7 @@ export async function POST(request: NextRequest) {
   const e164 = formatE164(body.phone);
   if (!e164 || !isValidPhone(e164)) {
     return NextResponse.json(
-      { error: "Please enter a valid mobile number (e.g. +27 79 123 4567)." },
+      { error: PHONE_VALIDATION_HINT },
       { status: 400 }
     );
   }
@@ -53,30 +53,21 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: "You must be signed in to add a phone number." }, { status: 401 });
       }
 
-      const { data: existingProfile } = await admin
-        .from("profiles")
-        .select("id")
-        .eq("phone", e164)
-        .maybeSingle();
-
-      if (existingProfile && existingProfile.id !== user.id) {
-        return NextResponse.json(
-          { error: "This number is already registered to another account." },
-          { status: 409 }
-        );
+      const phoneOwner = await findUserByPhone(admin, e164);
+      if (phoneOwner && phoneOwner.id !== user.id) {
+        return NextResponse.json({ error: SIGNUP_PHONE_TAKEN_ERROR }, { status: 409 });
       }
     } else {
-      const { data: existingProfile } = await admin
-        .from("profiles")
-        .select("id")
-        .eq("phone", e164)
-        .maybeSingle();
-
-      if (existingProfile) {
-        return NextResponse.json(
-          { error: "This number is already registered. Please sign in instead." },
-          { status: 409 }
-        );
+      const existingUser = await findUserByPhone(admin, e164);
+      const conflict = await findSignupConflict(
+        {
+          email: body.metadata?.email,
+          excludeUserId: existingUser?.id,
+        },
+        admin
+      );
+      if (conflict) {
+        return NextResponse.json({ error: conflict.error }, { status: 409 });
       }
     }
   }

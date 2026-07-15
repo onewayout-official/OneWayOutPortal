@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { formatE164, isValidPhone } from "@/lib/phone";
 import { verifyStoredOTP } from "@/lib/otp";
-import { getSupabaseAdmin } from "@/lib/supabaseAdmin";
+import { getSupabaseAdmin, getSupabaseServerAnon } from "@/lib/supabaseAdmin";
 import { getAuthUserFromRequest } from "@/lib/requestAuth";
+import {
+  findSignupConflict,
+  findUserByPhone,
+  SIGNUP_PHONE_TAKEN_ERROR,
+} from "@/lib/authIdentity";
 
 interface VerifyBody {
   phone?: string;
@@ -16,39 +21,73 @@ interface VerifyBody {
   mode?: "login" | "signup" | "link";
 }
 
-async function findUserByPhone(phone: string) {
-  const admin = getSupabaseAdmin();
-  if (!admin) return null;
-
-  const { data: profile } = await admin
-    .from("profiles")
-    .select("id, email")
-    .eq("phone", phone)
-    .maybeSingle();
-
-  if (profile?.id) {
-    const { data: userData } = await admin.auth.admin.getUserById(profile.id);
-    if (userData.user) return userData.user;
-  }
-
-  let page = 1;
-  const perPage = 200;
-  while (page <= 10) {
-    const { data, error } = await admin.auth.admin.listUsers({ page, perPage });
-    if (error || !data.users.length) break;
-
-    const match = data.users.find((u) => u.phone === phone);
-    if (match) return match;
-
-    if (data.users.length < perPage) break;
-    page += 1;
-  }
-
-  return null;
-}
-
 function phonePlaceholderEmail(phone: string): string {
   return `${phone.replace(/\D/g, "")}@phone.onewayout.local`;
+}
+
+function isDuplicateAuthError(message?: string): boolean {
+  const normalized = message?.toLowerCase() ?? "";
+  return (
+    normalized.includes("already") ||
+    normalized.includes("duplicate") ||
+    normalized.includes("registered")
+  );
+}
+
+async function updateSignupUser(
+  admin: NonNullable<ReturnType<typeof getSupabaseAdmin>>,
+  userId: string,
+  details: {
+    e164: string;
+    name: string;
+    firstName: string;
+    lastName: string;
+    email?: string;
+  }
+): Promise<void> {
+  const { e164, name, firstName, lastName, email } = details;
+  const { data: authUserData } = await admin.auth.admin.getUserById(userId);
+  const existingMeta = (authUserData.user?.user_metadata ?? {}) as Record<string, unknown>;
+
+  const authUpdates: {
+    phone: string;
+    phone_confirm: boolean;
+    user_metadata: Record<string, unknown>;
+    email?: string;
+    email_confirm?: boolean;
+  } = {
+    phone: e164,
+    phone_confirm: true,
+    user_metadata: {
+      ...existingMeta,
+      phone: e164,
+      ...(name ? { name } : {}),
+      ...(firstName ? { first_name: firstName } : {}),
+      ...(lastName ? { last_name: lastName } : {}),
+      ...(email ? { email } : {}),
+    },
+  };
+
+  const existingEmail = authUserData.user?.email?.trim();
+  const hasPlaceholderEmail =
+    !existingEmail || existingEmail.endsWith("@phone.onewayout.local");
+  if (email && hasPlaceholderEmail) {
+    authUpdates.email = email;
+    authUpdates.email_confirm = false;
+  }
+
+  await admin.auth.admin.updateUserById(userId, authUpdates);
+
+  await admin
+    .from("profiles")
+    .update({
+      ...(name ? { name } : {}),
+      ...(firstName ? { first_name: firstName } : {}),
+      ...(lastName ? { last_name: lastName } : {}),
+      ...(email ? { email } : {}),
+      phone: e164,
+    })
+    .eq("id", userId);
 }
 
 async function ensureUserEmail(
@@ -82,7 +121,8 @@ async function ensureUserEmail(
 
 async function mintSessionForUser(userId: string, phone: string, preferredEmail?: string) {
   const admin = getSupabaseAdmin();
-  if (!admin) {
+  const anon = getSupabaseServerAnon();
+  if (!admin || !anon) {
     return { success: false as const, error: "Server auth is not configured." };
   }
 
@@ -93,20 +133,30 @@ async function mintSessionForUser(userId: string, phone: string, preferredEmail?
     email,
   });
 
-  if (linkError || !linkData.properties?.hashed_token) {
+  const tokenHash = linkData?.properties?.hashed_token;
+  if (linkError || !tokenHash) {
     return {
       success: false as const,
       error: linkError?.message ?? "Failed to create session.",
     };
   }
 
-  const { data: sessionData, error: verifyError } = await admin.auth.verifyOtp({
-    email,
-    token: linkData.properties.hashed_token,
-    type: "magiclink",
-  });
+  let sessionData;
+  let verifyError;
 
-  if (verifyError || !sessionData.session) {
+  ({ data: sessionData, error: verifyError } = await anon.auth.verifyOtp({
+    token_hash: tokenHash,
+    type: "email",
+  }));
+
+  if (verifyError || !sessionData?.session) {
+    ({ data: sessionData, error: verifyError } = await anon.auth.verifyOtp({
+      token_hash: tokenHash,
+      type: "magiclink",
+    }));
+  }
+
+  if (verifyError || !sessionData?.session) {
     return {
       success: false as const,
       error: verifyError?.message ?? "Failed to establish session.",
@@ -165,12 +215,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const phoneOwner = await findUserByPhone(e164);
+    const phoneOwner = await findUserByPhone(admin, e164);
     if (phoneOwner && phoneOwner.id !== user.id) {
-      return NextResponse.json(
-        { error: "This number is already registered to another account." },
-        { status: 409 }
-      );
+      return NextResponse.json({ error: SIGNUP_PHONE_TAKEN_ERROR }, { status: 409 });
     }
 
     const { data: authUserData } = await admin.auth.admin.getUserById(user.id);
@@ -202,10 +249,7 @@ export async function POST(request: NextRequest) {
         updateProfileError.code === "23505" &&
         updateProfileError.message.includes("profiles_phone_unique")
       ) {
-        return NextResponse.json(
-          { error: "This number is already registered to another account." },
-          { status: 409 }
-        );
+        return NextResponse.json({ error: SIGNUP_PHONE_TAKEN_ERROR }, { status: 409 });
       }
       return NextResponse.json(
         { error: updateProfileError.message ?? "Failed to save phone number." },
@@ -225,13 +269,21 @@ export async function POST(request: NextRequest) {
     "";
   const email = metadata.email?.trim() || undefined;
 
-  let existingUser = await findUserByPhone(e164);
+  let existingUser = await findUserByPhone(admin, e164);
+  let createdThisRequest = false;
 
-  if (mode === "signup" && existingUser) {
-    return NextResponse.json(
-      { error: "This number is already registered. Please sign in instead." },
-      { status: 409 }
+  if (mode === "signup") {
+    const conflict = await findSignupConflict(
+      {
+        phone: existingUser ? undefined : e164,
+        email,
+        excludeUserId: existingUser?.id,
+      },
+      admin
     );
+    if (conflict) {
+      return NextResponse.json({ error: conflict.error }, { status: 409 });
+    }
   }
 
   if (mode === "login" && !existingUser) {
@@ -241,57 +293,99 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  if (!existingUser) {
-    const createPayload: {
-      phone: string;
-      phone_confirm: boolean;
-      email?: string;
-      email_confirm?: boolean;
-      user_metadata: Record<string, string>;
-    } = {
-      phone: e164,
-      phone_confirm: true,
-      user_metadata: {
+  if (mode === "signup") {
+    if (existingUser) {
+      await updateSignupUser(admin, existingUser.id, {
+        e164,
+        name,
+        firstName,
+        lastName,
+        email,
+      });
+    } else {
+      const createPayload: {
+        phone: string;
+        phone_confirm: boolean;
+        email?: string;
+        email_confirm?: boolean;
+        user_metadata: Record<string, string>;
+      } = {
         phone: e164,
-        ...(name ? { name } : {}),
-        ...(firstName ? { first_name: firstName } : {}),
-        ...(lastName ? { last_name: lastName } : {}),
-      },
-    };
-
-    if (email) {
-      createPayload.email = email;
-      createPayload.email_confirm = false;
-      createPayload.user_metadata.email = email;
-    }
-
-    const { data: created, error: createError } = await admin.auth.admin.createUser(createPayload);
-
-    if (createError || !created.user) {
-      return NextResponse.json(
-        { error: createError?.message ?? "Failed to create account." },
-        { status: 500 }
-      );
-    }
-
-    existingUser = created.user;
-
-    if (email || name || e164) {
-      await admin
-        .from("profiles")
-        .update({
+        phone_confirm: true,
+        user_metadata: {
+          phone: e164,
           ...(name ? { name } : {}),
           ...(firstName ? { first_name: firstName } : {}),
           ...(lastName ? { last_name: lastName } : {}),
-          ...(email ? { email } : {}),
-          phone: e164,
-        })
-        .eq("id", created.user.id);
+        },
+      };
+
+      if (email) {
+        createPayload.email = email;
+        createPayload.email_confirm = false;
+        createPayload.user_metadata.email = email;
+      } else {
+        const placeholder = phonePlaceholderEmail(e164);
+        createPayload.email = placeholder;
+        createPayload.email_confirm = true;
+      }
+
+      const { data: created, error: createError } = await admin.auth.admin.createUser(createPayload);
+
+      if (createError || !created.user) {
+        if (isDuplicateAuthError(createError?.message)) {
+          existingUser = await findUserByPhone(admin, e164);
+          if (existingUser) {
+            await updateSignupUser(admin, existingUser.id, {
+              e164,
+              name,
+              firstName,
+              lastName,
+              email,
+            });
+          }
+        }
+
+        if (!existingUser) {
+          const duplicateEmail = createError?.message?.toLowerCase().includes("email");
+          return NextResponse.json(
+            {
+              error: duplicateEmail
+                ? "This email address is already registered. Please sign in instead."
+                : createError?.message ?? "Failed to create account.",
+            },
+            { status: duplicateEmail ? 409 : 500 }
+          );
+        }
+      } else {
+        existingUser = created.user;
+        createdThisRequest = true;
+
+        if (email || name || e164) {
+          await admin
+            .from("profiles")
+            .update({
+              ...(name ? { name } : {}),
+              ...(firstName ? { first_name: firstName } : {}),
+              ...(lastName ? { last_name: lastName } : {}),
+              ...(email ? { email } : {}),
+              phone: e164,
+            })
+            .eq("id", created.user.id);
+        }
+      }
     }
+  }
+
+  if (!existingUser) {
+    return NextResponse.json({ error: "Failed to resolve account." }, { status: 500 });
   }
 
   const sessionResult = await mintSessionForUser(existingUser.id, e164, email);
   if (!sessionResult.success) {
+    if (createdThisRequest) {
+      await admin.auth.admin.deleteUser(existingUser.id);
+    }
     return NextResponse.json(
       { error: sessionResult.error ?? "Failed to sign in." },
       { status: 500 }

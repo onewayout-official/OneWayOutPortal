@@ -146,6 +146,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (password.length < 6) {
         return { success: false, error: "Password must be at least 6 characters long." };
       }
+
+      const checkResponse = await fetch("/api/auth/signup/check", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, phone }),
+      });
+      const checkData = await checkResponse.json();
+      if (!checkResponse.ok) {
+        return {
+          success: false,
+          error: checkData.error ?? "Unable to validate signup details.",
+        };
+      }
+
       const { data, error } = await supabase.auth.signUp({
         email,
         password,
@@ -160,11 +174,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (error) {
         const isRateLimit = error.message.toLowerCase().includes("too many") || error.message.includes("429");
+        const isDuplicate =
+          error.message.toLowerCase().includes("already") ||
+          error.message.toLowerCase().includes("registered");
         return {
           success: false,
           error: isRateLimit
             ? "Too many signup attempts. Please wait a few minutes and try again."
-            : error.message,
+            : isDuplicate
+              ? "This email address is already registered. Please sign in instead."
+              : error.message,
         };
       }
       if (data.session) {
