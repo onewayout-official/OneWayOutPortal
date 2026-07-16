@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { UserProfile, Asset } from "@/types";
 import { storage } from "@/lib/storage";
-import { computePooledExpenses, computePooledIncome } from "@/lib/budgetTotals";
 import { computeMembershipProgress, promoteMembershipTierIfEligible } from "@/lib/membershipProgress";
 import MembershipQuestMap from "@/components/MembershipQuestMap";
 import { Counselor, resolveCounselorImage } from "@/lib/counselors";
@@ -191,8 +190,32 @@ export default function Dashboard() {
         liabilities: liabilitiesForCharts,
       });
 
-      const monthlyIncomeTotal = computePooledIncome(incomeForCharts, userProfile);
-      const monthlyExpenseTotal = computePooledExpenses(expensesForCharts, userProfile);
+      const incomeTransferById = new Map<string, number>();
+      for (const allocation of incomeAllocations) {
+        const amount = Number(allocation.amount) || 0;
+        if (amount > 0) {
+          incomeTransferById.set(allocation.incomeId, amount);
+        }
+      }
+
+      const monthlyIncomeTotal = incomeRows
+        .filter((income) => (Number(income.personal) || 0) > 0)
+        .reduce((sum, income) => {
+          const total = Number(income.personal) || 0;
+          const allocated = incomeTransferById.get(income.id) ?? 0;
+          return sum + Math.max(0, total - allocated);
+        }, 0);
+
+      const activeBudgetExpenseIds = new Set(
+        budgetExpenseRows
+          .filter((expense) => (Number(expense.personal) || 0) > 0)
+          .map((expense) => expense.id)
+      );
+
+      const monthlyExpenseTotal = accountExpenseAllocations
+        .filter((allocation) => activeBudgetExpenseIds.has(allocation.expenseId))
+        .reduce((sum, allocation) => sum + (Number(allocation.amount) || 0), 0);
+
       setPooledIncome(monthlyIncomeTotal);
       setPooledExpenses(monthlyExpenseTotal);
 
@@ -226,7 +249,7 @@ export default function Dashboard() {
 
       setAccountTypeBalances(loadedAccountTypeBalances);
 
-      // Monthly statement chart uses the same calculated totals shown on the Budget page.
+      // Monthly statement chart uses the same Income / Expenses totals as the Budget page "This month" card.
       const statementMonth = new Date().toLocaleString(undefined, { month: "short", year: "numeric" });
       const diff = monthlyIncomeTotal - monthlyExpenseTotal;
       setMonthlyChartData([

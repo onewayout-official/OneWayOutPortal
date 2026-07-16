@@ -247,7 +247,7 @@ function IconCard({
               : liveAmountLabel === "Left"
               ? liveAmount === 0
                 ? "text-gray-400 dark:text-gray-500"
-                : "text-[#2f6064] dark:text-[#5a9ea3]"
+                : "text-red-600 dark:text-red-400"
               : item.amount != null
                 ? liveAmount > item.amount
                   ? "text-red-600 dark:text-red-400"
@@ -314,6 +314,10 @@ export default function BudgetManager() {
   const [newExpenseCategory, setNewExpenseCategory] = useState("Groceries");
   const [newExpenseName, setNewExpenseName] = useState("");
   const [newExpenseAmount, setNewExpenseAmount] = useState("");
+  const isAddingExpenseRef = useRef(false);
+  const [isAddingExpense, setIsAddingExpense] = useState(false);
+  const isAddingIncomeRef = useRef(false);
+  const [isAddingIncome, setIsAddingIncome] = useState(false);
   const [availableWalletBalance, setAvailableWalletBalance] = useState(0);
   const loadGeneration = useRef(0);
 
@@ -830,8 +834,13 @@ export default function BudgetManager() {
   };
 
   const handleAddIncome = async () => {
+    if (isAddingIncomeRef.current) return;
+
     const amount = Number(newIncomeAmount.replace(/,/g, "").trim());
     if (!newIncomeName.trim() || isNaN(amount) || amount <= 0) return;
+
+    isAddingIncomeRef.current = true;
+    setIsAddingIncome(true);
 
     const category = (newIncomeCategory === "Other income" ? "Other" : newIncomeCategory) as import("@/types").IncomeCategory;
     const newItem: Income = {
@@ -844,6 +853,11 @@ export default function BudgetManager() {
       points: 0,
       editable: true,
     };
+
+    setAddIncomeOpen(false);
+    setNewIncomeCategory("Salary");
+    setNewIncomeName("");
+    setNewIncomeAmount("");
 
     invalidateBudgetLoads();
     try {
@@ -860,17 +874,20 @@ export default function BudgetManager() {
       setAllIncomeIcons((prev) => [...prev, iconItem]);
     } catch (err) {
       console.error(err);
+    } finally {
+      isAddingIncomeRef.current = false;
+      setIsAddingIncome(false);
     }
-
-    setAddIncomeOpen(false);
-    setNewIncomeCategory("Salary");
-    setNewIncomeName("");
-    setNewIncomeAmount("");
   };
 
   const handleAddExpense = async () => {
+    if (isAddingExpenseRef.current) return;
+
     const amount = Number(newExpenseAmount.replace(/,/g, "").trim());
     if (!newExpenseName.trim() || isNaN(amount) || amount <= 0) return;
+
+    isAddingExpenseRef.current = true;
+    setIsAddingExpense(true);
 
     const category = (newExpenseCategory === "Other Expense" ? "Other" : newExpenseCategory) as import("@/types").ExpenseCategory;
     const newItem: RegistrationExpense = {
@@ -883,6 +900,11 @@ export default function BudgetManager() {
       points: 0,
       editable: true,
     };
+
+    setAddExpenseOpen(false);
+    setNewExpenseCategory("Groceries");
+    setNewExpenseName("");
+    setNewExpenseAmount("");
 
     invalidateBudgetLoads();
     try {
@@ -901,12 +923,10 @@ export default function BudgetManager() {
       await storage.logBudgetActivity();
     } catch (err) {
       console.error(err);
+    } finally {
+      isAddingExpenseRef.current = false;
+      setIsAddingExpense(false);
     }
-
-    setAddExpenseOpen(false);
-    setNewExpenseCategory("Groceries");
-    setNewExpenseName("");
-    setNewExpenseAmount("");
   };
 
   if (isLoading) {
@@ -923,8 +943,9 @@ export default function BudgetManager() {
   const pooledIncome = computePooledIncome(onboardingIncome, profile);
   const pooledExpenses = computePooledExpenses(onboardingExpenses, profile);
 
-  const totalAllocatedToExpenses = getTotalExpenseAllocations();
-  const monthlyBalance = pooledIncome - totalAllocatedToExpenses;
+  const actualIncomeLeft = allIncomeIcons.reduce((sum, inc) => sum + getRemainingIncome(inc), 0);
+  const totalExpenses = expenseIcons.reduce((sum, exp) => sum + getTotalAllocForExpense(exp.id), 0);
+  const monthlyBalance = actualIncomeLeft - totalExpenses;
   const isOverBudget = monthlyBalance < 0;
   const selectedIncome = selectedIncomeId ? allIncomeIcons.find((item) => item.id === selectedIncomeId) : null;
   const selectedSourceAccount = selectedSourceAccountId ? userAccounts.find((account) => account.id === selectedSourceAccountId) : null;
@@ -1339,23 +1360,17 @@ export default function BudgetManager() {
               <h2 className="text-lg font-semibold">This month</h2>
               {isOverBudget ? <AlertCircle className="h-6 w-6 text-red-500" /> : <CheckCircle className="h-6 w-6 text-green-500" />}
             </div>
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4 lg:gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-4">
               <div className="rounded bg-gray-50 p-4 dark:bg-gray-900/20">
                 <div className="text-sm text-gray-500">Income</div>
                 <div className="break-words text-lg font-bold text-[#2f6064] sm:text-xl">
-                  R {pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  R {actualIncomeLeft.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
               <div className="rounded bg-gray-50 p-4 dark:bg-gray-900/20">
-                <div className="text-sm text-gray-500">Planned expenses</div>
+                <div className="text-sm text-gray-500">Expenses</div>
                 <div className="break-words text-lg font-bold sm:text-xl">
-                  R {pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                </div>
-              </div>
-              <div className="rounded bg-gray-50 p-4 dark:bg-gray-900/20">
-                <div className="text-sm text-gray-500">Spent this month</div>
-                <div className={`break-words text-lg font-bold sm:text-xl ${isOverBudget ? "text-red-600 dark:text-red-400" : ""}`}>
-                  R {totalAllocatedToExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  R {totalExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
               </div>
               <div className="rounded bg-gray-50 p-4 dark:bg-gray-900/20">
@@ -1520,10 +1535,10 @@ export default function BudgetManager() {
             <div className="flex gap-3">
               <button
                 onClick={handleAddExpense}
-                disabled={!newExpenseName.trim() || !newExpenseAmount || Number(newExpenseAmount) <= 0}
+                disabled={isAddingExpense || !newExpenseName.trim() || !newExpenseAmount || Number(newExpenseAmount) <= 0}
                 className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
               >
-                Add
+                {isAddingExpense ? "Adding..." : "Add"}
               </button>
               <button
                 onClick={() => { setAddExpenseOpen(false); setNewExpenseCategory("Groceries"); setNewExpenseName(""); setNewExpenseAmount(""); }}
@@ -1604,10 +1619,10 @@ export default function BudgetManager() {
             <div className="flex gap-3">
               <button
                 onClick={handleAddIncome}
-                disabled={!newIncomeName.trim() || !newIncomeAmount || Number(newIncomeAmount) <= 0}
+                disabled={isAddingIncome || !newIncomeName.trim() || !newIncomeAmount || Number(newIncomeAmount) <= 0}
                 className="flex-1 py-2.5 bg-[#2f6064] hover:bg-[#255055] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
               >
-                Add
+                {isAddingIncome ? "Adding..." : "Add"}
               </button>
               <button
                 onClick={() => { setAddIncomeOpen(false); setNewIncomeCategory("Salary"); setNewIncomeName(""); setNewIncomeAmount(""); }}
