@@ -65,8 +65,13 @@ Copy `.env.local.example` to `.env.local` and fill in values:
 | `TWILIO_ACCOUNT_SID` | Twilio account SID |
 | `TWILIO_AUTH_TOKEN` | Twilio auth token |
 | `TWILIO_WHATSAPP_FROM` | Twilio WhatsApp sender (e.g. `whatsapp:+14155238886`) |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | App SMTP for coach welcome and appointment emails |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Office 365 SMTP for coach welcome and appointment emails |
+| `SMTP_REPLY_TO` | Optional reply-to address for transactional emails |
 | `COACH_SETUP_EMAIL_MODE` | `supabase`, `smtp`, or `both` (default: `both`) |
+| `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | Microsoft Graph for Teams meetings and Outlook availability |
+| `TEAMS_MEETING_TIMEZONE` | IANA timezone for sessions (default: `Africa/Johannesburg`) |
+| `TEAMS_MEETING_DURATION_MINUTES` | Session length in minutes (default: `20`) |
+| `AVAILABILITY_CACHE_TTL_SECONDS` | Cache Outlook busy lookups (default: `300`) |
 
 ## Getting Started
 
@@ -93,15 +98,24 @@ npm install
    - Set `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, and `TWILIO_WHATSAPP_FROM` in `.env.local`
    - For sandbox: join the sandbox from your phone and use the sandbox WhatsApp number as `TWILIO_WHATSAPP_FROM`
 
-4. **SMTP (two layers)**:
-   - **Supabase auth emails** (password reset): Supabase Dashboard → **Authentication** → **Email** → enable **Custom SMTP** and enter your SMTP credentials
-   - **App transactional emails** (coach welcome, appointment confirmations): set `SMTP_*` variables in `.env.local`
+4. **Office 365 SMTP (transactional email)**:
+   - Create a sender mailbox (e.g. `appointments@yourdomain.com`)
+   - Enable **Authenticated SMTP** for that mailbox in Exchange Admin
+   - Set `SMTP_HOST=smtp.office365.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, and mailbox credentials in `.env.local`
+   - Mirror the same SMTP settings in **Supabase Dashboard → Authentication → Email → Custom SMTP** for password-reset emails
 
-5. **Supabase phone auth**:
+5. **Microsoft Teams + Outlook calendar (coach booking)**:
+   - Register an app in **Azure Portal → App registrations**
+   - Add application permission `Calendars.ReadWrite` and grant **admin consent**
+   - Set `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, and `AZURE_CLIENT_SECRET` in `.env.local`
+   - Ensure each coach has `linked_user_id` pointing to their M365 portal account
+   - Run migration `supabase/migrations/20260717120000_teams_meeting_integration.sql`
+
+6. **Supabase phone auth**:
    - Dashboard → **Authentication** → **Providers** → enable **Phone**
    - This allows phone-based users in `auth.users`; OTP delivery is handled by this app via Twilio WhatsApp
 
-6. (Optional) Set up Google OAuth:
+7. (Optional) Set up Google OAuth:
    - Create a `.env.local` file in the root directory
    - Get your Google OAuth Client ID from [Google Cloud Console](https://console.cloud.google.com/apis/credentials)
    - Add the following to `.env.local`:

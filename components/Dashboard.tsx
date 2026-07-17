@@ -9,7 +9,7 @@ import { Counselor, resolveCounselorImage } from "@/lib/counselors";
 import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
 import { getAuthHeader } from "@/lib/authHeader";
 import { getLocalDateString } from "@/lib/gamification/config";
-import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, TrendingDown, Smile } from "lucide-react";
+import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, Smile } from "lucide-react";
 import Link from "next/link";
 import {
   LineChart, Line, BarChart, Bar as ReBar, Cell,
@@ -852,7 +852,7 @@ export default function Dashboard() {
         <h3 className="text-xl font-bold text-gray-900 dark:text-white">Cash is king - total cash balances</h3>
       </div>
       {(accountTypeBalances.length > 0 || profile.onboardingCompleted) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           {accountTypeBalances.map((b) => (
             <div
               key={b.type}
@@ -864,34 +864,6 @@ export default function Dashboard() {
               </p>
             </div>
           ))}
-
-          {profile.onboardingCompleted && (
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Income</p>
-                  <p className="text-2xl font-bold text-gray-900 dark:text-white">
-                    R {pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-green-600" />
-              </div>
-            </div>
-          )}
-
-          {profile.onboardingCompleted && (
-            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">Expenses</p>
-                  <p className="text-2xl font-bold text-orange-600">
-                    R {pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-                <TrendingDown className="h-8 w-8 text-orange-600" />
-              </div>
-            </div>
-          )}
         </div>
       )}
 

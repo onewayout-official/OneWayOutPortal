@@ -81,9 +81,7 @@ export function computeAccountTypeBalances(
     }
 
     const accountsOfType = input.userAccounts.filter((a) => a.accountType === type);
-    if (accountsOfType.length === 0) return null;
-
     const total = accountsOfType.reduce((sum, acc) => sum + (byAccount.get(acc.id) ?? 0), 0);
     return { type: label, total };
-  }).filter((b): b is { type: string; total: number } => b !== null);
+  });
 }

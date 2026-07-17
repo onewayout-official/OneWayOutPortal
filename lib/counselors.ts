@@ -52,6 +52,7 @@ export type CounselorAppointment = {
   appointmentDate: string;
   appointmentTime: string;
   meetingLink: string;
+  outlookEventId?: string | null;
   status: "scheduled" | "completed" | "cancelled";
   createdAt: string;
   userName?: string;
@@ -71,6 +72,7 @@ export type CounselorAppointmentRow = {
   appointment_date: string;
   appointment_time: string;
   meeting_link: string;
+  outlook_event_id?: string | null;
   status: "scheduled" | "completed" | "cancelled";
   created_at: string;
 };
@@ -113,6 +115,7 @@ export function appointmentFromRow(
     appointmentDate: row.appointment_date,
     appointmentTime: row.appointment_time,
     meetingLink: row.meeting_link,
+    outlookEventId: row.outlook_event_id ?? null,
     status: row.status,
     createdAt: row.created_at,
     userName: user?.name ?? undefined,

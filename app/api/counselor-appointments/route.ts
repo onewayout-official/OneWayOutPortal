@@ -1,9 +1,17 @@
 import { NextRequest, NextResponse } from "next/server";
-import { sendEmail, isSmtpConfigured } from "@/lib/email";
-import { appointmentConfirmationEmail } from "@/lib/emailTemplates";
-import crypto from "crypto";
+import { sendEmail, isEmailConfigured } from "@/lib/email";
+import {
+  appointmentConfirmationEmail,
+  coachBookingNotificationEmail,
+} from "@/lib/emailTemplates";
 import { createClient } from "@supabase/supabase-js";
 import { appointmentFromRow, type CounselorAppointmentRow } from "@/lib/counselors";
+import { isSlotAvailable } from "@/lib/coachAvailability";
+import {
+  loadCoachAvailability,
+  validateAvailabilityRange,
+} from "@/lib/coachBooking";
+import { createCoachTeamsMeeting } from "@/lib/microsoftGraph";
 
 async function getAuthenticatedUser(request: NextRequest) {
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
@@ -38,7 +46,6 @@ async function getAuthenticatedUser(request: NextRequest) {
   return { adminClient, user };
 }
 
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -54,10 +61,6 @@ function isValidDate(value: string) {
     parsed.getMonth() === month - 1 &&
     parsed.getDate() === day
   );
-}
-
-function isPastSlot(date: string, time: string) {
-  return new Date(`${date}T${time}:00`).getTime() < Date.now();
 }
 
 function slotKey(date: string, time: string) {
@@ -85,137 +88,6 @@ function getCounselorSummary(row: UserAppointmentRow): CounselorSummaryRow | und
   return counselor ?? undefined;
 }
 
-function base64UrlEncode(value: string | Buffer) {
-  return Buffer.from(value)
-    .toString("base64")
-    .replace(/=/g, "")
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_");
-}
-
-async function getGoogleAccessToken() {
-  const clientEmail = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
-  const privateKey = process.env.GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?.replace(/\\n/g, "\n");
-
-  if (!clientEmail || !privateKey) {
-    return null;
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  const header = base64UrlEncode(JSON.stringify({ alg: "RS256", typ: "JWT" }));
-  const payload = base64UrlEncode(
-    JSON.stringify({
-      iss: clientEmail,
-      scope: "https://www.googleapis.com/auth/calendar",
-      aud: "https://oauth2.googleapis.com/token",
-      iat: now,
-      exp: now + 3600,
-    })
-  );
-  const unsignedToken = `${header}.${payload}`;
-  const signature = crypto.createSign("RSA-SHA256").update(unsignedToken).sign(privateKey);
-  const assertion = `${unsignedToken}.${base64UrlEncode(signature)}`;
-
-  const response = await fetch("https://oauth2.googleapis.com/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
-      assertion,
-    }),
-  });
-
-  const json = (await response.json()) as { access_token?: string; error_description?: string };
-  if (!response.ok || !json.access_token) {
-    throw new Error(json.error_description ?? "Failed to authenticate with Google Calendar.");
-  }
-
-  return json.access_token;
-}
-
-function addMinutesToTime(time: string, minutesToAdd: number) {
-  const [hourText, minuteText] = time.split(":");
-  const totalMinutes = Number(hourText) * 60 + Number(minuteText) + minutesToAdd;
-  const hour = Math.floor(totalMinutes / 60) % 24;
-  const minute = totalMinutes % 60;
-  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
-}
-
-async function createGoogleMeetLink({
-  appointmentDate,
-  appointmentTime,
-  coachName,
-  coachEmail,
-  userEmail,
-}: {
-  appointmentDate: string;
-  appointmentTime: string;
-  coachName: string;
-  coachEmail?: string | null;
-  userEmail?: string | null;
-}) {
-  const calendarId = process.env.GOOGLE_CALENDAR_ID;
-  const timeZone = process.env.GOOGLE_MEET_TIME_ZONE ?? "Africa/Johannesburg";
-
-  if (!calendarId) {
-    return "";
-  }
-
-  const accessToken = await getGoogleAccessToken();
-  if (!accessToken) {
-    return "";
-  }
-
-  const attendees = [userEmail, coachEmail]
-    .filter((email): email is string => Boolean(email?.trim()))
-    .map((email) => ({ email }));
-
-  const startDateTime = `${appointmentDate}T${appointmentTime}:00`;
-  const endDateTime = `${appointmentDate}T${addMinutesToTime(appointmentTime, 20)}:00`;
-
-  const response = await fetch(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(
-      calendarId
-    )}/events?conferenceDataVersion=1`,
-    {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        summary: `OneWayOut coaching session with ${coachName}`,
-        description: "20-minute life coach/counsellor session booked from the OneWayOut portal.",
-        start: { dateTime: startDateTime, timeZone },
-        end: { dateTime: endDateTime, timeZone },
-        attendees,
-        conferenceData: {
-          createRequest: {
-            requestId: crypto.randomUUID(),
-            conferenceSolutionKey: { type: "hangoutsMeet" },
-          },
-        },
-      }),
-    }
-  );
-
-  const json = (await response.json()) as {
-    hangoutLink?: string;
-    conferenceData?: { entryPoints?: Array<{ uri?: string }> };
-    error?: { message?: string };
-  };
-
-  if (!response.ok) {
-    throw new Error(json.error?.message ?? "Failed to create Google Meet link.");
-  }
-
-  return (
-    json.hangoutLink ??
-    json.conferenceData?.entryPoints?.find((entryPoint) => entryPoint.uri)?.uri ??
-    ""
-  );
-}
-
 export async function GET(request: NextRequest) {
   const auth = await getAuthenticatedUser(request);
   if ("error" in auth && auth.error) return auth.error;
@@ -228,7 +100,9 @@ export async function GET(request: NextRequest) {
   if (counselorId) {
     const query = auth.adminClient!
       .from("counselor_appointments")
-      .select("id, counselor_id, user_id, appointment_date, appointment_time, meeting_link, status, created_at")
+      .select(
+        "id, counselor_id, user_id, appointment_date, appointment_time, meeting_link, outlook_event_id, status, created_at"
+      )
       .eq("counselor_id", counselorId)
       .eq("status", "scheduled")
       .order("appointment_date", { ascending: true })
@@ -260,9 +134,7 @@ export async function GET(request: NextRequest) {
 
   const { data, error } = await auth.adminClient!
     .from("counselor_appointments")
-    .select(
-      "*, counselors(id, name, title, specialty, image, location)"
-    )
+    .select("*, counselors(id, name, title, specialty, image, location)")
     .eq("user_id", auth.user!.id)
     .order("appointment_date", { ascending: true })
     .order("appointment_time", { ascending: true });
@@ -286,13 +158,11 @@ export async function POST(request: NextRequest) {
     counselorId?: string;
     appointmentDate?: string;
     appointmentTime?: string;
-    meetingLink?: string;
   };
 
   const counselorId = (body.counselorId ?? "").trim();
   const appointmentDate = (body.appointmentDate ?? "").trim();
   const appointmentTime = (body.appointmentTime ?? "").trim();
-  const meetingLink = (body.meetingLink ?? "").trim();
 
   if (!counselorId || !appointmentDate || !appointmentTime) {
     return NextResponse.json(
@@ -305,13 +175,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Choose a valid appointment date and time." }, { status: 400 });
   }
 
-  if (isPastSlot(appointmentDate, appointmentTime)) {
-    return NextResponse.json({ error: "Choose a future appointment slot." }, { status: 400 });
+  if (!validateAvailabilityRange(appointmentDate, appointmentDate)) {
+    return NextResponse.json({ error: "Choose a valid appointment date." }, { status: 400 });
   }
 
   const { data: counselor, error: counselorError } = await auth.adminClient!
     .from("counselors")
-    .select("id, name, availability, linked_user_id")
+    .select("id, name, linked_user_id")
     .eq("id", counselorId)
     .eq("is_active", true)
     .maybeSingle();
@@ -324,58 +194,63 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Counselor not found or inactive." }, { status: 404 });
   }
 
-  const appointmentWeekday = WEEKDAY_LABELS[new Date(`${appointmentDate}T00:00:00`).getDay()];
-  const availability = ((counselor as { availability?: string[] }).availability ?? []).map((slot) =>
-    slot.trim()
-  );
-  if (!availability.includes(`${appointmentWeekday} ${appointmentTime}`)) {
+  let availabilityResult;
+  try {
+    availabilityResult = await loadCoachAvailability({
+      adminClient: auth.adminClient!,
+      counselorId,
+      from: appointmentDate,
+      to: appointmentDate,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Failed to validate availability.";
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+
+  if (!availabilityResult) {
+    return NextResponse.json({ error: "Counselor not found or inactive." }, { status: 404 });
+  }
+
+  if (!isSlotAvailable(availabilityResult.slots, appointmentDate, appointmentTime)) {
     return NextResponse.json(
-      { error: "This time is not available for the selected coach." },
-      { status: 400 }
+      { error: "This time is no longer available. Please choose another slot." },
+      { status: 409 }
     );
   }
 
-  const { data: existing, error: existingError } = await auth.adminClient!
-    .from("counselor_appointments")
-    .select("id")
-    .eq("counselor_id", counselorId)
-    .eq("appointment_date", appointmentDate)
-    .eq("appointment_time", appointmentTime)
-    .eq("status", "scheduled")
+  const coachName = (counselor as { name?: string }).name ?? "your coach";
+  const coachEmail = availabilityResult.coachEmail;
+
+  const { data: userProfile } = await auth.adminClient!
+    .from("profiles")
+    .select("name, first_name")
+    .eq("id", auth.user!.id)
     .maybeSingle();
 
-  if (existingError) {
-    return NextResponse.json({ error: existingError.message }, { status: 500 });
-  }
+  const userName =
+    (userProfile as { name?: string; first_name?: string } | null)?.first_name ||
+    (userProfile as { name?: string } | null)?.name ||
+    "Client";
 
-  if (existing) {
-    return NextResponse.json({ error: "This slot was just booked. Please choose another time." }, { status: 409 });
-  }
+  let generatedMeetingLink = "";
+  let outlookEventId: string | null = null;
 
-  let generatedMeetingLink = meetingLink;
-  if (!generatedMeetingLink) {
+  if (coachEmail) {
     try {
-      const linkedUserId = (counselor as { linked_user_id?: string | null }).linked_user_id;
-      let coachEmail: string | null = null;
-
-      if (linkedUserId) {
-        const { data: coachProfile } = await auth.adminClient!
-          .from("profiles")
-          .select("email")
-          .eq("id", linkedUserId)
-          .maybeSingle();
-        coachEmail = (coachProfile as { email?: string | null } | null)?.email ?? null;
-      }
-
-      generatedMeetingLink = await createGoogleMeetLink({
+      const teamsMeeting = await createCoachTeamsMeeting({
+        coachEmail,
         appointmentDate,
         appointmentTime,
-        coachName: (counselor as { name?: string }).name ?? "your coach",
-        coachEmail,
+        coachName,
+        userName,
         userEmail: auth.user!.email ?? null,
       });
+      if (teamsMeeting) {
+        generatedMeetingLink = teamsMeeting.meetingLink;
+        outlookEventId = teamsMeeting.eventId;
+      }
     } catch (error) {
-      console.error("Failed to create Google Meet link:", error);
+      console.error("Failed to create Teams meeting:", error);
     }
   }
 
@@ -387,6 +262,7 @@ export async function POST(request: NextRequest) {
       appointment_date: appointmentDate,
       appointment_time: appointmentTime,
       meeting_link: generatedMeetingLink,
+      outlook_event_id: outlookEventId,
       status: "scheduled",
     })
     .select("*")
@@ -399,33 +275,46 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
 
-  const userEmail = auth.user!.email;
-  if (userEmail && isSmtpConfigured()) {
-    const { data: userProfile } = await auth.adminClient!
-      .from("profiles")
-      .select("name, first_name")
-      .eq("id", auth.user!.id)
-      .maybeSingle();
+  if (isEmailConfigured()) {
+    const userEmail = auth.user!.email;
+    if (userEmail) {
+      const userTemplate = appointmentConfirmationEmail({
+        userName,
+        coachName,
+        appointmentDate,
+        appointmentTime,
+        meetingLink: generatedMeetingLink,
+      });
+      const userSend = await sendEmail({
+        to: userEmail,
+        subject: userTemplate.subject,
+        html: userTemplate.html,
+        text: userTemplate.text,
+      });
+      if (!userSend.success) {
+        console.error("User confirmation email failed:", userSend.error);
+      }
+    }
 
-    const userName =
-      (userProfile as { name?: string; first_name?: string } | null)?.first_name ||
-      (userProfile as { name?: string } | null)?.name ||
-      "there";
-
-    const template = appointmentConfirmationEmail({
-      userName,
-      coachName: (counselor as { name?: string }).name ?? "your coach",
-      appointmentDate,
-      appointmentTime,
-      meetingLink: generatedMeetingLink,
-    });
-
-    await sendEmail({
-      to: userEmail,
-      subject: template.subject,
-      html: template.html,
-      text: template.text,
-    });
+    if (coachEmail) {
+      const coachTemplate = coachBookingNotificationEmail({
+        coachName,
+        userName,
+        userEmail: auth.user!.email ?? null,
+        appointmentDate,
+        appointmentTime,
+        meetingLink: generatedMeetingLink,
+      });
+      const coachSend = await sendEmail({
+        to: coachEmail,
+        subject: coachTemplate.subject,
+        html: coachTemplate.html,
+        text: coachTemplate.text,
+      });
+      if (!coachSend.success) {
+        console.error("Coach notification email failed:", coachSend.error);
+      }
+    }
   }
 
   return NextResponse.json(

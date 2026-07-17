@@ -11,6 +11,7 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { Counselor, CounselorAppointment, resolveCounselorImage } from "@/lib/counselors";
+import type { AvailabilitySlot } from "@/lib/coachAvailability";
 import { getAuthHeader } from "@/lib/authHeader";
 import { rewards } from "@/lib/gamification/rewards";
 import { notifyRewardPointsUpdated } from "@/lib/gamification/rewardPoints";
@@ -38,9 +39,6 @@ const toISODate = (date: Date) => {
 
 const slotKey = (date: string, time: string) => `${date}|${time}`;
 
-const isPastSlot = (date: string, time: string) =>
-  new Date(`${date}T${time}:00`).getTime() < Date.now();
-
 const addMinutes = (time: string, minutesToAdd: number) => {
   const [hourText, minuteText] = time.split(":");
   const hour = Number(hourText);
@@ -59,6 +57,13 @@ const getNextDateForWeekday = (weekday: number) => {
   return result;
 };
 
+function slotStatusLabel(status: AvailabilitySlot["status"]) {
+  if (status === "booked") return "Booked";
+  if (status === "busy") return "Unavailable";
+  if (status === "past") return "Past";
+  return "Book 20 min session";
+}
+
 export default function CounselorProfile({ counselor }: { counselor: Counselor }) {
   const [visibleMonth, setVisibleMonth] = useState(() => {
     const now = new Date();
@@ -75,24 +80,11 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
     time: string;
     meetingLink: string;
   } | null>(null);
-  const [bookedSlotKeys, setBookedSlotKeys] = useState<Set<string>>(() => new Set());
-  const [isLoadingBookedSlots, setIsLoadingBookedSlots] = useState(false);
+  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
+  const [graphSynced, setGraphSynced] = useState(false);
+  const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
-
-  const availabilityByWeekday = useMemo(() => {
-    const map = new Map<number, string[]>();
-    counselor.availability.forEach((slot) => {
-      const [dayLabel, time] = slot.split(" ");
-      const weekday = WEEKDAY_TO_INDEX[dayLabel];
-      if (weekday === undefined || !time) {
-        return;
-      }
-      const existing = map.get(weekday) ?? [];
-      map.set(weekday, [...existing, time]);
-    });
-    return map;
-  }, [counselor.availability]);
 
   const monthRange = useMemo(() => {
     const year = visibleMonth.getFullYear();
@@ -103,39 +95,55 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
     };
   }, [visibleMonth]);
 
-  const loadBookedSlots = useCallback(async () => {
-    setIsLoadingBookedSlots(true);
+  const fetchRange = useMemo(() => {
+    const today = toISODate(new Date());
+    const horizon = toISODate(new Date(Date.now() + 42 * 24 * 60 * 60 * 1000));
+    const from = monthRange.from < today ? monthRange.from : today;
+    const to = monthRange.to > horizon ? monthRange.to : horizon;
+    return { from, to };
+  }, [monthRange.from, monthRange.to]);
+
+  const slotByKey = useMemo(() => {
+    const map = new Map<string, AvailabilitySlot>();
+    availabilitySlots.forEach((slot) => map.set(slot.key, slot));
+    return map;
+  }, [availabilitySlots]);
+
+  const loadAvailability = useCallback(async () => {
+    setIsLoadingAvailability(true);
     try {
       const headers = await getAuthHeader();
       const params = new URLSearchParams({
-        counselorId: counselor.id,
-        from: monthRange.from,
-        to: monthRange.to,
+        from: fetchRange.from,
+        to: fetchRange.to,
       });
-      const response = await fetch(`/api/counselor-appointments?${params.toString()}`, {
-        method: "GET",
-        headers,
-      });
+      const response = await fetch(
+        `/api/counselors/${counselor.id}/availability?${params.toString()}`,
+        { method: "GET", headers }
+      );
       const json = (await response.json()) as {
-        bookedSlots?: Array<{ key: string; date: string; time: string }>;
+        slots?: AvailabilitySlot[];
+        graphSynced?: boolean;
         error?: string;
       };
 
       if (!response.ok) {
-        throw new Error(json.error ?? "Failed to load booked slots.");
+        throw new Error(json.error ?? "Failed to load availability.");
       }
 
-      setBookedSlotKeys(new Set((json.bookedSlots ?? []).map((slot) => slot.key)));
+      setAvailabilitySlots(json.slots ?? []);
+      setGraphSynced(Boolean(json.graphSynced));
+      setBookingError(null);
     } catch (err) {
-      setBookingError(err instanceof Error ? err.message : "Failed to load booked slots.");
+      setBookingError(err instanceof Error ? err.message : "Failed to load availability.");
     } finally {
-      setIsLoadingBookedSlots(false);
+      setIsLoadingAvailability(false);
     }
-  }, [counselor.id, monthRange.from, monthRange.to]);
+  }, [counselor.id, fetchRange.from, fetchRange.to]);
 
   useEffect(() => {
-    loadBookedSlots();
-  }, [loadBookedSlots]);
+    loadAvailability();
+  }, [loadAvailability]);
 
   const monthDays = useMemo(() => {
     const year = visibleMonth.getFullYear();
@@ -151,26 +159,21 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
     for (let day = 1; day <= daysInMonth; day += 1) {
       const date = new Date(year, month, day);
       const isoDate = toISODate(date);
-      const hasAvailability = (availabilityByWeekday.get(date.getDay()) ?? []).some(
-        (time) => !bookedSlotKeys.has(slotKey(isoDate, time)) && !isPastSlot(isoDate, time),
+      const hasAvailability = availabilitySlots.some(
+        (slot) => slot.date === isoDate && slot.status === "available"
       );
       cells.push({ isoDate, dayNumber: day, hasAvailability });
     }
 
     return { firstDayWeekIndex, cells };
-  }, [availabilityByWeekday, bookedSlotKeys, visibleMonth]);
+  }, [availabilitySlots, visibleMonth]);
 
   const selectedDateSlots = useMemo(() => {
-    if (!selectedDate) {
-      return [];
-    }
-    const selected = new Date(`${selectedDate}T00:00:00`);
-    return (availabilityByWeekday.get(selected.getDay()) ?? []).map((time) => ({
-      time,
-      isBooked: bookedSlotKeys.has(slotKey(selectedDate, time)),
-      isPast: isPastSlot(selectedDate, time),
-    }));
-  }, [availabilityByWeekday, bookedSlotKeys, selectedDate]);
+    if (!selectedDate) return [];
+    return availabilitySlots
+      .filter((slot) => slot.date === selectedDate)
+      .sort((a, b) => a.time.localeCompare(b.time));
+  }, [availabilitySlots, selectedDate]);
 
   const weeklySlots = useMemo(
     () =>
@@ -178,22 +181,20 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
         .map((slot) => {
           const [dayLabel, time] = slot.split(" ");
           const weekday = WEEKDAY_TO_INDEX[dayLabel];
-          if (weekday === undefined || !time) {
-            return null;
-          }
-          const nextDate = getNextDateForWeekday(weekday);
+          if (weekday === undefined || !time) return null;
+          const nextDate = toISODate(getNextDateForWeekday(weekday));
+          const status = slotByKey.get(slotKey(nextDate, time))?.status ?? "outside_hours";
           return {
             key: slot,
             dayLabel,
             time,
             endTime: addMinutes(time, 20),
-            nextDate: toISODate(nextDate),
-            isBooked: bookedSlotKeys.has(slotKey(toISODate(nextDate), time)),
-            isPast: isPastSlot(toISODate(nextDate), time),
+            nextDate,
+            status,
           };
         })
         .filter((slot): slot is NonNullable<typeof slot> => Boolean(slot)),
-    [bookedSlotKeys, counselor.availability],
+    [counselor.availability, slotByKey]
   );
 
   const todayDayLabel = WEEKDAY_LABELS[new Date().getDay()];
@@ -205,13 +206,15 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
     setSelectedDate(date);
     setSelectedTime(time);
 
-    if (bookedSlotKeys.has(slotKey(date, time))) {
-      setBookingError("This slot is already booked. Please choose another time.");
-      return;
-    }
-
-    if (isPastSlot(date, time)) {
-      setBookingError("Choose a future appointment slot.");
+    const status = slotByKey.get(slotKey(date, time))?.status;
+    if (status !== "available") {
+      setBookingError(
+        status === "booked"
+          ? "This slot is already booked. Please choose another time."
+          : status === "busy"
+            ? "This slot is unavailable on the coach's Outlook calendar."
+            : "Choose a future available appointment slot."
+      );
       return;
     }
 
@@ -219,9 +222,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
   };
 
   const confirmBooking = async () => {
-    if (!pendingBooking) {
-      return;
-    }
+    if (!pendingBooking) return;
 
     setBookingError(null);
     setIsBooking(true);
@@ -235,7 +236,6 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
           counselorId: counselor.id,
           appointmentDate: pendingBooking.date,
           appointmentTime: pendingBooking.time,
-          meetingLink: "",
         }),
       });
 
@@ -247,7 +247,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
         throw new Error(json.error ?? "Failed to book appointment.");
       }
 
-      setBookedSlotKeys((prev) => new Set(prev).add(slotKey(pendingBooking.date, pendingBooking.time)));
+      await loadAvailability();
       setBookingPopup({
         date: pendingBooking.date,
         time: pendingBooking.time,
@@ -255,7 +255,6 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
       });
       setPendingBooking(null);
 
-      // Reward the "Book Life Coaching Session" earn task (idempotent per month).
       try {
         await rewards.awardTask("book-life-counseling");
         await storage.logEarnActivity();
@@ -269,6 +268,11 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
       setIsBooking(false);
     }
   };
+
+  const selectedSlotAvailable =
+    selectedDate &&
+    selectedTime &&
+    slotByKey.get(slotKey(selectedDate, selectedTime))?.status === "available";
 
   return (
     <div className="space-y-6">
@@ -328,7 +332,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                     </div>
                     <button
                       type="button"
-                      disabled={slot.isBooked || slot.isPast || isLoadingBookedSlots}
+                      disabled={slot.status !== "available" || isLoadingAvailability}
                       onClick={() => {
                         const date = new Date(`${slot.nextDate}T00:00:00`);
                         setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
@@ -336,7 +340,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                       }}
                       className="mt-2 w-full rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
                     >
-                      {slot.isBooked ? "Booked" : "Book 20 min session"}
+                      {slotStatusLabel(slot.status)}
                     </button>
                   </div>
                 ))
@@ -362,7 +366,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                   </div>
                   <button
                     type="button"
-                    disabled={slot.isBooked || slot.isPast || isLoadingBookedSlots}
+                    disabled={slot.status !== "available" || isLoadingAvailability}
                     onClick={() => {
                       const date = new Date(`${slot.nextDate}T00:00:00`);
                       setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
@@ -370,7 +374,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                     }}
                     className="mt-2 w-full rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
                   >
-                    {slot.isBooked ? "Booked" : "Book 20 min session"}
+                    {slotStatusLabel(slot.status)}
                   </button>
                 </div>
               ))}
@@ -380,6 +384,12 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
 
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2">
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Book Appointment</h2>
+
+          {!graphSynced && (
+            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
+              Live Outlook calendar sync is unavailable. Slots are based on portal bookings and coach working hours only.
+            </p>
+          )}
 
           <div className="mt-5 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
             <div className="flex items-center justify-between gap-3">
@@ -392,7 +402,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                   aria-label="Previous month"
                   onClick={() =>
                     setVisibleMonth(
-                      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1),
+                      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
                     )
                   }
                   className="rounded-md border border-gray-200 p-1 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -404,7 +414,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                   aria-label="Next month"
                   onClick={() =>
                     setVisibleMonth(
-                      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1),
+                      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
                     )
                   }
                   className="rounded-md border border-gray-200 p-1 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
@@ -412,6 +422,18 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                   <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
+            </div>
+
+            <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400">
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-blue-500" /> Available
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-gray-400" /> Booked
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Outlook busy
+              </span>
             </div>
 
             <div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs text-gray-500 dark:text-gray-400">
@@ -452,31 +474,44 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
 
             <div className="mt-3">
               <p className="text-xs text-gray-500 dark:text-gray-400">Available time slots</p>
-              {isLoadingBookedSlots && (
+              {isLoadingAvailability && (
                 <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Refreshing booked slots...
+                  Loading live availability...
                 </p>
               )}
               {selectedDateSlots.length > 0 ? (
                 <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedDateSlots.map((slot) => (
-                    <button
-                      key={slot.time}
-                      type="button"
-                      disabled={slot.isBooked || slot.isPast}
-                      onClick={() => setSelectedTime(slot.time)}
-                      className={`rounded-full border px-3 py-1 text-xs ${
-                        slot.isBooked || slot.isPast
-                          ? "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500"
-                          : selectedTime === slot.time
-                          ? "border-blue-600 bg-blue-600 text-white"
-                          : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300"
-                      }`}
-                    >
-                      {slot.time}
-                      {slot.isBooked ? " booked" : slot.isPast ? " unavailable" : ""}
-                    </button>
-                  ))}
+                  {selectedDateSlots.map((slot) => {
+                    const isDisabled = slot.status !== "available";
+                    const suffix =
+                      slot.status === "booked"
+                        ? " booked"
+                        : slot.status === "busy"
+                          ? " busy"
+                          : slot.status === "past"
+                            ? " past"
+                            : "";
+                    return (
+                      <button
+                        key={slot.time}
+                        type="button"
+                        disabled={isDisabled}
+                        onClick={() => setSelectedTime(slot.time)}
+                        className={`rounded-full border px-3 py-1 text-xs ${
+                          isDisabled
+                            ? slot.status === "busy"
+                              ? "cursor-not-allowed border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
+                              : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500"
+                            : selectedTime === slot.time
+                              ? "border-blue-600 bg-blue-600 text-white"
+                              : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300"
+                        }`}
+                      >
+                        {slot.time}
+                        {suffix}
+                      </button>
+                    );
+                  })}
                 </div>
               ) : (
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -486,13 +521,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
 
               <button
                 type="button"
-                disabled={
-                  !selectedDate ||
-                  !selectedTime ||
-                  isBooking ||
-                  bookedSlotKeys.has(slotKey(selectedDate, selectedTime)) ||
-                  isPastSlot(selectedDate, selectedTime)
-                }
+                disabled={!selectedSlotAvailable || isBooking || isLoadingAvailability}
                 onClick={() => openBookingConfirm(selectedDate, selectedTime)}
                 className="mt-3 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -556,13 +585,13 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                 rel="noreferrer"
                 className="mt-3 inline-flex rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-medium text-blue-700 hover:bg-blue-100 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300 dark:hover:bg-blue-900/40"
               >
-                Join Google Meet
+                Join Teams meeting
               </a>
             ) : (
               <div className="mt-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-700 dark:border-blue-800 dark:bg-blue-900/20 dark:text-blue-300">
-                <p className="font-medium">Meeting room coming soon</p>
+                <p className="font-medium">Teams link pending</p>
                 <p className="mt-1">
-                  We will add the meeting link before video sessions go live.
+                  Your meeting link will appear here once Microsoft Teams is configured for this coach.
                 </p>
               </div>
             )}

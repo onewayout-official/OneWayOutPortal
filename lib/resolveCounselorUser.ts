@@ -1,7 +1,7 @@
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAppUrl } from "@/lib/siteUrl";
-import { sendEmail, getCoachSetupEmailMode, isSmtpConfigured } from "@/lib/email";
+import { sendEmail, getCoachSetupEmailMode, isEmailConfigured } from "@/lib/email";
 import { coachWelcomeEmail } from "@/lib/emailTemplates";
 
 function randomPassword(length = 16) {
@@ -60,7 +60,7 @@ async function updatePasswordAndSendSetupEmail(
     setupEmailSent = !emailError;
   }
 
-  if ((mode === "smtp" || mode === "both") && isSmtpConfigured()) {
+  if ((mode === "smtp" || mode === "both") && isEmailConfigured()) {
     const template = coachWelcomeEmail({ name: coachName, email });
     const smtpResult = await sendEmail({
       to: email,
@@ -89,7 +89,7 @@ async function sendCoachSetupEmail(
     setupEmailSent = !emailError;
   }
 
-  if ((mode === "smtp" || mode === "both") && isSmtpConfigured()) {
+  if ((mode === "smtp" || mode === "both") && isEmailConfigured()) {
     const template = coachWelcomeEmail({ name: coachName, email });
     const smtpResult = await sendEmail({
       to: email,
