@@ -5,8 +5,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
-import PhoneOTPForm from "@/components/PhoneOTPForm";
-import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
+// WhatsApp OTP login — re-enable later
+// import PhoneOTPForm from "@/components/PhoneOTPForm";
+// import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
 import { getPostAuthDestination } from "@/lib/authRouting";
 
 function GoogleIcon() {
@@ -101,13 +102,13 @@ function EyeIcon({ off }: { off?: boolean }) {
   );
 }
 
-type AuthTab = "phone" | "email";
+// type AuthTab = "phone" | "email";
 
 export default function LoginForm() {
-  // Default to email while WhatsApp OTP is disabled.
-  const [activeTab, setActiveTab] = useState<AuthTab>(
-    WHATSAPP_OTP_ENABLED ? "phone" : "email"
-  );
+  // WhatsApp OTP login — re-enable later
+  // const [activeTab, setActiveTab] = useState<AuthTab>(
+  //   WHATSAPP_OTP_ENABLED ? "phone" : "email"
+  // );
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({ email: "", password: "" });
   const [error, setError] = useState("");
@@ -167,12 +168,13 @@ export default function LoginForm() {
         Continue with Google
       </button>
 
-      {error && activeTab !== "email" ? <p className="terms-note">{error}</p> : null}
+      {/* {error && activeTab !== "email" ? <p className="terms-note">{error}</p> : null} */}
 
       <div className="auth-divider">
         <span>or continue with</span>
       </div>
 
+      {/* WhatsApp OTP mobile login — re-enable later
       {WHATSAPP_OTP_ENABLED ? (
         <div
           style={{
@@ -202,10 +204,11 @@ export default function LoginForm() {
         </div>
       ) : null}
 
-      {/* WhatsApp OTP mobile login — re-enable with WHATSAPP_OTP_ENABLED */}
       {WHATSAPP_OTP_ENABLED && activeTab === "phone" ? (
         <PhoneOTPForm mode="login" onSuccess={redirectAfterAuth} submitLabel="Send WhatsApp code" />
       ) : (
+      */}
+
         <form onSubmit={handleSubmit} noValidate>
           <div className="form-group">
             <label htmlFor="login-email">Email Address</label>
@@ -282,7 +285,7 @@ export default function LoginForm() {
             {isLoading ? "Signing in..." : "Sign In with Email"}
           </button>
         </form>
-      )}
+      {/* )} */}
 
       <div
         className="form-footer-links"

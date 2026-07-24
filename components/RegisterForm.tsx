@@ -5,9 +5,10 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
-import PhoneOTPForm from "@/components/PhoneOTPForm";
+// WhatsApp OTP signup — re-enable later
+// import PhoneOTPForm from "@/components/PhoneOTPForm";
 import { formatE164, isValidPhone, PHONE_INPUT_PLACEHOLDER, PHONE_VALIDATION_HINT } from "@/lib/phone";
-import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
+// import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
 
 function GoogleIcon() {
   return (
@@ -119,17 +120,17 @@ function EyeIcon({ off }: { off?: boolean }) {
   );
 }
 
-type RegisterTab = "phone" | "email";
-type RegisterStep = "details" | "otp" | "optional";
+// type RegisterTab = "phone" | "email";
+// type RegisterStep = "details" | "otp" | "optional";
 
 export default function RegisterForm() {
   const router = useRouter();
-  const { register, updatePassword, loginWithGoogle } = useAuth();
-  // Default to email while WhatsApp OTP is disabled; Mobile tab needs OTP for account creation.
-  const [activeTab, setActiveTab] = useState<RegisterTab>(
-    WHATSAPP_OTP_ENABLED ? "phone" : "email"
-  );
-  const [step, setStep] = useState<RegisterStep>("details");
+  const { register, loginWithGoogle } = useAuth();
+  // WhatsApp OTP signup — re-enable later
+  // const [activeTab, setActiveTab] = useState<RegisterTab>(
+  //   WHATSAPP_OTP_ENABLED ? "phone" : "email"
+  // );
+  // const [step, setStep] = useState<RegisterStep>("details");
   const [phone, setPhone] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [form, setForm] = useState({
@@ -147,43 +148,44 @@ export default function RegisterForm() {
   const lastName = form.lastName.trim();
   const fullName = `${firstName} ${lastName}`.trim();
 
-  const otpMetadata = {
-    firstName,
-    lastName,
-    name: fullName,
-    email: form.optionalEmail.trim() || undefined,
-  };
+  // WhatsApp OTP signup — re-enable later
+  // const otpMetadata = {
+  //   firstName,
+  //   lastName,
+  //   name: fullName,
+  //   email: form.optionalEmail.trim() || undefined,
+  // };
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
-  const handleOtpSuccess = async () => {
-    try {
-      const session = await storage.getSession();
-      if (session) {
-        const e164 = formatE164(phone) ?? phone;
-        await storage.saveProfile({
-          id: session.userId,
-          name: fullName,
-          firstName,
-          lastName,
-          email: session.email || form.optionalEmail.trim(),
-          phone: e164,
-          monthlyIncome: 0,
-          createdAt: new Date().toISOString(),
-        });
-      }
-    } catch (err) {
-      console.error("Error saving initial profile:", err);
-    }
-
-    if (form.optionalPassword.trim().length >= 6) {
-      await updatePassword(form.optionalPassword);
-    }
-
-    router.push("/onboarding");
-  };
+  // const handleOtpSuccess = async () => {
+  //   try {
+  //     const session = await storage.getSession();
+  //     if (session) {
+  //       const e164 = formatE164(phone) ?? phone;
+  //       await storage.saveProfile({
+  //         id: session.userId,
+  //         name: fullName,
+  //         firstName,
+  //         lastName,
+  //         email: session.email || form.optionalEmail.trim(),
+  //         phone: e164,
+  //         monthlyIncome: 0,
+  //         createdAt: new Date().toISOString(),
+  //       });
+  //     }
+  //   } catch (err) {
+  //     console.error("Error saving initial profile:", err);
+  //   }
+  //
+  //   if (form.optionalPassword.trim().length >= 6) {
+  //     await updatePassword(form.optionalPassword);
+  //   }
+  //
+  //   router.push("/onboarding");
+  // };
 
   const handleEmailRegister = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -277,6 +279,7 @@ export default function RegisterForm() {
         <span>or sign up with</span>
       </div>
 
+      {/* WhatsApp OTP mobile signup — re-enable later
       {WHATSAPP_OTP_ENABLED ? (
         <div
           style={{
@@ -313,7 +316,6 @@ export default function RegisterForm() {
         </div>
       ) : null}
 
-      {/* WhatsApp OTP mobile signup — re-enable with WHATSAPP_OTP_ENABLED */}
       {WHATSAPP_OTP_ENABLED && activeTab === "phone" ? (
         <>
           {step === "details" ? (
@@ -453,6 +455,8 @@ export default function RegisterForm() {
           )}
         </>
       ) : (
+      */}
+
         <form onSubmit={handleEmailRegister} noValidate>
           <div className="form-row">
             <div className="form-group">
@@ -568,7 +572,7 @@ export default function RegisterForm() {
             {isLoading ? "Creating account..." : "Create Account"}
           </button>
         </form>
-      )}
+      {/* )} */}
 
       <div className="form-footer-links">
         <Link href="/login" className="form-link primary" id="link-sign-in">
