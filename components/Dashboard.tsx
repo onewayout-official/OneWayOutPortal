@@ -1,0 +1,1108 @@
+"use client";
+
+import { useState, useEffect } from "react";
+import { UserProfile, Asset } from "@/types";
+import { storage } from "@/lib/storage";
+import { computeMembershipProgress, promoteMembershipTierIfEligible } from "@/lib/membershipProgress";
+import MembershipQuestMap from "@/components/MembershipQuestMap";
+import { Counselor, resolveCounselorImage } from "@/lib/counselors";
+import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
+import { getAuthHeader } from "@/lib/authHeader";
+import { getLocalDateString } from "@/lib/gamification/config";
+import { Calendar, DollarSign, Wallet, ChevronLeft, ChevronRight, HelpCircle, ShoppingCart, FileText, TrendingUp, Smile } from "lucide-react";
+import Link from "next/link";
+import {
+  LineChart, Line, BarChart, Bar as ReBar, Cell,
+  XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
+  ResponsiveContainer, ReferenceLine,
+} from 'recharts';
+
+export default function Dashboard() {
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [totalExpenses, setTotalExpenses] = useState(0);
+  const [totalDebt, setTotalDebt] = useState(0);
+  const [monthlyMinimumPayments, setMonthlyMinimumPayments] = useState(0);
+  const [assets, setAssets] = useState<Asset[]>([]);
+  const [currentDate, setCurrentDate] = useState(new Date());
+  const [calendarView, setCalendarView] = useState<"week" | "month">("week");
+  const [selectedDateState, setSelectedDateState] = useState<Date>(new Date());
+  const [onboardingData, setOnboardingData] = useState<{
+    income: any[];
+    expenses: any[];
+    assets: any[];
+    liabilities: any[];
+  }>({ income: [], expenses: [], assets: [], liabilities: [] });
+
+  const [isDashboardLoading, setIsDashboardLoading] = useState(true);
+  const [monthlyChartData, setMonthlyChartData] = useState<{
+    month: string;
+    Income: number;
+    Expenses: number;
+    Surplus: number | null;
+    Deficit: number | null;
+  }[]>([]);
+  const [pooledIncome, setPooledIncome] = useState(0);
+  const [pooledExpenses, setPooledExpenses] = useState(0);
+  const [incomeStatementChartType, setIncomeStatementChartType] = useState<"bar" | "line">("bar");
+  const [moodDates, setMoodDates] = useState<Set<string>>(new Set());
+  const [budgetDates, setBudgetDates] = useState<Set<string>>(new Set());
+  const [earnDates, setEarnDates] = useState<Set<string>>(new Set());
+  const [accountBalance, setAccountBalance] = useState<{ allocated: number; budgeted: number; spent: number } | null>(null);
+  const [userAccounts, setUserAccounts] = useState<{ id: string; accountType: string; name: string }[]>([]);
+  const [accountTypeBalances, setAccountTypeBalances] = useState<{ type: string; total: number }[]>([]);
+  const [counselors, setCounselors] = useState<Counselor[]>(MOCK_COUNSELORS);
+  const [isLoadingCounselors, setIsLoadingCounselors] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadCounselors() {
+      try {
+        const headers = await getAuthHeader();
+        const response = await fetch("/api/counselors", { method: "GET", headers });
+        if (!response.ok) return;
+        const json = (await response.json()) as { counselors?: Counselor[] };
+        if (!cancelled && json.counselors && json.counselors.length > 0) {
+          setCounselors(json.counselors);
+        }
+      } catch {
+        // Keep mock fallback when API is unavailable.
+      } finally {
+        if (!cancelled) setIsLoadingCounselors(false);
+      }
+    }
+
+    loadCounselors();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+      // Single batched call: one auth check + 8 parallel table reads (faster than 8 separate getUserId + fetch)
+      const data = await storage.getDashboardData();
+      if (!data) return;
+
+      const { profile: userProfile, expenses, debts, assets: loadedAssets, income: incomeRows, budgetExpenses: budgetExpenseRows, liabilities: liabilityRows, dailyMoods, earnDates: earnDatesArr, budgetActivityDates, onboarding, incomeAllocations, accountExpenseAllocations, userAccounts: loadedAccounts, accountTypeBalances: loadedAccountTypeBalances } = data;
+      setUserAccounts(loadedAccounts);
+
+      // If profile missing (e.g. new user), ensure it exists via normal getProfile (upsert)
+      if (!userProfile) {
+        const fallbackProfile = await storage.getProfile();
+        setProfile(fallbackProfile);
+        return;
+      }
+
+      setProfile(userProfile);
+      setAssets(loadedAssets);
+
+      setMoodDates(new Set(dailyMoods.map((m) => m.date)));
+      setBudgetDates(new Set(budgetActivityDates));
+      setEarnDates(new Set(earnDatesArr));
+
+      // Prefer normalized tables; fall back to legacy onboarding_data JSONB
+      const incomeForCharts =
+        incomeRows.length > 0
+          ? incomeRows.map((i) => ({
+            incomeType: i.category,
+            source: i.type,
+            name: i.name,
+            personal: i.personal,
+            total: i.personal,
+            points: i.points,
+          }))
+          : (onboarding.income || []).map((i: any) => ({
+            incomeType: i.incomeType,
+            source: i.source,
+            name: i.name,
+            personal: i.personal,
+            total: i.personal,
+            points: i.points,
+          }));
+
+      const expensesForCharts =
+        budgetExpenseRows.length > 0
+          ? budgetExpenseRows.map((e) => ({
+            expenseCategory: e.category,
+            expenseType: e.type,
+            name: e.name,
+            personal: e.personal,
+            total: e.personal,
+            points: e.points,
+          }))
+          : (onboarding.expenses || []).map((e: any) => ({
+            expenseCategory: e.expenseCategory,
+            expenseType: e.expenseType,
+            name: e.name,
+            personal: e.personal,
+            total: e.total ?? e.personal,
+            points: e.points,
+          }));
+
+      const assetsForCharts =
+        loadedAssets.length > 0
+          ? loadedAssets.map((a) => ({
+            expenses: a.category,
+            expenseType: a.type,
+            name: a.name,
+            personal: a.personal,
+            total: a.personal,
+            points: a.points,
+            interestRate: a.interestRate,
+          }))
+          : (onboarding.assets || []).map((a: any) => ({
+            expenses: a.expenses,
+            expenseType: a.expenseType,
+            name: a.name,
+            personal: a.personal,
+            total: a.total ?? a.personal,
+            points: a.points,
+            interestRate: a.interestRate,
+          }));
+
+      const liabilitiesForCharts =
+        liabilityRows.length > 0
+          ? liabilityRows.map((l) => ({
+            expenses: l.category,
+            expenseType: l.type,
+            name: l.name,
+            personal: l.personal,
+            total: l.personal,
+            points: l.points,
+            interestRate: l.interestRate,
+          }))
+          : (onboarding.liabilities || []).map((l: any) => ({
+            expenses: l.expenses,
+            expenseType: l.expenseType,
+            name: l.name,
+            personal: l.personal,
+            total: l.total ?? l.personal,
+            points: l.points,
+            interestRate: l.interestRate,
+          }));
+
+      setOnboardingData({
+        income: incomeForCharts,
+        expenses: expensesForCharts,
+        assets: assetsForCharts,
+        liabilities: liabilitiesForCharts,
+      });
+
+      const incomeTransferById = new Map<string, number>();
+      for (const allocation of incomeAllocations) {
+        const amount = Number(allocation.amount) || 0;
+        if (amount > 0) {
+          incomeTransferById.set(allocation.incomeId, amount);
+        }
+      }
+
+      const monthlyIncomeTotal = incomeRows
+        .filter((income) => (Number(income.personal) || 0) > 0)
+        .reduce((sum, income) => {
+          const total = Number(income.personal) || 0;
+          const allocated = incomeTransferById.get(income.id) ?? 0;
+          return sum + Math.max(0, total - allocated);
+        }, 0);
+
+      const activeBudgetExpenseIds = new Set(
+        budgetExpenseRows
+          .filter((expense) => (Number(expense.personal) || 0) > 0)
+          .map((expense) => expense.id)
+      );
+
+      const monthlyExpenseTotal = accountExpenseAllocations
+        .filter((allocation) => activeBudgetExpenseIds.has(allocation.expenseId))
+        .reduce((sum, allocation) => sum + (Number(allocation.amount) || 0), 0);
+
+      setPooledIncome(monthlyIncomeTotal);
+      setPooledExpenses(monthlyExpenseTotal);
+
+      const currentMonth = new Date().getMonth();
+      const currentYear = new Date().getFullYear();
+      const monthlyExpenses = expenses
+        .filter((exp) => {
+          const expDate = new Date(exp.date);
+          return expDate.getMonth() === currentMonth && expDate.getFullYear() === currentYear;
+        })
+        .reduce((sum, exp) => sum + exp.amount, 0);
+      setTotalExpenses(monthlyExpenses);
+
+      // Compute real per-account figures if the user has set up allocations
+      const allocatedIncomeIds = new Set(incomeAllocations.map((a) => a.accountId ? a.incomeId : null).filter(Boolean));
+      if (incomeAllocations.length > 0 && incomeRows.length > 0) {
+        const allocatedIncomeTotal = incomeRows
+          .filter((i) => allocatedIncomeIds.has(i.id))
+          .reduce((s, i) => s + (Number(i.personal) || 0), 0);
+        const totalBudgeted = accountExpenseAllocations.reduce((s, a) => s + a.amount, 0);
+        const totalSpentFromAccounts = expenses
+          .filter((exp) => {
+            const d = new Date(exp.date);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear && exp.accountId;
+          })
+          .reduce((s, e) => s + e.amount, 0);
+        setAccountBalance({ allocated: allocatedIncomeTotal, budgeted: totalBudgeted, spent: totalSpentFromAccounts });
+      } else {
+        setAccountBalance(null);
+      }
+
+      setAccountTypeBalances(loadedAccountTypeBalances);
+
+      // Monthly statement chart uses the same Income / Expenses totals as the Budget page "This month" card.
+      const statementMonth = new Date().toLocaleString(undefined, { month: "short", year: "numeric" });
+      const diff = monthlyIncomeTotal - monthlyExpenseTotal;
+      setMonthlyChartData([
+        {
+          month: statementMonth,
+          Income: monthlyIncomeTotal,
+          Expenses: monthlyExpenseTotal,
+          Surplus: diff >= 0 ? diff : null,
+          Deficit: diff < 0 ? diff : null,
+        },
+      ]);
+
+      const totalDebtAmount = debts.reduce((sum, debt) => sum + debt.remainingAmount, 0);
+      const totalMinPayments = debts.reduce((sum, debt) => sum + debt.minimumPayment, 0);
+      setTotalDebt(totalDebtAmount);
+      setMonthlyMinimumPayments(totalMinPayments);
+
+      const financialSavingsTotal = loadedAccountTypeBalances
+        .filter((b) => ["Cash", "Savings", "Bank"].includes(b.type))
+        .reduce((sum, b) => sum + Math.max(0, b.total), 0);
+
+      const investmentAssetTotal =
+        Math.max(0, loadedAccountTypeBalances.find((b) => b.type === "Investment")?.total ?? 0) +
+        (assetsForCharts || [])
+          .filter((a: { expenseType?: string; expenses?: string }) =>
+            /invest/i.test(a.expenseType ?? a.expenses ?? "")
+          )
+          .reduce((sum: number, a: { personal?: number }) => sum + (a.personal ?? 0), 0);
+
+      const promotion = await promoteMembershipTierIfEligible({
+        profile: userProfile,
+        totalDebt: totalDebtAmount,
+        totalSavings: financialSavingsTotal,
+        investmentAssetTotal,
+      });
+
+      if (promotion.promoted) {
+        setProfile(promotion.profile);
+      }
+      } catch (error) {
+        console.error("Failed to load dashboard data:", error);
+      } finally {
+        setIsDashboardLoading(false);
+      }
+    };
+
+    loadData();
+    // Poll every 5 minutes (fix #11 — was 15s causing excessive Supabase queries).
+    // Use a cancelled flag to prevent stale closures from overlapping (fix #6).
+    const POLL_MS = 5 * 60 * 1000;
+    let intervalId: ReturnType<typeof setInterval> | null = null;
+    let cancelled = false;
+
+    const safeLoad = async () => {
+      if (!cancelled) await loadData();
+    };
+
+    const schedulePoll = () => {
+      if (intervalId) clearInterval(intervalId);
+      intervalId = setInterval(safeLoad, POLL_MS);
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        safeLoad();
+        schedulePoll();
+      } else if (intervalId) {
+        clearInterval(intervalId);
+        intervalId = null;
+      }
+    };
+
+    schedulePoll();
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      cancelled = true;
+      if (intervalId) clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibility);
+    };
+  }, []);
+
+  if (isDashboardLoading && !profile) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16">
+        <div className="h-10 w-10 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-500" />
+        <p className="mt-4 text-gray-600 dark:text-gray-400">Loading dashboard...</p>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="text-center py-12">
+        <p className="text-gray-600 dark:text-gray-400 mb-4">Please set up your profile first.</p>
+        <Link
+          href="/profile"
+          className="inline-block bg-blue-600 text-white px-6 py-3 rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          Go to Profile
+        </Link>
+      </div>
+    );
+  }
+
+  const monthlyIncome = pooledIncome;
+  const availableAfterExpenses = monthlyIncome - totalExpenses - monthlyMinimumPayments;
+  const savingsRate = monthlyIncome > 0 ? (availableAfterExpenses / monthlyIncome) * 100 : 0;
+
+  // Total points from onboarding (count points only when personal > 0)
+  const totalPoints = [
+    ...(onboardingData.income || []),
+    ...(onboardingData.expenses || []),
+    ...(onboardingData.assets || []),
+    ...(onboardingData.liabilities || []),
+  ].reduce(
+    (sum, entry) =>
+      sum +
+      (entry.personal > 0 ? (entry.points ?? 0) : 0),
+    0
+  );
+
+  // Calculate progress values for each button
+  // Mood: Based on financial health (0-100)
+  const moodProgress = Math.max(0, Math.min(100, savingsRate + 50));
+
+  // Earn: Based on income goal from onboarding
+  const earnTarget = profile.incomeGoals || monthlyIncome * 1.2;
+  const earnProgress = earnTarget > 0
+    ? Math.min(100, ((profile.lastIncome || monthlyIncome) / earnTarget) * 100)
+    : 0;
+
+  // Budget: Based on budget adherence (expenses vs budget)
+  const budgetTarget = monthlyIncome * 0.8; // 80% of income as budget
+  const budgetProgress = budgetTarget > 0
+    ? Math.min(100, ((profile.lastExpenses || totalExpenses) / budgetTarget) * 100)
+    : 0;
+
+  // Calendar setup
+  const monthNames = ["January", "February", "March", "April", "May", "June",
+    "July", "August", "September", "October", "November", "December"];
+  const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  const year = currentDate.getFullYear();
+  const month = currentDate.getMonth();
+  const firstDay = new Date(year, month, 1).getDay();
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  const today = new Date();
+
+  const getDateStatus = (date: Date): { mood: boolean; earned: boolean; budget: boolean } => {
+    const key = getLocalDateString(date);
+    return {
+      mood: moodDates.has(key),
+      earned: earnDates.has(key),
+      budget: budgetDates.has(key),
+    };
+  };
+
+  const getDaysArray = () => {
+    const days = [];
+    // Empty cells for days before the first day of the month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+    // Days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      days.push(day);
+    }
+    return days;
+  };
+
+  const goToPrevious = () => {
+    if (calendarView === "week") {
+      setCurrentDate(new Date(year, month, currentDate.getDate() - 7));
+    } else {
+      setCurrentDate(new Date(year, month - 1, 1));
+    }
+  };
+
+  const goToNext = () => {
+    if (calendarView === "week") {
+      setCurrentDate(new Date(year, month, currentDate.getDate() + 7));
+    } else {
+      setCurrentDate(new Date(year, month + 1, 1));
+    }
+  };
+
+  const goToToday = () => {
+    setCurrentDate(new Date());
+  };
+
+  // Get week days for week view
+  const getWeekDays = () => {
+    const day = currentDate.getDate();
+    const startOfWeek = new Date(year, month, day - currentDate.getDay());
+    const weekDays = [];
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(startOfWeek);
+      date.setDate(startOfWeek.getDate() + i);
+      weekDays.push(date);
+    }
+    return weekDays;
+  };
+
+  // Ring with color portions: yellow = mood, red = earned, green = budget (each 120°)
+  const DateCircle = ({ status }: { status: { mood: boolean; earned: boolean; budget: boolean } }) => {
+    const { mood, earned, budget } = status;
+    if (!mood && !earned && !budget) return null;
+
+    const r = 14;
+    const circ = 2 * Math.PI * r;
+    const segment = circ / 3; // 120° each
+    const strokeWidth = 10;
+
+    return (
+      <svg viewBox="0 0 36 36" className="w-7 h-7 -rotate-90" style={{ overflow: "visible" }}>
+        {/* Base gray ring */}
+        <circle
+          cx="18" cy="18" r={r}
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={strokeWidth}
+          className="text-gray-300 dark:text-gray-500"
+        />
+        {/* Mood segment (0–120°) - yellow */}
+        {mood && (
+          <circle cx="18" cy="18" r={r} fill="none" stroke="#eab308" strokeWidth={strokeWidth}
+            strokeDasharray={`${segment} ${circ - segment}`} strokeDashoffset={0} strokeLinecap="round" />
+        )}
+        {/* Earn segment (120–240°) - green */}
+        {earned && (
+          <circle cx="18" cy="18" r={r} fill="none" stroke="#22c55e" strokeWidth={strokeWidth}
+            strokeDasharray={`${segment} ${circ - segment}`} strokeDashoffset={-segment} strokeLinecap="round" />
+        )}
+        {/* Budget segment (240–360°) - orange */}
+        {budget && (
+          <circle cx="18" cy="18" r={r} fill="none" stroke="#f97316" strokeWidth={strokeWidth}
+            strokeDasharray={`${segment} ${circ - segment}`} strokeDashoffset={-segment * 2} strokeLinecap="round" />
+        )}
+      </svg>
+    );
+  };
+
+  const renderMonthView = () => (
+    <div className="grid grid-cols-7 gap-2">
+      {dayNames.map((day) => (
+        <div key={day} className="text-center text-sm font-semibold text-gray-600 dark:text-gray-400 py-2">
+          {day}
+        </div>
+      ))}
+      {getDaysArray().map((day, index) => {
+        const date = day ? new Date(year, month, day) : null;
+        const isToday = date && date.getDate() === today.getDate() &&
+          date.getMonth() === today.getMonth() && date.getFullYear() === today.getFullYear();
+        const isSelected = date && date.getDate() === selectedDateState.getDate() &&
+          date.getMonth() === selectedDateState.getMonth() && date.getFullYear() === selectedDateState.getFullYear();
+
+        return (
+          <div
+            key={index}
+            onClick={() => {
+              if (date) {
+                setSelectedDateState(date);
+                setCurrentDate(date);
+              }
+            }}
+            className={`text-center py-2 rounded-lg relative cursor-pointer min-h-[56px] flex flex-col items-center justify-center gap-1 transition-all ${day === null
+              ? ""
+              : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 " + (
+                isToday && isSelected
+                  ? "ring-2 ring-blue-500 bg-blue-100/60 dark:bg-blue-900/40 dark:ring-blue-400"
+                  : isToday
+                    ? "ring-2 ring-blue-400/70 bg-blue-50/50 dark:bg-blue-900/25 dark:ring-blue-500/60 font-medium"
+                    : isSelected
+                      ? "ring-2 ring-slate-400/60 bg-slate-100/80 dark:bg-slate-700/40 dark:ring-slate-500/60"
+                      : ""
+              )
+              }`}
+          >
+            {day && (
+              <>
+                <span className="text-sm font-medium">{day}</span>
+                <DateCircle status={getDateStatus(new Date(year, month, day))} />
+              </>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+
+  const renderWeekView = () => {
+    const weekDays = getWeekDays();
+    return (
+      <div className="space-y-2">
+        <div className="grid grid-cols-7 gap-2 mb-2">
+          {dayNames.map((day) => (
+            <div key={day} className="text-center text-sm font-semibold text-gray-600 dark:text-gray-400 py-2">
+              {day}
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-7 gap-2">
+          {weekDays.map((date, index) => {
+            const isToday =
+              date.getDate() === today.getDate() &&
+              date.getMonth() === today.getMonth() &&
+              date.getFullYear() === today.getFullYear();
+            const isSelected =
+              date.getDate() === selectedDateState.getDate() &&
+              date.getMonth() === selectedDateState.getMonth() &&
+              date.getFullYear() === selectedDateState.getFullYear();
+            return (
+              <div
+                key={index}
+                onClick={() => {
+                  setSelectedDateState(date);
+                  setCurrentDate(date);
+                }}
+                className={`text-center py-2 rounded-lg cursor-pointer min-h-[60px] flex flex-col items-center justify-center gap-1 transition-all text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-600 ${isToday && isSelected
+                  ? "ring-2 ring-blue-500 bg-blue-100/60 dark:bg-blue-900/40 dark:ring-blue-400"
+                  : isToday
+                    ? "ring-2 ring-blue-400/70 bg-blue-50/50 dark:bg-blue-900/25 dark:ring-blue-500/60 font-medium"
+                    : isSelected
+                      ? "ring-2 ring-slate-400/60 bg-slate-100/80 dark:bg-slate-700/40 dark:ring-slate-500/60"
+                      : ""
+                  }`}
+              >
+                <span className="text-sm font-medium">{date.getDate()}</span>
+                <DateCircle status={getDateStatus(date)} />
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  };
+
+  const getViewTitle = () => {
+    if (calendarView === "week") {
+      const weekDays = getWeekDays();
+      const start = weekDays[0];
+      const end = weekDays[6];
+      return `${monthNames[start.getMonth()]} ${start.getDate()} - ${monthNames[end.getMonth()]} ${end.getDate()}, ${year}`;
+    } else {
+      return `${monthNames[month]} ${year}`;
+    }
+  };
+
+  const financialSavingsTotal = accountTypeBalances
+    .filter((b) => ["Cash", "Savings", "Bank"].includes(b.type))
+    .reduce((sum, b) => sum + Math.max(0, b.total), 0);
+
+  const investmentAssetTotal =
+    Math.max(0, accountTypeBalances.find((b) => b.type === "Investment")?.total ?? 0) +
+    (onboardingData.assets || [])
+      .filter((a: { expenseType?: string; expenses?: string }) =>
+        /invest/i.test(a.expenseType ?? a.expenses ?? "")
+      )
+      .reduce((sum: number, a: { personal?: number }) => sum + (a.personal ?? 0), 0);
+
+  const membershipProgress = computeMembershipProgress({
+    profile,
+    totalDebt,
+    totalSavings: financialSavingsTotal,
+    investmentAssetTotal,
+  });
+
+  return (
+    <div className="space-y-8">
+      <MembershipQuestMap progress={membershipProgress} />
+
+      {/* Calendar */}
+      <div className="flex justify-center">
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6 w-full">
+          <div className="flex items-center justify-between mb-4">
+            <button
+              onClick={goToPrevious}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              aria-label="Previous"
+            >
+              <ChevronLeft className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            </button>
+            <div className="flex items-center gap-2">
+              <Calendar className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+                {getViewTitle()}
+              </h2>
+            </div>
+            <button
+              onClick={goToNext}
+              className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+              aria-label="Next"
+            >
+              <ChevronRight className="h-5 w-5 text-gray-600 dark:text-gray-400" />
+            </button>
+          </div>
+
+          {/* View Toggle Buttons */}
+          <div className="flex gap-2 mb-4">
+            <button
+              onClick={() => setCalendarView("week")}
+              className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${calendarView === "week"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                }`}
+            >
+              Week
+            </button>
+            <button
+              onClick={() => setCalendarView("month")}
+              className={`flex-1 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${calendarView === "month"
+                ? "bg-blue-600 text-white"
+                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+                }`}
+            >
+              Month
+            </button>
+          </div>
+
+          <button
+            onClick={goToToday}
+            className="w-full mb-4 text-sm text-blue-600 dark:text-blue-400 hover:underline"
+          >
+            Go to Today
+          </button>
+
+          {/* Calendar View Content */}
+          {calendarView === "month" && renderMonthView()}
+          {calendarView === "week" && renderWeekView()}
+
+          {/* Legend */}
+          <div className="flex items-center justify-center gap-5 mt-4 pt-3 border-t border-gray-100 dark:border-gray-700">
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-[#eab308] inline-block" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Mood</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-[#22c55e] inline-block" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Earn</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <span className="w-3 h-3 rounded-full bg-[#f97316] inline-block" />
+              <span className="text-xs text-gray-500 dark:text-gray-400">Budget</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Quick action cards under calendar */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
+        {/* Mood Card */}
+        <Link href="/mood" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#f3e7c8] hover:bg-[#ecddb7] border border-[#eadab3] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#f4a91e] flex items-center justify-center text-white">
+              <Smile className="h-6 w-6" />
+            </div>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#8b5c00] font-semibold">Mood</span>
+              <span className="text-sm text-[#9b6e0c]">How are you feeling?</span>
+            </div>
+        </Link>
+
+        {/* Earn Card */}
+        <Link href="/earn" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#d6ece7] hover:bg-[#cbe5df] border border-[#c2ddd6] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#14a085] flex items-center justify-center text-white">
+              <DollarSign className="h-6 w-6" />
+            </div>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#1c6a5e] font-semibold">Earn</span>
+              <span className="text-sm text-[#2d8577]">Grow your income</span>
+            </div>
+        </Link>
+
+        {/* Budget Card */}
+        <Link href="/budget" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#d9e3f4] hover:bg-[#cdd9ef] border border-[#c3d0e8] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#2f6de1] flex items-center justify-center text-white">
+              <Wallet className="h-6 w-6" />
+            </div>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#1d4da9] font-semibold">Budget</span>
+              <span className="text-sm text-[#3562bb]">Control your spending</span>
+            </div>
+        </Link>
+
+        {/* Help me Button */}
+        <Link href="/help-me" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#ddd8ea] hover:bg-[#d2cce3] border border-[#cbc4df] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#6f57c7] flex items-center justify-center text-white">
+              <HelpCircle className="h-6 w-6" />
+            </div>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#4e3a99] font-semibold">Help me</span>
+              <span className="text-sm text-[#6e5aa7]">Get guidance on next steps</span>
+            </div>
+        </Link>
+
+        {/* Spend Button */}
+        <Link href="/spend" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#eed9d4] hover:bg-[#e6cbc3] border border-[#e0bfb6] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#e76f3d] flex items-center justify-center text-white">
+              <ShoppingCart className="h-6 w-6" />
+            </div>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#8d3413] font-semibold">Spend</span>
+              <span className="text-sm text-[#b0522c]">Track your daily expenses</span>
+            </div>
+        </Link>
+
+        {/* Review debt Button */}
+        <Link href="/review-debt" className="w-full flex items-center gap-4 p-5 rounded-2xl bg-[#dbe0e6] hover:bg-[#d1d8e0] border border-[#c6ced8] transition-colors no-underline">
+          <div className="w-12 h-12 rounded-xl bg-[#4f83ac] flex items-center justify-center text-white">
+              <FileText className="h-6 w-6" />
+            </div>
+            <div className="flex flex-col items-start text-left">
+              <span className="text-xl leading-tight text-[#2c4d67] font-semibold">Review debt</span>
+              <span className="text-sm text-[#4d6f89]">See what you owe today</span>
+            </div>
+        </Link>
+      </div>
+
+
+
+
+
+
+      {/* Mood Display — commented out, replaced by counselor slider below */}
+      {/* {profile.onboardingCompleted && profile.mood && (
+        <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Your Current Mood</h3>
+          <div className="flex items-center gap-4">
+            <div className="text-6xl">{profile.mood}</div>
+            <div>
+              <p className="text-gray-600 dark:text-gray-400">
+                {profile.mood === "😊" && "You're feeling great! Keep up the positive mindset."}
+                {profile.mood === "😐" && "You're doing okay. Remember, progress takes time."}
+                {profile.mood === "😔" && "Hang in there! Every step forward counts, no matter how small."}
+              </p>
+            </div>
+          </div>
+        </div>
+      )} */}
+
+      {/* Financial Counselors */}
+      <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+        <div className="flex items-center justify-between mb-5">
+          <div>
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">Meet Your Financial Counselors</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Browse our growing pool of expert advisors</p>
+          </div>
+          <span className="text-xs font-medium bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full border border-blue-100 dark:border-blue-800">
+            {isLoadingCounselors ? "Loading..." : `${counselors.length} counselors`}
+          </span>
+        </div>
+
+        {isLoadingCounselors ? (
+          <div className="flex items-center justify-center py-10">
+            <div className="h-8 w-8 animate-spin rounded-full border-4 border-gray-200 border-t-blue-600 dark:border-gray-700 dark:border-t-blue-500" />
+          </div>
+        ) : counselors.length === 0 ? (
+          <p className="text-sm text-gray-500 dark:text-gray-400">
+            No counselors are available right now. Please check back soon.
+          </p>
+        ) : (
+          <div className="flex gap-4 overflow-x-auto pb-2 sm:grid sm:grid-cols-3 sm:overflow-visible sm:pb-0 lg:grid-cols-3">
+            {counselors.slice(0, 3).map((counselor) => (
+              <div
+                key={counselor.id}
+                className="w-[calc((100%-1rem)/2)] min-w-[calc((100%-1rem)/2)] bg-gray-50 dark:bg-gray-700/50 border border-gray-200 dark:border-gray-600 rounded-xl p-4 flex flex-col items-center text-center gap-3 sm:w-auto sm:min-w-0"
+              >
+                <img
+                  src={resolveCounselorImage(counselor.image)}
+                  alt={counselor.name}
+                  className="w-14 h-14 rounded-full object-cover shadow-md ring-2 ring-white dark:ring-gray-600"
+                />
+                <div>
+                  <p className="font-semibold text-gray-900 dark:text-white text-base">{counselor.name}</p>
+                  <p className="text-sm text-blue-600 dark:text-blue-400 font-medium">{counselor.title}</p>
+                </div>
+                <span className="text-xs font-medium bg-indigo-50 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-300 px-2 py-0.5 rounded-full border border-indigo-100 dark:border-indigo-700">
+                  {counselor.specialty}
+                </span>
+                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed line-clamp-3">{counselor.bio}</p>
+                <Link
+                  href={`/help-me/counselors/${counselor.id}?action=book`}
+                  className="mt-auto w-full text-sm font-medium py-1.5 px-3 rounded-lg bg-blue-600 text-white hover:bg-blue-700 transition-colors text-center"
+                >
+                  Book Free Session
+                </Link>
+              </div>
+            ))}
+          </div>
+        )}
+        <Link
+          href="/help-me"
+          className="mt-4 inline-block w-full sm:w-auto text-sm font-medium py-2 px-4 rounded-lg border border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/30 transition-colors text-center"
+        >
+          View other counsellors
+        </Link>
+      </div>
+
+      {/* Cash is king Heading */}
+      <div>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-white">Cash is king - total cash balances</h3>
+      </div>
+      {(accountTypeBalances.length > 0 || profile.onboardingCompleted) && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+          {accountTypeBalances.map((b) => (
+            <div
+              key={b.type}
+              className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4"
+            >
+              <p className="text-sm text-gray-600 dark:text-gray-400">{b.type}</p>
+              <p className={`text-xl font-bold ${b.total < 0 ? "text-red-600 dark:text-red-400" : "text-gray-900 dark:text-white"}`}>
+                R {b.total.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Financial Profile Details */}
+      {profile.onboardingCompleted && (
+        <div className="space-y-6">
+          <h2 className="text-2xl font-bold text-gray-900 dark:text-white">Financial Profile Details</h2>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            {/* 1 — Monthly Income Statement Summary */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-white flex items-center gap-2">
+                  <TrendingUp className="h-5 w-5 text-green-600" />
+                  Monthly Income Statement Summary
+                </h3>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full bg-[#2f6064]/10 px-3 py-1 text-xs font-semibold text-[#2f6064] dark:text-[#6ab0b6]">
+                    Monthly calculated view
+                  </span>
+                  <div className="flex overflow-hidden rounded-lg border border-gray-200 dark:border-gray-600">
+                    {(["bar", "line"] as const).map((type) => (
+                      <button
+                        key={type}
+                        type="button"
+                        onClick={() => setIncomeStatementChartType(type)}
+                        className={`px-3 py-1.5 text-xs font-medium capitalize transition-colors ${
+                          incomeStatementChartType === type
+                            ? "bg-[#2f6064] text-white"
+                            : "bg-white text-gray-600 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700"
+                        }`}
+                      >
+                        {type}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+              {monthlyChartData.some((d) => d.Income > 0 || d.Expenses > 0 || (d.Surplus ?? 0) > 0 || (d.Deficit ?? 0) < 0) ? (
+                (() => {
+                  const statement = monthlyChartData[0];
+                  const balance = statement.Surplus ?? statement.Deficit ?? 0;
+                  const monthlyStatementBars = [
+                    { name: "Income", value: statement.Income, fill: "#22c55e" },
+                    { name: "Expenses", value: statement.Expenses, fill: "#ef4444" },
+                    {
+                      name: balance >= 0 ? "Surplus" : "Deficit",
+                      value: balance,
+                      fill: balance >= 0 ? "#2563eb" : "#f59e0b",
+                    },
+                  ];
+
+                  return (
+                    <>
+                      <div className="grid grid-cols-3 gap-2 mb-4">
+                        {monthlyStatementBars.map((item) => (
+                          <div key={item.name} className="rounded-xl bg-gray-50 px-3 py-2 dark:bg-gray-900/30">
+                            <p className="text-[11px] font-medium text-gray-500 dark:text-gray-400">{item.name}</p>
+                            <p className="text-sm font-bold" style={{ color: item.fill }}>
+                              R {item.value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      {incomeStatementChartType === "line" && (
+                        <div className="mb-3 flex flex-wrap items-center justify-center gap-3">
+                          {monthlyStatementBars.map((item) => (
+                            <div key={item.name} className="flex items-center gap-1.5 text-xs font-medium text-gray-600 dark:text-gray-300">
+                              <span
+                                className="h-2.5 w-2.5 rounded-full"
+                                style={{ backgroundColor: item.fill }}
+                              />
+                              {item.name}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="w-full min-h-[300px]">
+                        <ResponsiveContainer width="100%" height={300}>
+                          {incomeStatementChartType === "bar" ? (
+                            <BarChart data={monthlyStatementBars} margin={{ top: 24, right: 20, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                              <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#6b7280" }} axisLine={false} tickLine={false} />
+                              <YAxis
+                                tick={{ fontSize: 11, fill: "#6b7280" }}
+                                tickFormatter={(v) => `R${Math.abs(v).toLocaleString()}`}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <ReTooltip
+                                formatter={(value: number | undefined) =>
+                                  [`R${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, ""]
+                                }
+                                cursor={{ fill: "rgba(47, 96, 100, 0.06)" }}
+                              />
+                              <ReBar dataKey="value" radius={[8, 8, 0, 0]} maxBarSize={80}>
+                                {monthlyStatementBars.map((entry, index) => (
+                                  <Cell key={index} fill={entry.fill} />
+                                ))}
+                              </ReBar>
+                            </BarChart>
+                          ) : (
+                            <LineChart data={monthlyStatementBars} margin={{ top: 24, right: 24, left: 10, bottom: 5 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                              <XAxis dataKey="name" tick={{ fontSize: 12, fill: "#6b7280" }} axisLine={false} tickLine={false} />
+                              <YAxis
+                                tick={{ fontSize: 11, fill: "#6b7280" }}
+                                tickFormatter={(v) => `R${Math.abs(v).toLocaleString()}`}
+                                axisLine={false}
+                                tickLine={false}
+                              />
+                              <ReferenceLine y={0} stroke="#94a3b8" strokeDasharray="4 4" />
+                              <ReTooltip
+                                formatter={(value: number | undefined) =>
+                                  [`R${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, ""]
+                                }
+                              />
+                              <Line
+                                type="monotone"
+                                dataKey="value"
+                                name="Monthly value"
+                                stroke="#64748b"
+                                strokeWidth={3}
+                                dot={(props: unknown) => {
+                                  const point = props as {
+                                    cx?: number;
+                                    cy?: number;
+                                    payload?: { fill?: string };
+                                  };
+                                  if (typeof point.cx !== "number" || typeof point.cy !== "number") return <circle />;
+                                  return (
+                                    <circle
+                                      cx={point.cx}
+                                      cy={point.cy}
+                                      r={5}
+                                      fill={point.payload?.fill ?? "#2563eb"}
+                                      stroke="#ffffff"
+                                      strokeWidth={2}
+                                    />
+                                  );
+                                }}
+                                activeDot={(props: unknown) => {
+                                  const point = props as {
+                                    cx?: number;
+                                    cy?: number;
+                                    payload?: { fill?: string };
+                                  };
+                                  if (typeof point.cx !== "number" || typeof point.cy !== "number") return <circle />;
+                                  return (
+                                    <circle
+                                      cx={point.cx}
+                                      cy={point.cy}
+                                      r={7}
+                                      fill={point.payload?.fill ?? "#2563eb"}
+                                      stroke="#ffffff"
+                                      strokeWidth={2}
+                                    />
+                                  );
+                                }}
+                              />
+                            </LineChart>
+                          )}
+                        </ResponsiveContainer>
+                      </div>
+                    </>
+                  );
+                })()
+              ) : (
+                <div className="h-[300px] flex items-center justify-center text-gray-400 dark:text-gray-500">
+                  No data available yet
+                </div>
+              )}
+            </div>
+
+
+            {/* 2 — Financial Position (Summary Bar Chart) */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-6">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 flex items-center gap-2">
+                <Wallet className="h-5 w-5 text-blue-600" />
+                Financial Position
+              </h3>
+              {/*<p className="text-sm text-gray-500 dark:text-gray-400 mb-4">Total Assets · Total Liabilities · Net Worth</p>*/}
+              {(() => {
+                const totalAssets = onboardingData.assets.reduce(
+                  (sum: number, a: any) => sum + (a.personal ?? 0), 0
+                );
+                const totalLiabilities = onboardingData.liabilities.reduce(
+                  (sum: number, l: any) => sum + (l.personal ?? 0), 0
+                );
+                const netWorth = totalAssets - totalLiabilities;
+
+                const barData = [
+                  { name: 'Total Assets', value: totalAssets, fill: '#92d050' },
+                  { name: 'Total Liabilities', value: totalLiabilities, fill: '#ff0000' },
+                  { name: 'Net Worth', value: netWorth, fill: netWorth >= 0 ? '#3b82f6' : '#ffc000' },
+                ];
+
+                const hasData = totalAssets > 0 || totalLiabilities > 0;
+
+                return hasData ? (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={barData} margin={{ top: 24, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                      <XAxis dataKey="name" tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: '#6b7280' }}
+                        tickFormatter={(v) => `R${Math.abs(v).toLocaleString()}`}
+                        axisLine={false}
+                        tickLine={false}
+                      />
+                      <ReTooltip
+                        formatter={(value: number | undefined) =>
+                          [`R${(value ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2 })}`, '']
+                        }
+                        cursor={{ fill: 'rgba(0,0,0,0.04)' }}
+                      />
+                      <ReBar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={80}>
+                        {barData.map((entry, index) => (
+                          <Cell key={index} fill={entry.fill} />
+                        ))}
+                      </ReBar>
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <div className="h-[300px] flex items-center justify-center text-gray-400 dark:text-gray-500">
+                    No asset or liability data available yet
+                  </div>
+                );
+              })()}
+            </div>
+
+
+          </div>{/* end grid */}
+
+        </div>
+      )}
+
+    </div>
+  );
+}
+
