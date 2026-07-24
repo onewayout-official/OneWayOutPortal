@@ -14,6 +14,35 @@ export default function CoachDashboard() {
   const [error, setError] = useState<string | null>(null);
   const [isForbidden, setIsForbidden] = useState(false);
 
+  const saveSessionNote = useCallback(async (appointmentId: string, coachNotes: string) => {
+    const headers = await getAuthHeader();
+    const response = await fetch(`/api/coach/appointments/${appointmentId}`, {
+      method: "PATCH",
+      headers: {
+        ...headers,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({ coachNotes }),
+    });
+
+    const json = (await response.json()) as {
+      appointment?: CounselorAppointment;
+      error?: string;
+    };
+
+    if (!response.ok) {
+      throw new Error(json.error ?? "Failed to save session notes.");
+    }
+
+    if (json.appointment) {
+      setAppointments((current) =>
+        current.map((appointment) =>
+          appointment.id === appointmentId ? json.appointment! : appointment
+        )
+      );
+    }
+  }, []);
+
   const loadAppointments = useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -74,6 +103,7 @@ export default function CoachDashboard() {
       coachName={coachName}
       isLoading={isLoading}
       error={error}
+      onSaveSessionNote={saveSessionNote}
     />
   );
 }

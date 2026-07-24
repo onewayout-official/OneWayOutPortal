@@ -1,15 +1,19 @@
+import type { Metadata } from "next";
+import FinancialGoals from "@/components/FinancialGoals";
 import AppLayout from "@/components/AppLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
+
+export const metadata: Metadata = {
+  title: "Financial Goals | OneWayOut",
+  description:
+    "Complete your financial goals to see where you stand and what it takes to close the gap.",
+};
 
 export default function My1PlanPage() {
   return (
     <ProtectedRoute>
       <AppLayout>
-        <div className="flex min-h-[60vh] items-center justify-center">
-          <p className="text-lg font-semibold text-gray-600 dark:text-gray-300">
-            Coming soon
-          </p>
-        </div>
+        <FinancialGoals />
       </AppLayout>
     </ProtectedRoute>
   );

@@ -55,6 +55,7 @@ export type CounselorAppointment = {
   outlookEventId?: string | null;
   status: "scheduled" | "completed" | "cancelled";
   createdAt: string;
+  coachNotes?: string;
   userName?: string;
   userEmail?: string;
   userPhone?: string | null;
@@ -75,6 +76,7 @@ export type CounselorAppointmentRow = {
   outlook_event_id?: string | null;
   status: "scheduled" | "completed" | "cancelled";
   created_at: string;
+  coach_notes?: string | null;
 };
 
 export function counselorFromRow(row: CounselorRow): Counselor {
@@ -118,6 +120,7 @@ export function appointmentFromRow(
     outlookEventId: row.outlook_event_id ?? null,
     status: row.status,
     createdAt: row.created_at,
+    coachNotes: row.coach_notes ?? "",
     userName: user?.name ?? undefined,
     userEmail: user?.email ?? undefined,
     userPhone: user?.phone ?? null,

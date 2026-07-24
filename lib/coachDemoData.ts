@@ -38,6 +38,7 @@ export const DEMO_COACH_APPOINTMENTS: CounselorAppointment[] = [
     meetingLink: "https://meet.google.com/demo-onewayout-3",
     status: "completed",
     createdAt: "2026-06-05T09:15:00.000Z",
+    coachNotes: "Reviewed monthly budget and debt snowball plan. Client will track dining out for two weeks.",
     userName: "Linda Amutenya",
     userEmail: "linda.a@example.com",
     userPhone: "+264 81 555 1234",

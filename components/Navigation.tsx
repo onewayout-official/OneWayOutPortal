@@ -102,7 +102,7 @@ const navSections = [
     items: [
       { href: "/", label: "Dashboard", icon: Home },
       { href: "/financial-plan", label: "Financial Information", icon: BarChart3 },
-      { href: "/my-1-plan", label: "FNA", icon: ClipboardList },
+      { href: "/my-1-plan", label: "Financial Goals", icon: ClipboardList },
       { href: "/book-financial-session", label: "Book Financial Planning Session", icon: CalendarCheck },
     ],
   },
@@ -116,7 +116,6 @@ const navSections = [
       { href: "/my-sessions", label: "My Sessions", icon: CalendarCheck },
       { href: "/course", label: "Course", icon: GraduationCap },
       { href: "/spend", label: "Spend", icon: ShoppingCart },
-      { href: "/review-debt", label: "Review debt", icon: FileText },
     ],
   },
   
