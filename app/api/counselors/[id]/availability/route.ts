@@ -46,6 +46,7 @@ export async function GET(
       slots: result.slots,
       coachEmail: result.coachEmail,
       graphSynced: result.graphSynced,
+      graphSyncStatus: result.graphSyncStatus,
     });
   } catch (error) {
     const message = error instanceof Error ? error.message : "Failed to load availability.";

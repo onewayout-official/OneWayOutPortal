@@ -17,6 +17,38 @@ let tokenCache: TokenCache | null = null;
 
 const scheduleCache = new Map<string, { expiresAt: number; intervals: BusyInterval[] }>();
 
+const MICROSOFT_FETCH_TIMEOUT_MS = 30_000;
+
+async function fetchMicrosoft(url: string, init: RequestInit): Promise<Response> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      return await fetch(url, {
+        ...init,
+        signal: AbortSignal.timeout(MICROSOFT_FETCH_TIMEOUT_MS),
+      });
+    } catch (err) {
+      lastError = err;
+      const code = (err as { code?: string }).code;
+      const retryable =
+        code === "UND_ERR_CONNECT_TIMEOUT" ||
+        (err instanceof Error && /timeout|fetch failed/i.test(err.message));
+      if (!retryable || attempt === 1) break;
+      await new Promise((resolve) => setTimeout(resolve, 800));
+    }
+  }
+  throw lastError;
+}
+
+export function isNetworkGraphError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = (error as { code?: string }).code;
+  return (
+    code === "UND_ERR_CONNECT_TIMEOUT" ||
+    /fetch failed|timeout|ECONNRESET|ENOTFOUND/i.test(error.message)
+  );
+}
+
 export function isMicrosoftGraphConfigured(): boolean {
   const tenantId = process.env.AZURE_TENANT_ID?.trim() ?? "";
   const clientId = process.env.AZURE_CLIENT_ID?.trim() ?? "";
@@ -57,7 +89,7 @@ export async function getGraphAccessToken(): Promise<string | null> {
   }
 
   const tenantId = process.env.AZURE_TENANT_ID!.trim();
-  const response = await fetch(
+  const response = await fetchMicrosoft(
     `https://login.microsoftonline.com/${tenantId}/oauth2/v2.0/token`,
     {
       method: "POST",
@@ -159,7 +191,7 @@ export async function getCoachBusyIntervals(
   const { startDateTime: scheduleStart, endDateTime: scheduleEnd } =
     clampScheduleDateTimeRange(startDateTime, endDateTime);
 
-  const response = await fetch(
+  const response = await fetchMicrosoft(
     `${GRAPH_BASE}/users/${encodeURIComponent(coachEmail)}/calendar/getSchedule`,
     {
       method: "POST",
@@ -255,7 +287,7 @@ export async function createCoachTeamsMeeting({
       ]
     : [];
 
-  const response = await fetch(
+  const response = await fetchMicrosoft(
     `${GRAPH_BASE}/users/${encodeURIComponent(coachEmail)}/events`,
     {
       method: "POST",
@@ -305,7 +337,7 @@ export async function deleteCoachTeamsMeeting(
     return false;
   }
 
-  const response = await fetch(
+  const response = await fetchMicrosoft(
     `${GRAPH_BASE}/users/${encodeURIComponent(coachEmail)}/events/${encodeURIComponent(eventId)}`,
     {
       method: "DELETE",
@@ -347,7 +379,7 @@ export async function sendGraphEmail({
     message.replyTo = [{ emailAddress: { address: replyTo.trim() } }];
   }
 
-  const response = await fetch(
+  const response = await fetchMicrosoft(
     `${GRAPH_BASE}/users/${encodeURIComponent(senderMailbox)}/sendMail`,
     {
       method: "POST",

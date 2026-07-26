@@ -110,10 +110,30 @@ function dayCellClass(
   return `${base} ${tone}${selected}${today}`;
 }
 
+type GraphSyncStatus = "live" | "network" | "not_configured" | "no_mailbox" | "error";
+
+function graphSyncBanner(status: GraphSyncStatus): string | null {
+  switch (status) {
+    case "live":
+      return null;
+    case "network":
+      return "Could not reach Microsoft from this server (timeout or firewall). Slots use portal bookings and coach hours only—try again or test on production.";
+    case "not_configured":
+      return "Azure calendar is not configured. Set AZURE_* and GRAPH_MAIL_SENDER in the environment.";
+    case "no_mailbox":
+      return "This coach has no linked Microsoft mailbox. Link a login email in Admin → Coaches.";
+    case "error":
+      return "Outlook calendar sync failed. Check Azure Calendars.ReadWrite permission and that the coach email exists in Microsoft 365.";
+    default:
+      return "Outlook calendar sync is off. Booked portal slots still show; coach calendar conflicts may not.";
+  }
+}
+
 type Props = {
   availabilitySlots: AvailabilitySlot[];
   isLoading: boolean;
   graphSynced: boolean;
+  graphSyncStatus?: GraphSyncStatus;
   selectedDate: string;
   selectedTime: string;
   onSelectDate: (isoDate: string) => void;
@@ -128,6 +148,7 @@ export default function CounselorBookingCalendar({
   availabilitySlots,
   isLoading,
   graphSynced,
+  graphSyncStatus = graphSynced ? "live" : "error",
   selectedDate,
   selectedTime,
   onSelectDate,
@@ -217,6 +238,8 @@ export default function CounselorBookingCalendar({
     selectedDate,
   ]);
 
+  const syncNotice = graphSyncBanner(graphSyncStatus);
+
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
@@ -237,10 +260,9 @@ export default function CounselorBookingCalendar({
         )}
       </div>
 
-      {!graphSynced && (
+      {!graphSynced && syncNotice && (
         <p className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-100">
-          Outlook calendar sync is off. Booked portal slots still show; coach calendar conflicts may
-          not.
+          {syncNotice}
         </p>
       )}
 

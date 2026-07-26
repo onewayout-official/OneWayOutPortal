@@ -8,6 +8,7 @@ import {
   getCoachBusyIntervals,
   getMeetingTimezone,
   isMicrosoftGraphConfigured,
+  isNetworkGraphError,
 } from "@/lib/microsoftGraph";
 
 export async function createAdminClient(): Promise<SupabaseClient | null> {
@@ -44,6 +45,13 @@ export async function resolveCoachMailboxEmail(
   return authData.user?.email?.trim() || null;
 }
 
+export type GraphSyncStatus =
+  | "live"
+  | "network"
+  | "not_configured"
+  | "no_mailbox"
+  | "error";
+
 export async function loadCoachAvailability({
   adminClient,
   counselorId,
@@ -58,6 +66,7 @@ export async function loadCoachAvailability({
   slots: AvailabilitySlot[];
   coachEmail: string | null;
   graphSynced: boolean;
+  graphSyncStatus: GraphSyncStatus;
 } | null> {
   const { data: counselor, error: counselorError } = await adminClient
     .from("counselors")
@@ -101,9 +110,13 @@ export async function loadCoachAvailability({
   }));
 
   let busyIntervals: Awaited<ReturnType<typeof getCoachBusyIntervals>> = [];
-  let graphSynced = false;
+  let graphSyncStatus: GraphSyncStatus = "not_configured";
 
-  if (coachEmail && isMicrosoftGraphConfigured()) {
+  if (!isMicrosoftGraphConfigured()) {
+    graphSyncStatus = "not_configured";
+  } else if (!coachEmail) {
+    graphSyncStatus = "no_mailbox";
+  } else {
     try {
       const timeZone = getMeetingTimezone();
       busyIntervals = await getCoachBusyIntervals(
@@ -112,9 +125,16 @@ export async function loadCoachAvailability({
         `${to}T23:59:59`,
         timeZone
       );
-      graphSynced = true;
+      graphSyncStatus = "live";
     } catch (error) {
-      console.error("Failed to load Outlook busy intervals:", error);
+      graphSyncStatus = isNetworkGraphError(error) ? "network" : "error";
+      if (graphSyncStatus === "network") {
+        console.warn(
+          "Outlook calendar sync skipped: could not reach Microsoft (network timeout or firewall). Showing portal slots only."
+        );
+      } else {
+        console.error("Failed to load Outlook busy intervals:", error);
+      }
     }
   }
 
@@ -126,7 +146,12 @@ export async function loadCoachAvailability({
     busyIntervals,
   });
 
-  return { slots, coachEmail, graphSynced };
+  return {
+    slots,
+    coachEmail,
+    graphSynced: graphSyncStatus === "live",
+    graphSyncStatus,
+  };
 }
 
 export function validateAvailabilityRange(from: string, to: string): boolean {

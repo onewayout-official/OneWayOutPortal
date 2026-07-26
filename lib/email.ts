@@ -23,8 +23,21 @@ export function getGraphMailSender(): string {
   return from.replace(/^["']|["']$/g, "").trim();
 }
 
+function isPlaceholderMailbox(email: string): boolean {
+  const lower = email.toLowerCase();
+  return (
+    !email ||
+    lower.includes("yourdomain") ||
+    lower.includes("@example.com") ||
+    lower.includes("your-mailbox") ||
+    lower.includes("yourdomain.com")
+  );
+}
+
 export function isGraphEmailConfigured(): boolean {
-  return isMicrosoftGraphConfigured() && Boolean(getGraphMailSender());
+  const sender = getGraphMailSender();
+  if (isPlaceholderMailbox(sender)) return false;
+  return isMicrosoftGraphConfigured() && Boolean(sender);
 }
 
 export function getEmailTransport(): "graph" | "smtp" {
@@ -127,6 +140,11 @@ async function sendEmailViaGraph(
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Failed to send email via Graph.";
     console.error("Graph sendMail failed:", msg);
+    if (msg.toLowerCase().includes("invalid") && isPlaceholderMailbox(senderMailbox)) {
+      console.error(
+        "Update GRAPH_MAIL_SENDER in .env.local to a real Microsoft 365 mailbox UPN, then restart the dev server."
+      );
+    }
     return { success: false, error: msg };
   }
 }

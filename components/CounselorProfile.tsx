@@ -85,6 +85,9 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
   } | null>(null);
   const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlot[]>([]);
   const [graphSynced, setGraphSynced] = useState(false);
+  const [graphSyncStatus, setGraphSyncStatus] = useState<
+    "live" | "network" | "not_configured" | "no_mailbox" | "error"
+  >("error");
   const [isLoadingAvailability, setIsLoadingAvailability] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
   const [bookingError, setBookingError] = useState<string | null>(null);
@@ -129,6 +132,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
       const json = (await response.json()) as {
         slots?: AvailabilitySlot[];
         graphSynced?: boolean;
+        graphSyncStatus?: "live" | "network" | "not_configured" | "no_mailbox" | "error";
         error?: string;
       };
 
@@ -138,6 +142,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
 
       setAvailabilitySlots(json.slots ?? []);
       setGraphSynced(Boolean(json.graphSynced));
+      setGraphSyncStatus(json.graphSyncStatus ?? (json.graphSynced ? "live" : "error"));
       setBookingError(null);
     } catch (err) {
       setBookingError(err instanceof Error ? err.message : "Failed to load availability.");
@@ -377,6 +382,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
             availabilitySlots={availabilitySlots}
             isLoading={isLoadingAvailability}
             graphSynced={graphSynced}
+            graphSyncStatus={graphSyncStatus}
             selectedDate={selectedDate}
             selectedTime={selectedTime}
             onSelectDate={handleSelectDate}
