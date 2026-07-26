@@ -1,14 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { HelpCircle, MessageCircle, AlertTriangle, ArrowRight, Phone, MessageSquare, Clock, PhoneCall } from "lucide-react";
+import { HelpCircle, AlertTriangle, ArrowRight, Phone, MessageSquare, Clock, PhoneCall } from "lucide-react";
 import Link from "next/link";
 import { Counselor, resolveCounselorImage } from "@/lib/counselors";
 import { MOCK_COUNSELORS } from "@/lib/mockCounselors";
 import { getAuthHeader } from "@/lib/authHeader";
 
 export default function HelpMeGuide() {
-  const [isChatOpen, setIsChatOpen] = useState(false);
   const [counselors, setCounselors] = useState<Counselor[]>([]);
   const [isLoadingCounselors, setIsLoadingCounselors] = useState(true);
 
@@ -260,51 +259,6 @@ export default function HelpMeGuide() {
 
         </div>
       </div>
-
-      {isChatOpen ? (
-        <div className="fixed bottom-4 right-4 z-50 w-[350px] max-w-[calc(100vw-2rem)] rounded-xl border border-gray-200 bg-white shadow-2xl dark:border-gray-700 dark:bg-gray-800">
-          <div className="flex items-center justify-between rounded-t-xl bg-blue-600 px-3 py-2 text-white">
-            <h3 className="text-sm font-semibold">Counselor chat</h3>
-            <button
-              type="button"
-              onClick={() => setIsChatOpen(false)}
-              className="rounded px-2 py-0.5 text-xs hover:bg-blue-700"
-            >
-              Minimize
-            </button>
-          </div>
-          <div className="h-64 space-y-2 overflow-y-auto bg-gray-50 p-3 dark:bg-gray-900/30">
-            <div className="max-w-[85%] rounded-lg bg-blue-600 px-3 py-2 text-xs text-white">
-              Hi, I need help planning my debt payoff.
-            </div>
-            <div className="ml-auto max-w-[85%] rounded-lg bg-white px-3 py-2 text-xs text-gray-700 shadow dark:bg-gray-700 dark:text-gray-200">
-              You are in the right place. I can guide you step by step.
-            </div>
-          </div>
-          <div className="flex gap-2 border-t border-gray-200 p-3 dark:border-gray-700">
-            <input
-              type="text"
-              placeholder="Type your message..."
-              className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-            />
-            <button
-              type="button"
-              className="rounded-lg bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
-            >
-              Send
-            </button>
-          </div>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={() => setIsChatOpen(true)}
-          className="fixed bottom-4 right-4 z-50 inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-blue-700"
-        >
-          <MessageCircle className="h-4 w-4" />
-          Chat
-        </button>
-      )}
     </div>
   );
 }
