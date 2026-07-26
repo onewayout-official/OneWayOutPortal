@@ -40,7 +40,7 @@ flowchart LR
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Public anon key (safe to expose in the client; access is limited by RLS) |
 | `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Optional; used by `@react-oauth/google` wrapper. **Supabase Google login** is configured in the Supabase dashboard (redirect URLs, provider toggle), not only this env var |
 
-Templates: `.env.local.example` (copy to `.env.local`, never commit secrets).
+Templates: [`.env.local.example`](../.env.local.example) (copy to `.env.local`, never commit secrets). Full list: [`.env.example`](../.env.example). Recovery: [`docs/CREDENTIALS_RECOVERY.md`](CREDENTIALS_RECOVERY.md). Validate: `npm run env:check`.
 
 The Supabase client is created in `lib/supabase.ts`. It uses placeholder URL/key when env is missing so builds do not fail; `isSupabaseConfigured()` (client-side) gates auth flows with a clear error message.
 

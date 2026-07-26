@@ -1,5 +1,8 @@
 const GRAPH_BASE = "https://graph.microsoft.com/v1.0";
 
+/** Microsoft Graph getSchedule FreeBusy window limit (days, inclusive). */
+export const GRAPH_MAX_SCHEDULE_DAYS = 62;
+
 export type BusyInterval = {
   start: Date;
   end: Date;
@@ -92,6 +95,43 @@ export async function getGraphAccessToken(): Promise<string | null> {
   return json.access_token;
 }
 
+function ymdFromDateTime(dateTime: string): string {
+  return dateTime.slice(0, 10);
+}
+
+function addCalendarDays(ymd: string, days: number): string {
+  const [y, m, d] = ymd.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+}
+
+function inclusiveDaySpan(fromYmd: string, toYmd: string): number {
+  const [y1, m1, d1] = fromYmd.split("-").map(Number);
+  const [y2, m2, d2] = toYmd.split("-").map(Number);
+  const start = Date.UTC(y1, m1 - 1, d1);
+  const end = Date.UTC(y2, m2 - 1, d2);
+  return Math.floor((end - start) / 86_400_000) + 1;
+}
+
+/** Graph getSchedule rejects windows longer than 62 days. */
+export function clampScheduleDateTimeRange(
+  startDateTime: string,
+  endDateTime: string
+): { startDateTime: string; endDateTime: string } {
+  const fromYmd = ymdFromDateTime(startDateTime);
+  const toYmd = ymdFromDateTime(endDateTime);
+  if (inclusiveDaySpan(fromYmd, toYmd) <= GRAPH_MAX_SCHEDULE_DAYS) {
+    return { startDateTime, endDateTime };
+  }
+  const clampedToYmd = addCalendarDays(fromYmd, GRAPH_MAX_SCHEDULE_DAYS - 1);
+  const timePart = endDateTime.includes("T") ? endDateTime.slice(endDateTime.indexOf("T")) : "T23:59:59";
+  return {
+    startDateTime,
+    endDateTime: `${clampedToYmd}${timePart}`,
+  };
+}
+
 function parseGraphDateTime(dateTime: string, timeZone: string): Date {
   if (dateTime.endsWith("Z") || /[+-]\d\d:\d\d$/.test(dateTime)) {
     return new Date(dateTime);
@@ -116,6 +156,9 @@ export async function getCoachBusyIntervals(
     return [];
   }
 
+  const { startDateTime: scheduleStart, endDateTime: scheduleEnd } =
+    clampScheduleDateTimeRange(startDateTime, endDateTime);
+
   const response = await fetch(
     `${GRAPH_BASE}/users/${encodeURIComponent(coachEmail)}/calendar/getSchedule`,
     {
@@ -127,8 +170,8 @@ export async function getCoachBusyIntervals(
       },
       body: JSON.stringify({
         schedules: [coachEmail],
-        startTime: { dateTime: startDateTime, timeZone },
-        endTime: { dateTime: endDateTime, timeZone },
+        startTime: { dateTime: scheduleStart, timeZone },
+        endTime: { dateTime: scheduleEnd, timeZone },
         availabilityViewInterval: getMeetingDurationMinutes(),
       }),
     }

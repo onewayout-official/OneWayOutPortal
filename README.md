@@ -55,7 +55,15 @@ A comprehensive Next.js application for managing your personal finances, trackin
 
 ## Environment Variables
 
-Copy `.env.local.example` to `.env.local` and fill in values:
+Copy [`.env.local.example`](.env.local.example) to `.env.local` and fill in values, or pull from Vercel:
+
+```bash
+vercel link --project <your-vercel-project-slug> --yes
+vercel env pull .env.local --environment=production --yes
+npm run env:check
+```
+
+Full variable list and recovery steps: [`.env.example`](.env.example) and [`docs/CREDENTIALS_RECOVERY.md`](docs/CREDENTIALS_RECOVERY.md).
 
 | Variable | Purpose |
 |----------|---------|

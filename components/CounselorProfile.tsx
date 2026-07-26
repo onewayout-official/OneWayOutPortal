@@ -2,14 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import {
-  Clock3,
-  MapPin,
-  Star,
-  Languages,
-  ChevronLeft,
-  ChevronRight,
-} from "lucide-react";
+import { Clock3, MapPin, Star, Languages } from "lucide-react";
+import CounselorBookingCalendar from "@/components/CounselorBookingCalendar";
 import { Counselor, CounselorAppointment, resolveCounselorImage } from "@/lib/counselors";
 import type { AvailabilitySlot } from "@/lib/coachAvailability";
 import { getAuthHeader } from "@/lib/authHeader";
@@ -28,7 +22,6 @@ const WEEKDAY_TO_INDEX: Record<string, number> = {
 };
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const CALENDAR_WEEKDAY_LABELS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 const toISODate = (date: Date) => {
   const year = date.getFullYear();
@@ -59,16 +52,26 @@ const getNextDateForWeekday = (weekday: number) => {
 
 function slotStatusLabel(status: AvailabilitySlot["status"]) {
   if (status === "booked") return "Booked";
-  if (status === "busy") return "Unavailable";
+  if (status === "busy") return "Calendar busy";
   if (status === "past") return "Past";
-  return "Book 20 min session";
+  if (status === "outside_hours") return "Not scheduled";
+  return "Book session";
+}
+
+function slotStatusBadgeClass(status: AvailabilitySlot["status"]): string {
+  if (status === "available") {
+    return "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-200";
+  }
+  if (status === "booked") {
+    return "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-200";
+  }
+  if (status === "busy") {
+    return "bg-amber-100 text-amber-900 dark:bg-amber-900/40 dark:text-amber-200";
+  }
+  return "bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400";
 }
 
 export default function CounselorProfile({ counselor }: { counselor: Counselor }) {
-  const [visibleMonth, setVisibleMonth] = useState(() => {
-    const now = new Date();
-    return new Date(now.getFullYear(), now.getMonth(), 1);
-  });
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTime, setSelectedTime] = useState("");
   const [pendingBooking, setPendingBooking] = useState<{
@@ -87,20 +90,22 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
   const [bookingError, setBookingError] = useState<string | null>(null);
 
   const monthRange = useMemo(() => {
-    const year = visibleMonth.getFullYear();
-    const month = visibleMonth.getMonth();
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = now.getMonth();
     return {
       from: toISODate(new Date(year, month, 1)),
       to: toISODate(new Date(year, month + 1, 0)),
     };
-  }, [visibleMonth]);
+  }, []);
 
   const fetchRange = useMemo(() => {
     const today = toISODate(new Date());
     const horizon = toISODate(new Date(Date.now() + 42 * 24 * 60 * 60 * 1000));
-    const from = monthRange.from < today ? monthRange.from : today;
+    // Do not start before today (avoids 60+ day Graph windows when viewing the current month).
+    const from = monthRange.from < today ? today : monthRange.from;
     const to = monthRange.to > horizon ? monthRange.to : horizon;
-    return { from, to };
+    return from <= to ? { from, to } : { from: today, to: today };
   }, [monthRange.from, monthRange.to]);
 
   const slotByKey = useMemo(() => {
@@ -145,35 +150,16 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
     loadAvailability();
   }, [loadAvailability]);
 
-  const monthDays = useMemo(() => {
-    const year = visibleMonth.getFullYear();
-    const month = visibleMonth.getMonth();
-    const firstDayWeekIndex = (new Date(year, month, 1).getDay() + 6) % 7;
-    const daysInMonth = new Date(year, month + 1, 0).getDate();
-    const cells: Array<{
-      isoDate: string;
-      dayNumber: number;
-      hasAvailability: boolean;
-    }> = [];
+  const handleSelectDate = useCallback((isoDate: string) => {
+    setSelectedDate(isoDate);
+    setSelectedTime("");
+    setBookingError(null);
+  }, []);
 
-    for (let day = 1; day <= daysInMonth; day += 1) {
-      const date = new Date(year, month, day);
-      const isoDate = toISODate(date);
-      const hasAvailability = availabilitySlots.some(
-        (slot) => slot.date === isoDate && slot.status === "available"
-      );
-      cells.push({ isoDate, dayNumber: day, hasAvailability });
-    }
-
-    return { firstDayWeekIndex, cells };
-  }, [availabilitySlots, visibleMonth]);
-
-  const selectedDateSlots = useMemo(() => {
-    if (!selectedDate) return [];
-    return availabilitySlots
-      .filter((slot) => slot.date === selectedDate)
-      .sort((a, b) => a.time.localeCompare(b.time));
-  }, [availabilitySlots, selectedDate]);
+  const handleSelectTime = useCallback((time: string) => {
+    setSelectedTime(time);
+    setBookingError(null);
+  }, []);
 
   const weeklySlots = useMemo(
     () =>
@@ -333,12 +319,12 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                     <button
                       type="button"
                       disabled={slot.status !== "available" || isLoadingAvailability}
-                      onClick={() => {
-                        const date = new Date(`${slot.nextDate}T00:00:00`);
-                        setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
-                        openBookingConfirm(slot.nextDate, slot.time);
-                      }}
-                      className="mt-2 w-full rounded-md bg-blue-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                      onClick={() => openBookingConfirm(slot.nextDate, slot.time)}
+                      className={`mt-2 w-full rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60 ${
+                        slot.status === "available"
+                          ? "bg-blue-600 text-white hover:bg-blue-700"
+                          : slotStatusBadgeClass(slot.status)
+                      }`}
                     >
                       {slotStatusLabel(slot.status)}
                     </button>
@@ -368,11 +354,15 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
                     type="button"
                     disabled={slot.status !== "available" || isLoadingAvailability}
                     onClick={() => {
-                      const date = new Date(`${slot.nextDate}T00:00:00`);
-                      setVisibleMonth(new Date(date.getFullYear(), date.getMonth(), 1));
+                      handleSelectDate(slot.nextDate);
+                      handleSelectTime(slot.time);
                       openBookingConfirm(slot.nextDate, slot.time);
                     }}
-                    className="mt-2 w-full rounded-md border border-blue-200 px-3 py-1.5 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-50 dark:border-blue-700 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                    className={`mt-2 w-full rounded-md px-3 py-1.5 text-xs font-medium disabled:cursor-not-allowed disabled:opacity-60 ${
+                      slot.status === "available"
+                        ? "border border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/20"
+                        : slotStatusBadgeClass(slot.status)
+                    }`}
                   >
                     {slotStatusLabel(slot.status)}
                   </button>
@@ -383,155 +373,19 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
         </div>
 
         <div className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800 lg:col-span-2">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Book Appointment</h2>
-
-          {!graphSynced && (
-            <p className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:border-amber-800/40 dark:bg-amber-900/20 dark:text-amber-200">
-              Live Outlook calendar sync is unavailable. Slots are based on portal bookings and coach working hours only.
-            </p>
-          )}
-
-          <div className="mt-5 rounded-xl border border-gray-200 p-4 dark:border-gray-700">
-            <div className="flex items-center justify-between gap-3">
-              <p className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                {visibleMonth.toLocaleString("default", { month: "long", year: "numeric" })}
-              </p>
-              <div className="inline-flex items-center gap-1">
-                <button
-                  type="button"
-                  aria-label="Previous month"
-                  onClick={() =>
-                    setVisibleMonth(
-                      (prev) => new Date(prev.getFullYear(), prev.getMonth() - 1, 1)
-                    )
-                  }
-                  className="rounded-md border border-gray-200 p-1 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                <button
-                  type="button"
-                  aria-label="Next month"
-                  onClick={() =>
-                    setVisibleMonth(
-                      (prev) => new Date(prev.getFullYear(), prev.getMonth() + 1, 1)
-                    )
-                  }
-                  className="rounded-md border border-gray-200 p-1 text-gray-600 hover:bg-gray-100 dark:border-gray-600 dark:text-gray-300 dark:hover:bg-gray-700"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-
-            <div className="mt-3 flex flex-wrap gap-3 text-xs text-gray-500 dark:text-gray-400">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-blue-500" /> Available
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-gray-400" /> Booked
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2.5 w-2.5 rounded-full bg-amber-500" /> Outlook busy
-              </span>
-            </div>
-
-            <div className="mt-3 grid grid-cols-7 gap-1 text-center text-xs text-gray-500 dark:text-gray-400">
-              {CALENDAR_WEEKDAY_LABELS.map((label) => (
-                <div key={label} className="py-1">
-                  {label}
-                </div>
-              ))}
-            </div>
-
-            <div className="grid grid-cols-7 gap-1">
-              {Array.from({ length: monthDays.firstDayWeekIndex }).map((_, idx) => (
-                <div key={`empty-${idx}`} className="h-9" />
-              ))}
-              {monthDays.cells.map((day) => (
-                <button
-                  key={day.isoDate}
-                  type="button"
-                  disabled={!day.hasAvailability}
-                  onClick={() => {
-                    setSelectedDate(day.isoDate);
-                    setSelectedTime("");
-                  }}
-                  className={`h-9 rounded-md text-sm transition-colors ${
-                    day.hasAvailability
-                      ? "border border-blue-200 text-blue-700 hover:bg-blue-50 dark:border-blue-700 dark:text-blue-300 dark:hover:bg-blue-900/20"
-                      : "border border-gray-200 text-gray-400 dark:border-gray-700 dark:text-gray-600"
-                  } ${
-                    selectedDate === day.isoDate
-                      ? "bg-blue-100 dark:bg-blue-900/40"
-                      : "bg-transparent"
-                  }`}
-                >
-                  {day.dayNumber}
-                </button>
-              ))}
-            </div>
-
-            <div className="mt-3">
-              <p className="text-xs text-gray-500 dark:text-gray-400">Available time slots</p>
-              {isLoadingAvailability && (
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                  Loading live availability...
-                </p>
-              )}
-              {selectedDateSlots.length > 0 ? (
-                <div className="mt-2 flex flex-wrap gap-2">
-                  {selectedDateSlots.map((slot) => {
-                    const isDisabled = slot.status !== "available";
-                    const suffix =
-                      slot.status === "booked"
-                        ? " booked"
-                        : slot.status === "busy"
-                          ? " busy"
-                          : slot.status === "past"
-                            ? " past"
-                            : "";
-                    return (
-                      <button
-                        key={slot.time}
-                        type="button"
-                        disabled={isDisabled}
-                        onClick={() => setSelectedTime(slot.time)}
-                        className={`rounded-full border px-3 py-1 text-xs ${
-                          isDisabled
-                            ? slot.status === "busy"
-                              ? "cursor-not-allowed border-amber-200 bg-amber-50 text-amber-700 dark:border-amber-800 dark:bg-amber-900/20 dark:text-amber-300"
-                              : "cursor-not-allowed border-gray-200 bg-gray-100 text-gray-400 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-500"
-                            : selectedTime === slot.time
-                              ? "border-blue-600 bg-blue-600 text-white"
-                              : "border-gray-300 text-gray-700 dark:border-gray-600 dark:text-gray-300"
-                        }`}
-                      >
-                        {slot.time}
-                        {suffix}
-                      </button>
-                    );
-                  })}
-                </div>
-              ) : (
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">
-                  Select an available date to view time slots.
-                </p>
-              )}
-
-              <button
-                type="button"
-                disabled={!selectedSlotAvailable || isBooking || isLoadingAvailability}
-                onClick={() => openBookingConfirm(selectedDate, selectedTime)}
-                className="mt-3 w-full rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                Review selected 20 min session
-              </button>
-              {bookingError && (
-                <p className="mt-2 text-xs text-red-600 dark:text-red-400">{bookingError}</p>
-              )}
-            </div>
-          </div>
+          <CounselorBookingCalendar
+            availabilitySlots={availabilitySlots}
+            isLoading={isLoadingAvailability}
+            graphSynced={graphSynced}
+            selectedDate={selectedDate}
+            selectedTime={selectedTime}
+            onSelectDate={handleSelectDate}
+            onSelectTime={handleSelectTime}
+            onReviewBooking={() => openBookingConfirm(selectedDate, selectedTime)}
+            canReview={Boolean(selectedSlotAvailable)}
+            isBooking={isBooking}
+            bookingError={bookingError}
+          />
         </div>
       </section>
 

@@ -314,7 +314,15 @@ export async function POST(request: NextRequest) {
       if (!coachSend.success) {
         console.error("Coach notification email failed:", coachSend.error);
       }
+    } else {
+      console.warn(
+        "[counselor-appointments] Coach notification skipped: link a portal login email to this coach in Admin → Coaches."
+      );
     }
+  } else {
+    console.warn(
+      "[counselor-appointments] Email not configured; client and coach confirmation emails were not sent."
+    );
   }
 
   return NextResponse.json(

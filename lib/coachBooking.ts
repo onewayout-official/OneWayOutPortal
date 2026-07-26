@@ -32,8 +32,16 @@ export async function resolveCoachMailboxEmail(
     .eq("id", linkedUserId)
     .maybeSingle();
 
-  const email = (data as { email?: string | null } | null)?.email?.trim();
-  return email || null;
+  const profileEmail = (data as { email?: string | null } | null)?.email?.trim();
+  if (profileEmail) return profileEmail;
+
+  const { data: authData, error } = await adminClient.auth.admin.getUserById(linkedUserId);
+  if (error) {
+    console.error("[coach] could not resolve login email for linked user:", error.message);
+    return null;
+  }
+
+  return authData.user?.email?.trim() || null;
 }
 
 export async function loadCoachAvailability({
