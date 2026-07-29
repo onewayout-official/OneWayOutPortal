@@ -159,7 +159,9 @@ export async function sendEmail(
 }
 
 export function getCoachSetupEmailMode(): "supabase" | "smtp" | "both" {
-  const mode = (process.env.COACH_SETUP_EMAIL_MODE ?? "both").toLowerCase();
-  if (mode === "supabase" || mode === "smtp") return mode;
-  return "both";
+  const mode = (process.env.COACH_SETUP_EMAIL_MODE ?? "smtp").toLowerCase();
+  if (mode === "supabase") return "supabase";
+  if (mode === "both") return "both";
+  // smtp | graph | app → send via lib/email (Graph when EMAIL_TRANSPORT=graph|auto)
+  return "smtp";
 }

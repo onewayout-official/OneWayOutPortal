@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, GraduationCap, CalendarCheck, ClipboardList, UserCog, Eye, Menu, X } from "lucide-react";
+import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, CalendarCheck, ClipboardList, UserCog, Eye, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { rewards } from "@/lib/gamification/rewards";
 import { REWARD_POINTS_UPDATED_EVENT } from "@/lib/gamification/rewardPoints";
@@ -102,7 +102,7 @@ const navSections = [
     items: [
       { href: "/", label: "Dashboard", icon: Home },
       { href: "/financial-plan", label: "Financial Information", icon: BarChart3 },
-      { href: "/my-1-plan", label: "Financial Goals", icon: ClipboardList },
+      { href: "/financial-goals", label: "Financial Goals", icon: ClipboardList },
       { href: "/book-financial-session", label: "Book Financial Planning Session", icon: CalendarCheck },
     ],
   },
@@ -114,7 +114,6 @@ const navSections = [
       { href: "/budget", label: "Budget", icon: Wallet },
       { href: "/help-me", label: "Help me", icon: HelpCircle },
       { href: "/my-sessions", label: "My Sessions", icon: CalendarCheck },
-      { href: "/course", label: "Course", icon: GraduationCap },
       { href: "/spend", label: "Spend", icon: ShoppingCart },
     ],
   },

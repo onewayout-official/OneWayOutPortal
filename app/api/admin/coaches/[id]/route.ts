@@ -38,6 +38,7 @@ export async function PATCH(
   }
   if (body.image !== undefined) updates.image = resolveCounselorImage(String(body.image));
   if (body.isActive !== undefined) updates.is_active = Boolean(body.isActive);
+  if (body.isFinancialCoach !== undefined) updates.is_financial_coach = Boolean(body.isFinancialCoach);
 
   if (body.linkedUserEmail !== undefined) {
     const coachName =

@@ -28,6 +28,11 @@ const WEEKDAY_TO_INDEX: Record<string, number> = {
 };
 
 const DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
+const TIME_PATTERN = /^(\d{1,2}):(\d{2})$/;
+
+export type ParsedAvailabilitySlot =
+  | { kind: "date"; raw: string; date: string; time: string }
+  | { kind: "weekly"; raw: string; weekday: string; time: string };
 
 export function slotKey(date: string, time: string): string {
   return `${date}|${time}`;
@@ -49,6 +54,58 @@ export function isValidAvailabilityDate(value: string): boolean {
 
 export function isPastSlot(date: string, time: string, now = new Date()): boolean {
   return new Date(`${date}T${time}:00`).getTime() < now.getTime();
+}
+
+export function normalizeAvailabilityTime(time: string): string | null {
+  const match = time.trim().match(TIME_PATTERN);
+  if (!match) return null;
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+  if (hours > 23 || minutes > 59) return null;
+  return `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`;
+}
+
+export function parseAvailabilitySlot(raw: string): ParsedAvailabilitySlot | null {
+  const trimmed = raw.trim();
+  const spaceIndex = trimmed.indexOf(" ");
+  if (spaceIndex === -1) return null;
+
+  const first = trimmed.slice(0, spaceIndex);
+  const time = normalizeAvailabilityTime(trimmed.slice(spaceIndex + 1));
+  if (!time) return null;
+
+  if (isValidAvailabilityDate(first)) {
+    return { kind: "date", raw: `${first} ${time}`, date: first, time };
+  }
+
+  const weekday =
+    first.charAt(0).toUpperCase() + first.slice(1, 3).toLowerCase();
+  if (WEEKDAY_TO_INDEX[weekday] === undefined) return null;
+
+  return { kind: "weekly", raw: `${weekday} ${time}`, weekday, time };
+}
+
+export function parseAvailabilityList(
+  value: string | string[]
+): ParsedAvailabilitySlot[] {
+  const parts = Array.isArray(value)
+    ? value
+    : value
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+
+  const seen = new Set<string>();
+  const parsed: ParsedAvailabilitySlot[] = [];
+
+  for (const part of parts) {
+    const slot = parseAvailabilitySlot(part);
+    if (!slot || seen.has(slot.raw)) continue;
+    seen.add(slot.raw);
+    parsed.push(slot);
+  }
+
+  return parsed;
 }
 
 function addMinutesToTime(time: string, minutesToAdd: number): string {
@@ -73,18 +130,25 @@ function formatISODate(date: Date): string {
 
 function expandWorkingHours(availability: string[], from: string, to: string) {
   const availabilityByWeekday = new Map<number, string[]>();
+  const dateSpecific: Array<{ date: string; time: string }> = [];
 
-  availability.forEach((slot) => {
-    const [dayLabel, time] = slot.trim().split(" ");
-    const weekday = WEEKDAY_TO_INDEX[dayLabel];
-    if (weekday === undefined || !time) return;
+  parseAvailabilityList(availability).forEach((slot) => {
+    if (slot.kind === "date") {
+      if (slot.date >= from && slot.date <= to) {
+        dateSpecific.push({ date: slot.date, time: slot.time });
+      }
+      return;
+    }
+
+    const weekday = WEEKDAY_TO_INDEX[slot.weekday];
+    if (weekday === undefined) return;
     const existing = availabilityByWeekday.get(weekday) ?? [];
-    availabilityByWeekday.set(weekday, [...existing, time]);
+    availabilityByWeekday.set(weekday, [...existing, slot.time]);
   });
 
   const start = parseISODate(from);
   const end = parseISODate(to);
-  const candidates: Array<{ date: string; time: string }> = [];
+  const candidates: Array<{ date: string; time: string }> = [...dateSpecific];
 
   for (let cursor = new Date(start); cursor <= end; cursor.setDate(cursor.getDate() + 1)) {
     const isoDate = formatISODate(cursor);
@@ -94,7 +158,13 @@ function expandWorkingHours(availability: string[], from: string, to: string) {
     }
   }
 
-  return candidates;
+  const seen = new Set<string>();
+  return candidates.filter(({ date, time }) => {
+    const key = slotKey(date, time);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function slotInterval(date: string, time: string, durationMinutes: number) {

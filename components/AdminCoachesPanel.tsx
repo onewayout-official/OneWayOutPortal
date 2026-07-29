@@ -28,6 +28,7 @@ interface CoachFormState {
   availability: string;
   image: string;
   isActive: boolean;
+  isFinancialCoach: boolean;
   linkedUserEmail: string;
   password: string;
 }
@@ -44,6 +45,7 @@ const EMPTY_FORM: CoachFormState = {
   availability: "",
   image: "",
   isActive: true,
+  isFinancialCoach: false,
   linkedUserEmail: "",
   password: "",
 };
@@ -62,6 +64,7 @@ function coachToForm(coach: Counselor): CoachFormState {
     availability: coach.availability.join(", "),
     image: coach.image,
     isActive: Boolean(coach.isActive),
+    isFinancialCoach: Boolean(coach.isFinancialCoach),
     linkedUserEmail: coach.linkedUserEmail ?? "",
     password: "",
   };
@@ -100,6 +103,7 @@ function formToPayload(form: CoachFormState, includePassword = false) {
     availability: form.availability,
     image: form.image.trim(),
     isActive: form.isActive,
+    isFinancialCoach: form.isFinancialCoach,
     linkedUserEmail: form.linkedUserEmail.trim() || null,
   };
 
@@ -186,11 +190,11 @@ export default function AdminCoachesPanel() {
         json.accountCreated
           ? json.setupEmailSent
             ? "Coach added and a new counselor login was created. A secure password setup email was sent to the coach."
-            : "Coach added and a new counselor login was created. The password was set, but Supabase did not send the setup email."
+            : "Coach added and a new counselor login was created. The password was set, but the setup email was not sent."
           : json.passwordUpdated
             ? json.setupEmailSent
               ? "Coach added successfully. The linked coach password was reset and a secure setup email was sent."
-              : "Coach added successfully. The linked coach password was reset, but Supabase did not send the setup email."
+              : "Coach added successfully. The linked coach password was reset, but the setup email was not sent."
           : "Coach added successfully."
       );
       setCreateForm(EMPTY_FORM);
@@ -285,11 +289,11 @@ export default function AdminCoachesPanel() {
         json.accountCreated
           ? json.setupEmailSent
             ? "Coach updated and a new counselor login was created. A secure password setup email was sent to the coach."
-            : "Coach updated and a new counselor login was created. The password was set, but Supabase did not send the setup email."
+            : "Coach updated and a new counselor login was created. The password was set, but the setup email was not sent."
           : json.passwordUpdated
             ? json.setupEmailSent
               ? "Coach updated successfully. The coach password was reset and a secure setup email was sent."
-              : "Coach updated successfully. The coach password was reset, but Supabase did not send the setup email."
+              : "Coach updated successfully. The coach password was reset, but the setup email was not sent."
           : "Coach updated successfully."
       );
       cancelEdit();
@@ -470,7 +474,7 @@ export default function AdminCoachesPanel() {
       />
       <FormField
         label="Availability"
-        hint="Select a weekday and time, then add each recurring meeting slot."
+        hint="Pick a date on the calendar and add times for that specific day only."
         className="sm:col-span-2"
       >
         <AvailabilitySlotBuilder
@@ -498,7 +502,15 @@ export default function AdminCoachesPanel() {
           checked={form.isActive}
           onChange={(e) => setForm((prev) => ({ ...prev, isActive: e.target.checked }))}
         />
-        Active (visible on Help Me page)
+        Active (can be booked and can log in)
+      </label>
+      <label className="flex items-center gap-2 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 dark:border-gray-600 dark:text-gray-200 sm:col-span-2">
+        <input
+          type="checkbox"
+          checked={form.isFinancialCoach}
+          onChange={(e) => setForm((prev) => ({ ...prev, isFinancialCoach: e.target.checked }))}
+        />
+        Financial coach (hidden from Help Me page, used on Book Financial Planning Session)
       </label>
     </>
   );
@@ -638,6 +650,11 @@ export default function AdminCoachesPanel() {
                       >
                         {coach.isActive ? "Active" : "Inactive"}
                       </span>
+                      {coach.isFinancialCoach && (
+                        <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                          Financial coach
+                        </span>
+                      )}
                     </div>
                     <p className="text-sm text-gray-600 dark:text-gray-400">{coach.specialty}</p>
                     <p className="text-xs text-gray-500 dark:text-gray-500">{coach.location}</p>

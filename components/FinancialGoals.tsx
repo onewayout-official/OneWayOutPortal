@@ -13,6 +13,7 @@ import {
   DEBT_CATCHUP_STEPS,
   DEBT_TYPE_OPTIONS,
   formatRand,
+  validateFinancialGoalsForSummary,
   type DebtRow,
   type DebtStrategy,
   type ResultRow,
@@ -20,6 +21,15 @@ import {
   type ShortfallKey,
   type StudyRow,
 } from "@/lib/financialGoalsCalc";
+
+const SECTION_TAB: Record<ShortfallKey, TabId> = {
+  retire: "g-retire",
+  death: "g-death",
+  study: "g-study",
+  debt: "g-debt",
+  dis: "g-dis",
+  ci: "g-ci",
+};
 
 type TabId =
   | "g-retire"
@@ -347,6 +357,8 @@ export default function FinancialGoals() {
     [retireOut, deathOut, studyOut, debtOut, disOut, ciOut]
   );
 
+  const summaryValidation = useMemo(() => validateFinancialGoalsForSummary(data), [data]);
+
   const summaryOrder: ShortfallKey[] = ["retire", "death", "study", "debt", "dis", "ci"];
 
   const selectTab = (id: TabId) => {
@@ -370,11 +382,11 @@ export default function FinancialGoals() {
           <Target className="h-6 w-6 text-[#2f6064] dark:text-teal-300" />
         </div>
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">My Financial Goals</h1>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Financial Goals</h1>
           <p className="mt-1 max-w-3xl text-sm text-gray-600 dark:text-gray-400">
-            Complete each goal below to see where you stand today and what it would take to close the gap.
-            All amounts are in South African Rand (R). Your answers are stored only in your browser on this
-            device.
+            Fill in every field on each goal tab (assumptions are optional). When all sections are complete, open
+            Summary for your full picture. All amounts are in South African Rand (R). Your answers are stored only
+            in your browser on this device.
           </p>
         </div>
       </div>
@@ -383,7 +395,7 @@ export default function FinancialGoals() {
         {TABS.map((t) => {
           const isSummary = t.id === "g-summary";
           const key = t.shortfallKey;
-          const hasShortfall = key && shortfalls[key];
+          const sectionComplete = key ? summaryValidation.sections[key]?.complete : summaryValidation.ok;
           const active = activeTab === t.id;
           return (
             <button
@@ -394,13 +406,14 @@ export default function FinancialGoals() {
                 active
                   ? "border-[#2f6064] bg-[#2f6064] text-white"
                   : "border-gray-200 bg-white text-gray-600 hover:border-[#2f6064]/50 hover:text-[#2f6064] dark:border-gray-600 dark:bg-gray-800 dark:text-gray-300"
-              }`}
+              } ${isSummary && !summaryValidation.ok ? "opacity-90" : ""}`}
             >
-              {!isSummary && (
+              {!isSummary && key && (
                 <span
                   className={`inline-block h-2 w-2 rounded-full ${
-                    hasShortfall ? "bg-amber-400" : "bg-gray-300 dark:bg-gray-600"
+                    sectionComplete ? "bg-green-500" : "bg-amber-400"
                   }`}
+                  title={sectionComplete ? "Section complete" : "Required fields missing"}
                 />
               )}
               {isSummary && <Star className="h-3.5 w-3.5" aria-hidden />}
@@ -450,7 +463,7 @@ export default function FinancialGoals() {
           </div>
           <details className="mt-6 rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
             <summary className="cursor-pointer text-sm font-semibold text-[#2f6064] dark:text-teal-300">
-              Adjust assumptions (optional)
+              Assumptions (optional)
             </summary>
             <div className={`mt-4 ${formGridWideCls}`}>
               <NumField label="Investment growth per year (%)" value={data.retire.growth} step={0.5} onChange={(n) => patch("retire", (r) => ({ ...r, growth: n }))} />
@@ -901,7 +914,49 @@ export default function FinancialGoals() {
         </div>
       )}
 
-      {activeTab === "g-summary" && (
+      {activeTab === "g-summary" && !summaryValidation.ok && (
+        <div className={cardCls}>
+          <h2 className="text-lg font-semibold text-[#2f6064] dark:text-teal-300">Complete all goals first</h2>
+          <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
+            Your summary is available once every required field is filled on each goal tab. Optional assumption
+            sections do not need to be completed. Use zero where an amount does not apply (e.g. no education
+            savings yet).
+          </p>
+          <div className="space-y-4">
+            {summaryOrder.map((key) => {
+              const section = summaryValidation.sections[key];
+              if (section.complete) return null;
+              const tab = TABS.find((t) => t.shortfallKey === key);
+              return (
+                <div
+                  key={key}
+                  className="rounded-lg border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-900/50 dark:bg-amber-950/20"
+                >
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white">
+                      {tab?.label ?? key}
+                    </h3>
+                    <button
+                      type="button"
+                      onClick={() => selectTab(SECTION_TAB[key])}
+                      className="text-sm font-medium text-[#2f6064] underline-offset-2 hover:underline dark:text-teal-300"
+                    >
+                      Go to section →
+                    </button>
+                  </div>
+                  <ul className="mt-2 list-inside list-disc space-y-0.5 text-sm text-gray-700 dark:text-gray-300">
+                    {section.missing.map((item) => (
+                      <li key={item}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {activeTab === "g-summary" && summaryValidation.ok && (
         <>
           <div className={cardCls}>
             <h2 className="text-lg font-semibold text-[#2f6064] dark:text-teal-300">Your Goals Summary</h2>

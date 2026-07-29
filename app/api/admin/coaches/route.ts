@@ -68,6 +68,7 @@ function toRowPayload(body: Record<string, unknown>, id?: string) {
       sessions_completed: Number(body.sessionsCompleted ?? 0),
       image: resolveCounselorImage(String(body.image ?? "")),
       is_active: Boolean(body.isActive),
+      is_financial_coach: Boolean(body.isFinancialCoach),
       updated_at: new Date().toISOString(),
     },
   };

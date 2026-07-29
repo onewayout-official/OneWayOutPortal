@@ -308,7 +308,7 @@ export default function CoachProfileEditor() {
           </FormField>
           <FormField
             label="Availability"
-            hint="Select a weekday and time, then add each recurring meeting slot."
+            hint="Pick a date on the calendar and add times for that specific day only."
             className="sm:col-span-2"
           >
             <AvailabilitySlotBuilder

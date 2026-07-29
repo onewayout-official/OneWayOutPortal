@@ -21,6 +21,7 @@ export type Counselor = {
   sessionsCompleted: number;
   image: string;
   isActive?: boolean;
+  isFinancialCoach?: boolean;
   linkedUserId?: string | null;
   linkedUserEmail?: string | null;
 };
@@ -40,6 +41,7 @@ export type CounselorRow = {
   sessions_completed: number;
   image: string;
   is_active: boolean;
+  is_financial_coach: boolean;
   linked_user_id?: string | null;
   created_at?: string;
   updated_at?: string;
@@ -95,6 +97,7 @@ export function counselorFromRow(row: CounselorRow): Counselor {
     sessionsCompleted: Number(row.sessions_completed ?? 0),
     image: resolveCounselorImage(row.image),
     isActive: Boolean(row.is_active),
+    isFinancialCoach: Boolean(row.is_financial_coach),
     linkedUserId: row.linked_user_id ?? null,
   };
 }

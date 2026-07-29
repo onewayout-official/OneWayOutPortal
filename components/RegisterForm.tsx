@@ -143,6 +143,7 @@ export default function RegisterForm() {
   });
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingEmailConfirmation, setPendingEmailConfirmation] = useState<string | null>(null);
 
   const firstName = form.firstName.trim();
   const lastName = form.lastName.trim();
@@ -222,6 +223,11 @@ export default function RegisterForm() {
     });
 
     if (result.success) {
+      if (result.needsEmailConfirmation) {
+        setPendingEmailConfirmation(form.email.trim());
+        setIsLoading(false);
+        return;
+      }
       try {
         const session = await storage.getSession();
         if (session) {
@@ -259,6 +265,26 @@ export default function RegisterForm() {
       setIsLoading(false);
     }
   };
+
+  if (pendingEmailConfirmation) {
+    return (
+      <div>
+        <h2
+          className="text-xl font-semibold text-gray-900 dark:text-white"
+          style={{ marginBottom: "0.75rem" }}
+        >
+          Check your email
+        </h2>
+        <p className="terms-note" style={{ marginBottom: "1.25rem" }}>
+          We sent a confirmation link to <strong>{pendingEmailConfirmation}</strong>. Open it to
+          activate your account and sign in. After confirming, you can complete onboarding.
+        </p>
+        <Link href="/login" className="form-link primary" id="link-sign-in-after-confirm">
+          Back to sign in
+        </Link>
+      </div>
+    );
+  }
 
   return (
     <div>

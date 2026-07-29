@@ -16,6 +16,7 @@ export async function GET(
     .select("*")
     .eq("id", id)
     .eq("is_active", true)
+    .eq("is_financial_coach", false)
     .maybeSingle();
 
   if (error) {

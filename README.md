@@ -73,9 +73,10 @@ Full variable list and recovery steps: [`.env.example`](.env.example) and [`docs
 | `TWILIO_ACCOUNT_SID` | Twilio account SID |
 | `TWILIO_AUTH_TOKEN` | Twilio auth token |
 | `TWILIO_WHATSAPP_FROM` | Twilio WhatsApp sender (e.g. `whatsapp:+14155238886`) |
-| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Office 365 SMTP for coach welcome and appointment emails |
+| `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Optional SMTP fallback when Graph is unavailable |
 | `SMTP_REPLY_TO` | Optional reply-to address for transactional emails |
-| `COACH_SETUP_EMAIL_MODE` | `supabase`, `smtp`, or `both` (default: `both`) |
+| `EMAIL_TRANSPORT` | `graph`, `smtp`, or `auto` (default: `auto` — Graph first) |
+| `COACH_SETUP_EMAIL_MODE` | Coach welcome mail: `smtp` or `graph` (app/Graph only), `supabase`, or `both` (default: `smtp`) |
 | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET` | Microsoft Graph for Teams meetings and Outlook availability |
 | `TEAMS_MEETING_TIMEZONE` | IANA timezone for sessions (default: `Africa/Johannesburg`) |
 | `TEAMS_MEETING_DURATION_MINUTES` | Session length in minutes (default: `20`) |
@@ -110,7 +111,7 @@ npm install
    - Create a sender mailbox (e.g. `appointments@yourdomain.com`)
    - Enable **Authenticated SMTP** for that mailbox in Exchange Admin
    - Set `SMTP_HOST=smtp.office365.com`, `SMTP_PORT=587`, `SMTP_SECURE=false`, and mailbox credentials in `.env.local`
-   - Mirror the same SMTP settings in **Supabase Dashboard → Authentication → Email → Custom SMTP** for password-reset emails
+   - Mirror the same SMTP settings in **Supabase Dashboard → Authentication → Email → Custom SMTP** for member auth mail (confirm signup, password reset). See [`docs/SUPABASE_AUTH_EMAIL.md`](docs/SUPABASE_AUTH_EMAIL.md).
 
 5. **Microsoft Teams + Outlook calendar (coach booking)**:
    - Register an app in **Azure Portal → App registrations**

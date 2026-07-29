@@ -10,6 +10,7 @@ export async function GET(request: Request) {
     .from("counselors")
     .select("*")
     .eq("is_active", true)
+    .eq("is_financial_coach", false)
     .order("name", { ascending: true });
 
   if (error) {

@@ -219,7 +219,6 @@ export const GAMIFICATION_TASKS: GamificationTask[] = [
     points: 100,
     pointsLabel: `100 each (max ${VIDEO_QUIZ_DAILY_CAP}/day)`,
     icon: GraduationCap,
-    href: "/course",
     manualClaim: true,
     showOnEarn: true,
     category: "daily",

@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     "Complete your financial goals to see where you stand and what it takes to close the gap.",
 };
 
-export default function My1PlanPage() {
+export default function FinancialGoalsPage() {
   return (
     <ProtectedRoute>
       <AppLayout>

@@ -506,3 +506,138 @@ export const DEBT_CATCHUP_STEPS = [
     body: "speak to a registered debt counsellor about debt review (National Credit Act) before creditors take legal action — don't borrow more to pay arrears.",
   },
 ];
+
+export type FinancialGoalsFormData = {
+  retire: RetirementInput;
+  death: DeathInput;
+  study: StudyInput;
+  debt: DebtInput;
+  dis: DisabilityInput;
+  ci: SevereIllnessInput;
+};
+
+export type SummarySectionValidation = {
+  complete: boolean;
+  missing: string[];
+};
+
+export type SummaryValidationResult = {
+  ok: boolean;
+  sections: Record<ShortfallKey, SummarySectionValidation>;
+};
+
+function positive(n: number): boolean {
+  return Number.isFinite(n) && n > 0;
+}
+
+function nonNegative(n: number): boolean {
+  return Number.isFinite(n) && n >= 0;
+}
+
+/** Required main-form fields only (assumption panels stay optional). */
+export function validateFinancialGoalsForSummary(data: FinancialGoalsFormData): SummaryValidationResult {
+  const sections: Record<ShortfallKey, SummarySectionValidation> = {
+    retire: { complete: false, missing: [] },
+    death: { complete: false, missing: [] },
+    study: { complete: false, missing: [] },
+    debt: { complete: false, missing: [] },
+    dis: { complete: false, missing: [] },
+    ci: { complete: false, missing: [] },
+  };
+
+  const r = data.retire;
+  const retireMissing: string[] = [];
+  if (!positive(r.age)) retireMissing.push("Your current age");
+  if (!positive(r.retAge)) retireMissing.push("Age you want to retire");
+  if (positive(r.age) && positive(r.retAge) && r.retAge <= r.age) {
+    retireMissing.push("Retirement age must be after your current age");
+  }
+  if (!positive(r.income)) retireMissing.push("Current monthly income (before tax)");
+  if (!positive(r.pct)) retireMissing.push("% of income needed in retirement");
+  if (!nonNegative(r.saved)) retireMissing.push("Retirement savings you already have");
+  if (!nonNegative(r.pm)) retireMissing.push("Amount you save for retirement each month");
+  sections.retire = { complete: retireMissing.length === 0, missing: retireMissing };
+
+  const d = data.death;
+  const deathMissing: string[] = [];
+  if (!positive(d.incNeed)) deathMissing.push("Monthly income your family would need");
+  if (!positive(d.years)) deathMissing.push("For how many years?");
+  if (!nonNegative(d.debt)) deathMissing.push("Debts to be settled at death");
+  if (!nonNegative(d.edu)) deathMissing.push("Education amount to set aside");
+  if (!positive(d.funeral)) deathMissing.push("Funeral & immediate costs");
+  if (!nonNegative(d.estate)) deathMissing.push("Estimated value of your estate");
+  if (!nonNegative(d.cover)) deathMissing.push("Life cover you already have");
+  if (!nonNegative(d.assets)) deathMissing.push("Savings/investments available to your family");
+  sections.death = { complete: deathMissing.length === 0, missing: deathMissing };
+
+  const st = data.study;
+  const studyMissing: string[] = [];
+  if (st.rows.length === 0) {
+    studyMissing.push("Add at least one child or study goal");
+  } else {
+    st.rows.forEach((row, i) => {
+      const label = row.name.trim() || `Row ${i + 1}`;
+      if (!row.name.trim()) studyMissing.push(`${label}: child / goal name`);
+      if (!nonNegative(row.start)) studyMissing.push(`${label}: years until studies start`);
+      if (!positive(row.len)) studyMissing.push(`${label}: length of studies (years)`);
+      if (!positive(row.cost)) studyMissing.push(`${label}: cost per year today`);
+    });
+  }
+  if (!nonNegative(st.saved)) studyMissing.push("Education savings you already have");
+  if (!nonNegative(st.pm)) studyMissing.push("Amount you save for education each month");
+  sections.study = { complete: studyMissing.length === 0, missing: studyMissing };
+
+  const db = data.debt;
+  const debtMissing: string[] = [];
+  const activeDebtRows = db.rows.filter(
+    (row) =>
+      row.cred.trim() !== "" ||
+      row.arr > 0 ||
+      row.mths > 0 ||
+      row.rate > 0 ||
+      row.inst > 0
+  );
+  if (activeDebtRows.length === 0) {
+    // No arrears listed — only budget/strategy apply; budget must be filled (0 = none extra).
+    if (!nonNegative(db.budget)) debtMissing.push("Extra amount you can pay per month");
+  } else {
+    activeDebtRows.forEach((row, i) => {
+      const label = row.cred.trim() || `Debt row ${i + 1}`;
+      if (!row.cred.trim()) debtMissing.push(`${label}: creditor name`);
+      if (!positive(row.arr)) debtMissing.push(`${label}: amount in arrears`);
+      if (!positive(row.mths)) debtMissing.push(`${label}: months behind`);
+      if (!positive(row.rate)) debtMissing.push(`${label}: interest rate`);
+      if (!positive(row.inst)) debtMissing.push(`${label}: normal monthly instalment`);
+    });
+    if (!positive(db.budget)) {
+      debtMissing.push("Extra amount you can pay per month (required when you list arrears)");
+    }
+  }
+  sections.debt = { complete: debtMissing.length === 0, missing: debtMissing };
+
+  const dis = data.dis;
+  const disMissing: string[] = [];
+  if (!positive(dis.age)) disMissing.push("Your current age");
+  if (!positive(dis.retAge)) disMissing.push("Planned retirement age");
+  if (positive(dis.age) && positive(dis.retAge) && dis.retAge <= dis.age) {
+    disMissing.push("Retirement age must be after your current age");
+  }
+  if (!positive(dis.incNeed)) disMissing.push("Monthly income to replace");
+  if (!nonNegative(dis.debt)) disMissing.push("Debts you'd want settled");
+  if (!nonNegative(dis.adjust)) disMissing.push("Once-off adjustment costs");
+  if (!nonNegative(dis.cover)) disMissing.push("Disability cover you already have");
+  sections.dis = { complete: disMissing.length === 0, missing: disMissing };
+
+  const ci = data.ci;
+  const ciMissing: string[] = [];
+  if (!nonNegative(ci.med)) ciMissing.push("Medical costs not covered by medical aid");
+  if (!positive(ci.exp)) ciMissing.push("Your monthly living expenses");
+  if (!positive(ci.months)) ciMissing.push("Months of income buffer while recovering");
+  if (!nonNegative(ci.debt)) ciMissing.push("Debt you'd want to reduce");
+  if (!nonNegative(ci.care)) ciMissing.push("Lifestyle & care costs");
+  if (!nonNegative(ci.cover)) ciMissing.push("Severe illness cover you already have");
+  sections.ci = { complete: ciMissing.length === 0, missing: ciMissing };
+
+  const ok = (Object.keys(sections) as ShortfallKey[]).every((k) => sections[k].complete);
+  return { ok, sections };
+}

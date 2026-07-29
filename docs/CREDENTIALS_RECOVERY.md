@@ -62,7 +62,7 @@ Lost secret only: reset secret in Google Cloud → update Supabase provider (not
 
 ## Step 4 — Microsoft 365 — Graph mail + Teams (P1)
 
-**`.env.local`:** `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `GRAPH_MAIL_SENDER`, `EMAIL_TRANSPORT=auto`
+**`.env.local`:** `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `GRAPH_MAIL_SENDER`, `EMAIL_TRANSPORT=graph` (or `auto`), `COACH_SETUP_EMAIL_MODE=smtp` for coach welcome via Graph only
 
 **Azure Portal** → App registrations → your app → **API permissions** (application, admin consent):
 
@@ -71,7 +71,7 @@ Lost secret only: reset secret in Google Cloud → update Supabase provider (not
 
 Lost client secret: **Certificates & secrets** → **New client secret** → update Vercel + `.env.local` → test → revoke old secret later.
 
-Optional SMTP: see [README.md](../README.md) and `.env.example` comments. Mirror SMTP in Supabase for password-reset email.
+Optional SMTP: see [README.md](../README.md) and `.env.example` comments. Member auth mail (welcome/confirm/reset): [SUPABASE_AUTH_EMAIL.md](./SUPABASE_AUTH_EMAIL.md).
 
 ## Step 5 — Twilio WhatsApp OTP (P1)
 

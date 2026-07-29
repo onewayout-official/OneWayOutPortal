@@ -6,6 +6,7 @@ import { Clock3, MapPin, Star, Languages } from "lucide-react";
 import CounselorBookingCalendar from "@/components/CounselorBookingCalendar";
 import { Counselor, CounselorAppointment, resolveCounselorImage } from "@/lib/counselors";
 import type { AvailabilitySlot } from "@/lib/coachAvailability";
+import { parseAvailabilityList } from "@/lib/coachAvailability";
 import { getAuthHeader } from "@/lib/authHeader";
 import { rewards } from "@/lib/gamification/rewards";
 import { notifyRewardPointsUpdated } from "@/lib/gamification/rewardPoints";
@@ -20,8 +21,6 @@ const WEEKDAY_TO_INDEX: Record<string, number> = {
   Fri: 5,
   Sat: 6,
 };
-
-const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 const toISODate = (date: Date) => {
   const year = date.getFullYear();
@@ -168,18 +167,31 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
 
   const weeklySlots = useMemo(
     () =>
-      counselor.availability
+      parseAvailabilityList(counselor.availability)
         .map((slot) => {
-          const [dayLabel, time] = slot.split(" ");
-          const weekday = WEEKDAY_TO_INDEX[dayLabel];
-          if (weekday === undefined || !time) return null;
+          if (slot.kind === "date") {
+            const status =
+              slotByKey.get(slotKey(slot.date, slot.time))?.status ?? "outside_hours";
+            return {
+              key: slot.raw,
+              dayLabel: slot.date,
+              time: slot.time,
+              endTime: addMinutes(slot.time, 20),
+              nextDate: slot.date,
+              status,
+            };
+          }
+
+          const weekday = WEEKDAY_TO_INDEX[slot.weekday];
+          if (weekday === undefined) return null;
           const nextDate = toISODate(getNextDateForWeekday(weekday));
-          const status = slotByKey.get(slotKey(nextDate, time))?.status ?? "outside_hours";
+          const status =
+            slotByKey.get(slotKey(nextDate, slot.time))?.status ?? "outside_hours";
           return {
-            key: slot,
-            dayLabel,
-            time,
-            endTime: addMinutes(time, 20),
+            key: slot.raw,
+            dayLabel: slot.weekday,
+            time: slot.time,
+            endTime: addMinutes(slot.time, 20),
             nextDate,
             status,
           };
@@ -188,8 +200,8 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
     [counselor.availability, slotByKey]
   );
 
-  const todayDayLabel = WEEKDAY_LABELS[new Date().getDay()];
-  const todaySlots = weeklySlots.filter((slot) => slot.dayLabel === todayDayLabel);
+  const todayIso = toISODate(new Date());
+  const todaySlots = weeklySlots.filter((slot) => slot.nextDate === todayIso);
 
   const openBookingConfirm = (date: string, time: string) => {
     setBookingError(null);
@@ -309,7 +321,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
           <h2 className="text-lg font-semibold text-gray-900 dark:text-white">Availability</h2>
 
           <div className="mt-4">
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Today ({todayDayLabel})</h3>
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Today</h3>
             <div className="mt-2 space-y-2">
               {todaySlots.length > 0 ? (
                 todaySlots.map((slot) => (
@@ -344,7 +356,7 @@ export default function CounselorProfile({ counselor }: { counselor: Counselor }
           </div>
 
           <div className="mt-5">
-            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Weekly</h3>
+            <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-100">Scheduled</h3>
             <div className="mt-2 space-y-2">
               {weeklySlots.map((slot) => (
                 <div

@@ -72,6 +72,7 @@ if (hasAppUrl) {
   console.log(`  Supabase redirect URLs should include:`);
   console.log(`    ${appUrl.replace(/\/+$/, "")}/auth/callback`);
   console.log(`    http://localhost:3000/auth/callback`);
+  console.log(`  Member auth email: docs/SUPABASE_AUTH_EMAIL.md (Custom SMTP + Confirm signup template)`);
 }
 
 section("P1 — Google (local + Supabase dashboard)");
@@ -115,6 +116,13 @@ if (smtpPartial) {
 console.log(
   `  Azure app permissions (admin consent): Calendars.ReadWrite, Mail.Send`
 );
+
+const coachEmailMode = (process.env.COACH_SETUP_EMAIL_MODE ?? "smtp").toLowerCase();
+const emailTransport = (process.env.EMAIL_TRANSPORT ?? "auto").toLowerCase();
+console.log(
+  `  Coach setup email: COACH_SETUP_EMAIL_MODE=${coachEmailMode} (use smtp/graph for Graph-only; avoid both with Supabase)`
+);
+console.log(`  App mail transport: EMAIL_TRANSPORT=${emailTransport}`);
 
 section("P2 — Yoyo");
 const yoyoOk =

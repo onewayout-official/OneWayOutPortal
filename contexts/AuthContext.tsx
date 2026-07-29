@@ -20,7 +20,9 @@ interface AuthContextType {
   user: AuthSession | null;
   isLoading: boolean;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
-  register: (payload: RegisterPayload) => Promise<{ success: boolean; error?: string }>;
+  register: (
+    payload: RegisterPayload
+  ) => Promise<{ success: boolean; error?: string; needsEmailConfirmation?: boolean }>;
   loginWithGoogle: () => Promise<{ success: boolean; error?: string }>;
   // Phone OTP via WhatsApp (metadata optional for signup so new user gets name/email in auth)
   // mode "link" attaches a verified phone to the current session (e.g. after Google OAuth)
@@ -131,7 +133,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  const register = async (payload: RegisterPayload): Promise<{ success: boolean; error?: string }> => {
+  const register = async (
+    payload: RegisterPayload
+  ): Promise<{ success: boolean; error?: string; needsEmailConfirmation?: boolean }> => {
     if (!isSupabaseConfigured()) {
       return { success: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (same folder as package.json), then restart the dev server." };
     }
@@ -164,6 +168,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         email,
         password,
         options: {
+          emailRedirectTo: getAppUrl("/auth/callback"),
           data: {
             name,
             first_name: firstName,
@@ -189,7 +194,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.session) {
         setUser(toAuthSession(data.session));
       }
-      return { success: true };
+      return {
+        success: true,
+        needsEmailConfirmation: !data.session,
+      };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An error occurred during registration.";
       const isRateLimit = msg.includes("429") || msg.toLowerCase().includes("too many");

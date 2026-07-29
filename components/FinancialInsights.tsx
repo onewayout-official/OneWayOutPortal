@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { storage } from "@/lib/storage";
 import { rewards, tryAwardTask } from "@/lib/gamification/rewards";
 import {
@@ -144,33 +144,175 @@ const DEFAULT_LIABILITIES: Omit<AssetEntry, "id">[] = [
   { expenses: "Short term loans to Other",    expenseType: "Short Term Liabilities",name: "", personal: 0, total: 0, points: 50,  interestRate: 0, namePlaceholder: "Various" },
 ];
 
+const SPEND_CATS = ["Grocery", "Fuel", "Electricity", "Airtime", "Water", "Rent", "Transport", "Send to others"];
+const AUTOSAVE_DELAY_MS = 1200;
+
+function displayStoredName(storedName: string, categoryLabel: string): string {
+  const name = storedName.trim();
+  const category = categoryLabel.trim();
+  if (!name || name.toLowerCase() === category.toLowerCase()) return "";
+  return name;
+}
+
+function normalizeLegacyIncome(raw: Record<string, unknown>): Income {
+  const incomeType = String(raw.incomeType ?? raw.category ?? "");
+  return {
+    id: String(raw.id ?? crypto.randomUUID()),
+    category: incomeType as IncomeCategory,
+    type: (raw.source === "Variable" || raw.type === "Variable" ? "Variable" : "Fixed") as Income["type"],
+    name: String(raw.name ?? ""),
+    personal: Number(raw.personal) || 0,
+    spouse: Number(raw.spouse) || 0,
+    points: Number(raw.points) || 0,
+    editable: true,
+  };
+}
+
+function normalizeLegacyExpense(raw: Record<string, unknown>): RegistrationExpense {
+  const category = String(raw.expenseCategory ?? raw.category ?? "");
+  return {
+    id: String(raw.id ?? crypto.randomUUID()),
+    category: category as ExpenseCategory,
+    type: (raw.expenseType === "Variable" || raw.type === "Variable" ? "Variable" : "Fixed") as RegistrationExpense["type"],
+    name: String(raw.name ?? ""),
+    personal: Number(raw.personal ?? raw.total) || 0,
+    spouse: Number(raw.spouse) || 0,
+    points: Number(raw.points) || 0,
+    editable: true,
+  };
+}
+
+function normalizeLegacyAsset(raw: Record<string, unknown>): Asset {
+  const category = String(raw.expenses ?? raw.category ?? "");
+  return {
+    id: String(raw.id ?? crypto.randomUUID()),
+    category: category as AssetCategory,
+    type: (String(raw.expenseType ?? raw.type ?? "Fixed Assets") as Asset["type"]),
+    name: String(raw.name ?? ""),
+    personal: Number(raw.personal ?? raw.total) || 0,
+    spouse: Number(raw.spouse) || 0,
+    points: Number(raw.points) || 0,
+    interestRate: Number(raw.interestRate) || 0,
+    editable: true,
+  };
+}
+
+function normalizeLegacyLiability(raw: Record<string, unknown>): Liability {
+  const category = String(raw.expenses ?? raw.category ?? "");
+  return {
+    id: String(raw.id ?? crypto.randomUUID()),
+    category: category as LiabilityCategory,
+    type: (String(raw.expenseType ?? raw.type ?? "Long Term Liabilities") as Liability["type"]),
+    name: String(raw.name ?? ""),
+    personal: Number(raw.personal ?? raw.total) || 0,
+    spouse: Number(raw.spouse) || 0,
+    points: Number(raw.points) || 0,
+    interestRate: Number(raw.interestRate) || 0,
+    editable: true,
+  };
+}
+
+async function loadFinancialPlanRecords(): Promise<{
+  income: Income[];
+  budgetExpenses: RegistrationExpense[];
+  assets: Asset[];
+  liabilities: Liability[];
+}> {
+  const [tableIncome, tableBudget, tableAssets, tableLiabilities, onboarding] = await Promise.all([
+    storage.getIncome(),
+    storage.getBudgetExpenses(),
+    storage.getAssets(),
+    storage.getLiabilities(),
+    storage.getOnboardingData(),
+  ]);
+
+  const legacyIncome = (onboarding.income ?? []).map((row) =>
+    normalizeLegacyIncome(row as Record<string, unknown>)
+  );
+  const legacyExpenses = (onboarding.expenses ?? []).map((row) =>
+    normalizeLegacyExpense(row as Record<string, unknown>)
+  );
+  const legacyAssets = (onboarding.assets ?? []).map((row) =>
+    normalizeLegacyAsset(row as Record<string, unknown>)
+  );
+  const legacyLiabilities = (onboarding.liabilities ?? []).map((row) =>
+    normalizeLegacyLiability(row as Record<string, unknown>)
+  );
+
+  const income = tableIncome.length > 0 ? tableIncome : legacyIncome;
+
+  const spendFromTable = tableBudget.filter((e) => SPEND_CATS.includes(e.category));
+  const planFromTable = tableBudget.filter((e) => !SPEND_CATS.includes(e.category));
+  const planFromLegacy = legacyExpenses.filter((e) => !SPEND_CATS.includes(e.category));
+  const planExpenses = planFromTable.length > 0 ? planFromTable : planFromLegacy;
+  const budgetExpenses = [...planExpenses, ...spendFromTable];
+
+  const assets = tableAssets.length > 0 ? tableAssets : legacyAssets;
+  const liabilities = tableLiabilities.length > 0 ? tableLiabilities : legacyLiabilities;
+
+  return { income, budgetExpenses, assets, liabilities };
+}
+
 // ─── Helper: merge stored records into default entry rows ─────────────────
 
 function mergeIncomeWithDefaults(stored: Income[]): IncomeEntry[] {
   const defaults: IncomeEntry[] = DEFAULT_INCOME.map((d) => ({ ...d, id: crypto.randomUUID() }));
   const extras: IncomeEntry[] = [];
   for (const s of stored) {
+    const personal = Number(s.personal) || 0;
     const idx = defaults.findIndex((d) => d.incomeType === s.category);
     if (idx >= 0) {
-      defaults[idx] = { ...defaults[idx], id: s.id, name: s.name, personal: s.personal, total: s.personal, points: s.points };
+      defaults[idx] = {
+        ...defaults[idx],
+        id: s.id,
+        name: displayStoredName(s.name, s.category),
+        personal,
+        total: personal,
+        points: Number(s.points) || defaults[idx].points,
+      };
     } else {
-      extras.push({ id: s.id, incomeType: s.category, source: s.type, name: s.name, personal: s.personal, total: s.personal, points: s.points, namePlaceholder: s.category });
+      extras.push({
+        id: s.id,
+        incomeType: s.category,
+        source: s.type,
+        name: displayStoredName(s.name, s.category),
+        personal,
+        total: personal,
+        points: Number(s.points) || 0,
+        namePlaceholder: s.category,
+      });
     }
   }
   return [...defaults, ...extras];
 }
 
 function mergeExpensesWithDefaults(stored: RegistrationExpense[]): ExpenseEntry[] {
-  const SPEND_CATS = ["Grocery", "Fuel", "Electricity", "Airtime", "Water", "Rent", "Transport", "Send to others"];
   const filtered = stored.filter((s) => !SPEND_CATS.includes(s.category));
   const defaults: ExpenseEntry[] = DEFAULT_EXPENSES.map((d) => ({ ...d, id: crypto.randomUUID() }));
   const extras: ExpenseEntry[] = [];
   for (const s of filtered) {
+    const personal = Number(s.personal) || 0;
     const idx = defaults.findIndex((d) => d.expenseCategory === s.category);
     if (idx >= 0) {
-      defaults[idx] = { ...defaults[idx], id: s.id, name: s.name, personal: s.personal, total: s.personal, points: s.points };
+      defaults[idx] = {
+        ...defaults[idx],
+        id: s.id,
+        name: displayStoredName(s.name, s.category),
+        personal,
+        total: personal,
+        points: Number(s.points) || defaults[idx].points,
+      };
     } else {
-      extras.push({ id: s.id, expenseCategory: s.category, expenseType: s.type, name: s.name, personal: s.personal, total: s.personal, points: s.points, namePlaceholder: s.category });
+      extras.push({
+        id: s.id,
+        expenseCategory: s.category,
+        expenseType: s.type,
+        name: displayStoredName(s.name, s.category),
+        personal,
+        total: personal,
+        points: Number(s.points) || 0,
+        namePlaceholder: s.category,
+      });
     }
   }
   return [...defaults, ...extras];
@@ -180,11 +322,30 @@ function mergeAssetsWithDefaults(stored: Asset[]): AssetEntry[] {
   const defaults: AssetEntry[] = DEFAULT_ASSETS.map((d) => ({ ...d, id: crypto.randomUUID() }));
   const extras: AssetEntry[] = [];
   for (const s of stored) {
+    const personal = Number(s.personal) || 0;
     const idx = defaults.findIndex((d) => d.expenses === s.category && d.expenseType === s.type);
     if (idx >= 0) {
-      defaults[idx] = { ...defaults[idx], id: s.id, name: s.name, personal: s.personal, total: s.personal, points: s.points, interestRate: s.interestRate };
+      defaults[idx] = {
+        ...defaults[idx],
+        id: s.id,
+        name: displayStoredName(s.name, s.category),
+        personal,
+        total: personal,
+        points: Number(s.points) || defaults[idx].points,
+        interestRate: Number(s.interestRate) || 0,
+      };
     } else {
-      extras.push({ id: s.id, expenses: s.category, expenseType: s.type, name: s.name, personal: s.personal, total: s.personal, points: s.points, interestRate: s.interestRate, namePlaceholder: s.category });
+      extras.push({
+        id: s.id,
+        expenses: s.category,
+        expenseType: s.type,
+        name: displayStoredName(s.name, s.category),
+        personal,
+        total: personal,
+        points: Number(s.points) || 0,
+        interestRate: Number(s.interestRate) || 0,
+        namePlaceholder: s.category,
+      });
     }
   }
   return [...defaults, ...extras];
@@ -194,11 +355,30 @@ function mergeLiabilitiesWithDefaults(stored: Liability[]): AssetEntry[] {
   const defaults: AssetEntry[] = DEFAULT_LIABILITIES.map((d) => ({ ...d, id: crypto.randomUUID() }));
   const extras: AssetEntry[] = [];
   for (const s of stored.filter((row) => row.category !== "Equity")) {
+    const personal = Number(s.personal) || 0;
     const idx = defaults.findIndex((d) => d.expenses === s.category && d.expenseType === s.type);
     if (idx >= 0) {
-      defaults[idx] = { ...defaults[idx], id: s.id, name: s.name, personal: s.personal, total: s.personal, points: s.points, interestRate: s.interestRate };
+      defaults[idx] = {
+        ...defaults[idx],
+        id: s.id,
+        name: displayStoredName(s.name, s.category),
+        personal,
+        total: personal,
+        points: Number(s.points) || defaults[idx].points,
+        interestRate: Number(s.interestRate) || 0,
+      };
     } else {
-      extras.push({ id: s.id, expenses: s.category, expenseType: s.type, name: s.name, personal: s.personal, total: s.personal, points: s.points, interestRate: s.interestRate, namePlaceholder: s.category });
+      extras.push({
+        id: s.id,
+        expenses: s.category,
+        expenseType: s.type,
+        name: displayStoredName(s.name, s.category),
+        personal,
+        total: personal,
+        points: Number(s.points) || 0,
+        interestRate: Number(s.interestRate) || 0,
+        namePlaceholder: s.category,
+      });
     }
   }
   return [...defaults, ...extras];
@@ -206,7 +386,6 @@ function mergeLiabilitiesWithDefaults(stored: Liability[]): AssetEntry[] {
 
 // ─── Completion helpers ───────────────────────────────────────────────────
 
-const SPEND_CATS = ["Grocery", "Fuel", "Electricity", "Airtime", "Water", "Rent", "Transport", "Send to others"];
 const PLAN_SECTIONS = ["income", "expenses", "assets", "liabilities"] as const;
 
 function isMeaningfulEntry(personal: number, name?: string): boolean {
@@ -229,6 +408,27 @@ function hasMeaningfulPlanData(
   );
 }
 
+/** Any saved plan data or section progress — used to skip the landing screen on return visits. */
+function hasAnyPlanProgress(
+  income: Income[],
+  expenses: RegistrationExpense[],
+  assets: Asset[],
+  liabilities: Liability[],
+  completedTaskKeys: string[]
+): boolean {
+  if (isFinancialPlanComplete(completedTaskKeys)) return true;
+  if (PLAN_SECTIONS.some((s) => completedTaskKeys.includes(`plan-section-${s}`))) return true;
+
+  const planExpenses = expenses.filter((e) => !SPEND_CATS.includes(e.category));
+  const planLiabilities = liabilities.filter((l) => l.category !== "Equity");
+  return (
+    income.some((i) => isMeaningfulEntry(i.personal, i.name)) ||
+    planExpenses.some((e) => isMeaningfulEntry(e.personal, e.name)) ||
+    assets.some((a) => isMeaningfulEntry(a.personal, a.name)) ||
+    planLiabilities.some((l) => isMeaningfulEntry(l.personal, l.name))
+  );
+}
+
 function isFinancialPlanComplete(completedKeys: string[]): boolean {
   if (completedKeys.includes("full-plan-complete")) return true;
   return PLAN_SECTIONS.every((s) => completedKeys.includes(`plan-section-${s}`));
@@ -247,6 +447,39 @@ async function markSectionComplete(section: (typeof PLAN_SECTIONS)[number]): Pro
 // ─── Tab IDs ─────────────────────────────────────────────────────────────
 
 type TabId = "income" | "expenses" | "assets" | "liabilities";
+
+type TabTheme = {
+  active: string;
+  inactive: string;
+  inactiveHover: string;
+};
+
+const TAB_THEMES: Record<TabId, TabTheme> = {
+  income: {
+    active:
+      "border-b-2 border-green-600 text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/25",
+    inactive: "text-gray-500 dark:text-gray-400",
+    inactiveHover: "hover:text-green-600 dark:hover:text-green-400 hover:bg-green-50/50 dark:hover:bg-green-900/10",
+  },
+  expenses: {
+    active:
+      "border-b-2 border-red-500 text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/25",
+    inactive: "text-gray-500 dark:text-gray-400",
+    inactiveHover: "hover:text-red-600 dark:hover:text-red-400 hover:bg-red-50/50 dark:hover:bg-red-900/10",
+  },
+  assets: {
+    active:
+      "border-b-2 border-blue-600 text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/25",
+    inactive: "text-gray-500 dark:text-gray-400",
+    inactiveHover: "hover:text-blue-600 dark:hover:text-blue-400 hover:bg-blue-50/50 dark:hover:bg-blue-900/10",
+  },
+  liabilities: {
+    active:
+      "border-b-2 border-orange-500 text-orange-600 dark:text-orange-400 bg-orange-50 dark:bg-orange-900/25",
+    inactive: "text-gray-500 dark:text-gray-400",
+    inactiveHover: "hover:text-orange-600 dark:hover:text-orange-400 hover:bg-orange-50/50 dark:hover:bg-orange-900/10",
+  },
+};
 
 const TABS: { id: TabId; label: string; icon: typeof DollarSign }[] = [
   { id: "income",      label: "Income",      icon: TrendingUp },
@@ -299,198 +532,91 @@ export default function FinancialInsights() {
   const [liabilitySaving, setLiabilitySaving] = useState(false);
   const [liabilitySaved, setLiabilitySaved] = useState(false);
 
-  // ── Load from Supabase and detect whether the plan is already complete ─
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      const [income, budgetExpenses, assets, liabilities, gamState] = await Promise.all([
-        storage.getIncome(),
-        storage.getBudgetExpenses(),
-        storage.getAssets(),
-        storage.getLiabilities(),
-        rewards.getGamificationState(),
-      ]);
-      if (cancelled) return;
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveError, setSaveError] = useState<string | null>(null);
 
-      if (income.length > 0) setIncomeEntries(mergeIncomeWithDefaults(income));
-      if (budgetExpenses.length > 0) setExpenseEntries(mergeExpensesWithDefaults(budgetExpenses));
-      if (assets.length > 0) setAssetEntries(mergeAssetsWithDefaults(assets));
-      if (liabilities.length > 0) setLiabilityEntries(mergeLiabilitiesWithDefaults(liabilities));
+  const planHydratedRef = useRef(false);
+  const planDirtyRef = useRef(false);
+  const autosaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-      const completed =
-        isFinancialPlanComplete(gamState.completedTaskKeys) ||
-        hasMeaningfulPlanData(income, budgetExpenses, assets, liabilities);
-
-      if (completed) {
-        setIsCompleted(true);
-        setStarted(true);
-      }
-      setLoading(false);
-    }
-    load();
-    return () => { cancelled = true; };
+  const markPlanDirty = useCallback(() => {
+    planDirtyRef.current = true;
+    setSaveError(null);
   }, []);
 
-  // ─── Income handlers ──────────────────────────────────────────────────
-
-  const updateIncomeEntry = (index: number, field: keyof IncomeEntry, value: string | number) => {
-    setIncomeEntries((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      if (field === "personal") updated[index].total = Number(value) || 0;
-      return updated;
-    });
-  };
-
-  const addNewIncome = () => {
-    if (!newIncome.incomeType.trim()) return;
-    setIncomeEntries((prev) => [...prev, { ...newIncome, id: crypto.randomUUID() }]);
-    setIsAddIncomeOpen(false);
-    setNewIncome({ incomeType: "", source: "", name: "", personal: 0, total: 0, points: 0, namePlaceholder: "" });
-  };
-
-  const handleSaveIncome = async () => {
-    setIncomeSaving(true);
-    try {
-      const toSave: Income[] = incomeEntries
-        .filter((e) => e.personal > 0 || e.name.trim() !== "")
-        .map((e) => ({
-          id: e.id,
-          category: e.incomeType as IncomeCategory,
-          type: (e.source === "Fixed" || e.source === "Variable" ? e.source : "Variable") as Income["type"],
-          name: e.name.trim() || e.incomeType,
-          personal: e.personal,
-          spouse: 0,
-          points: e.points,
-          editable: true,
-        }));
-      await storage.saveIncome(toSave);
-      if (!isCompleted && toSave.length > 0) {
-        const planDone = await markSectionComplete("income");
-        if (planDone) setIsCompleted(true);
+  const persistSection = useCallback(
+    async (section: TabId, award: boolean): Promise<void> => {
+      const userId = await storage.getCurrentUserId();
+      if (!userId) {
+        throw new Error("You must be signed in to save your financial plan.");
       }
-      setIncomeSaved(true);
-      setTimeout(() => setIncomeSaved(false), 2500);
-    } finally {
-      setIncomeSaving(false);
-    }
-  };
 
-  // ─── Expenses handlers ────────────────────────────────────────────────
-
-  const updateExpenseEntry = (index: number, field: keyof ExpenseEntry, value: string | number) => {
-    setExpenseEntries((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      if (field === "personal") updated[index].total = Number(value) || 0;
-      return updated;
-    });
-  };
-
-  const addNewExpense = () => {
-    if (!newExpense.expenseCategory.trim() || !newExpense.expenseType.trim()) return;
-    setExpenseEntries((prev) => [...prev, { ...newExpense, id: crypto.randomUUID() }]);
-    setIsAddExpenseOpen(false);
-    setNewExpense({ expenseCategory: "", expenseType: "", name: "", personal: 0, total: 0, points: 0, namePlaceholder: "" });
-  };
-
-  const handleSaveExpenses = async () => {
-    setExpenseSaving(true);
-    try {
-      const existing = await storage.getBudgetExpenses();
-      const spendRows = existing.filter((e) => SPEND_CATS.includes(e.category));
-      const planRows: RegistrationExpense[] = expenseEntries
-        .filter((e) => e.personal > 0 || e.name.trim() !== "")
-        .map((e) => ({
-          id: e.id,
-          category: e.expenseCategory as ExpenseCategory,
-          type: (e.expenseType === "Fixed" || e.expenseType === "Variable" ? e.expenseType : "Variable") as RegistrationExpense["type"],
-          name: e.name.trim() || e.expenseCategory,
-          personal: e.personal,
-          spouse: 0,
-          points: e.points,
-          editable: true,
-        }));
-      await storage.saveBudgetExpenses([...planRows, ...spendRows]);
-      if (!isCompleted && planRows.length > 0) {
-        const planDone = await markSectionComplete("expenses");
-        if (planDone) setIsCompleted(true);
+      if (section === "income") {
+        const toSave: Income[] = incomeEntries
+          .filter((e) => e.personal > 0 || e.name.trim() !== "")
+          .map((e) => ({
+            id: e.id,
+            category: e.incomeType as IncomeCategory,
+            type: (e.source === "Fixed" || e.source === "Variable" ? e.source : "Variable") as Income["type"],
+            name: e.name.trim() || e.incomeType,
+            personal: e.personal,
+            spouse: 0,
+            points: e.points,
+            editable: true,
+          }));
+        await storage.saveIncome(toSave);
+        if (award && !isCompleted && toSave.length > 0) {
+          const planDone = await markSectionComplete("income");
+          if (planDone) setIsCompleted(true);
+        }
+        return;
       }
-      setExpenseSaved(true);
-      setTimeout(() => setExpenseSaved(false), 2500);
-    } finally {
-      setExpenseSaving(false);
-    }
-  };
 
-  // ─── Assets handlers ──────────────────────────────────────────────────
-
-  const updateAssetEntry = (index: number, field: keyof AssetEntry, value: string | number) => {
-    setAssetEntries((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      if (field === "personal") updated[index].total = Number(value) || 0;
-      return updated;
-    });
-  };
-
-  const addNewAsset = () => {
-    if (!newAsset.expenses.trim() || !newAsset.expenseType.trim()) return;
-    setAssetEntries((prev) => [...prev, { ...newAsset, id: crypto.randomUUID() }]);
-    setIsAddAssetOpen(false);
-    setNewAsset({ expenses: "", expenseType: "", name: "", personal: 0, total: 0, points: 0, interestRate: 0, namePlaceholder: "" });
-  };
-
-  const handleSaveAssets = async () => {
-    setAssetSaving(true);
-    try {
-      const toSave: Asset[] = assetEntries
-        .filter((e) => e.personal > 0 || e.name.trim() !== "")
-        .map((e) => ({
-          id: e.id,
-          category: e.expenses as AssetCategory,
-          type: e.expenseType as Asset["type"],
-          name: e.name.trim() || e.expenses,
-          personal: e.personal,
-          spouse: 0,
-          points: e.points,
-          interestRate: e.interestRate,
-          editable: true,
-        }));
-      await storage.saveAssets(toSave);
-      if (!isCompleted && toSave.length > 0) {
-        const planDone = await markSectionComplete("assets");
-        if (planDone) setIsCompleted(true);
+      if (section === "expenses") {
+        const existing = await storage.getBudgetExpenses();
+        const spendRows = existing.filter((e) => SPEND_CATS.includes(e.category));
+        const planRows: RegistrationExpense[] = expenseEntries
+          .filter((e) => e.personal > 0 || e.name.trim() !== "")
+          .map((e) => ({
+            id: e.id,
+            category: e.expenseCategory as ExpenseCategory,
+            type: (e.expenseType === "Fixed" || e.expenseType === "Variable" ? e.expenseType : "Variable") as RegistrationExpense["type"],
+            name: e.name.trim() || e.expenseCategory,
+            personal: e.personal,
+            spouse: 0,
+            points: e.points,
+            editable: true,
+          }));
+        await storage.saveBudgetExpenses([...planRows, ...spendRows]);
+        if (award && !isCompleted && planRows.length > 0) {
+          const planDone = await markSectionComplete("expenses");
+          if (planDone) setIsCompleted(true);
+        }
+        return;
       }
-      setAssetSaved(true);
-      setTimeout(() => setAssetSaved(false), 2500);
-    } finally {
-      setAssetSaving(false);
-    }
-  };
 
-  // ─── Liabilities handlers ─────────────────────────────────────────────
+      if (section === "assets") {
+        const toSave: Asset[] = assetEntries
+          .filter((e) => e.personal > 0 || e.name.trim() !== "")
+          .map((e) => ({
+            id: e.id,
+            category: e.expenses as AssetCategory,
+            type: e.expenseType as Asset["type"],
+            name: e.name.trim() || e.expenses,
+            personal: e.personal,
+            spouse: 0,
+            points: e.points,
+            interestRate: e.interestRate,
+            editable: true,
+          }));
+        await storage.saveAssets(toSave);
+        if (award && !isCompleted && toSave.length > 0) {
+          const planDone = await markSectionComplete("assets");
+          if (planDone) setIsCompleted(true);
+        }
+        return;
+      }
 
-  const updateLiabilityEntry = (index: number, field: keyof AssetEntry, value: string | number) => {
-    setLiabilityEntries((prev) => {
-      const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
-      if (field === "personal") updated[index].total = Number(value) || 0;
-      return updated;
-    });
-  };
-
-  const addNewLiability = () => {
-    if (!newLiability.expenses.trim() || !newLiability.expenseType.trim()) return;
-    setLiabilityEntries((prev) => [...prev, { ...newLiability, id: crypto.randomUUID() }]);
-    setIsAddLiabilityOpen(false);
-    setNewLiability({ expenses: "", expenseType: "", name: "", personal: 0, total: 0, points: 0, interestRate: 0, namePlaceholder: "" });
-  };
-
-  const handleSaveLiabilities = async () => {
-    setLiabilitySaving(true);
-    try {
       const toSave: Liability[] = liabilityEntries
         .filter((e) => e.expenses !== "Equity" && (e.personal > 0 || e.name.trim() !== ""))
         .map((e) => ({
@@ -505,12 +631,273 @@ export default function FinancialInsights() {
           editable: true,
         }));
       await storage.saveLiabilities(toSave);
-      if (!isCompleted && toSave.length > 0) {
+      if (award && !isCompleted && toSave.length > 0) {
         const planDone = await markSectionComplete("liabilities");
         if (planDone) setIsCompleted(true);
       }
+    },
+    [incomeEntries, expenseEntries, assetEntries, liabilityEntries, isCompleted]
+  );
+
+  const flushAutosave = useCallback(
+    async (section: TabId) => {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      if (!planDirtyRef.current) return;
+      setAutosaveStatus("saving");
+      try {
+        await persistSection(section, false);
+        planDirtyRef.current = false;
+        setAutosaveStatus("saved");
+        window.setTimeout(() => setAutosaveStatus("idle"), 2000);
+      } catch (error) {
+        console.error("[FinancialInsights] autosave failed:", error);
+        setAutosaveStatus("error");
+        setSaveError(error instanceof Error ? error.message : "Could not save your changes.");
+      }
+    },
+    [persistSection]
+  );
+
+  const switchTab = useCallback(
+    async (tab: TabId) => {
+      if (tab === activeTab) return;
+      await flushAutosave(activeTab);
+      setActiveTab(tab);
+    },
+    [activeTab, flushAutosave]
+  );
+
+  // ── Load from Supabase and detect whether the plan is already complete ─
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      planHydratedRef.current = false;
+      planDirtyRef.current = false;
+
+      const [{ income, budgetExpenses, assets, liabilities }, gamState] = await Promise.all([
+        loadFinancialPlanRecords(),
+        rewards.getGamificationState(),
+      ]);
+      if (cancelled) return;
+
+      setIncomeEntries(mergeIncomeWithDefaults(income));
+      setExpenseEntries(mergeExpensesWithDefaults(budgetExpenses));
+      setAssetEntries(mergeAssetsWithDefaults(assets));
+      setLiabilityEntries(mergeLiabilitiesWithDefaults(liabilities));
+
+      const completed =
+        isFinancialPlanComplete(gamState.completedTaskKeys) ||
+        hasMeaningfulPlanData(income, budgetExpenses, assets, liabilities);
+
+      if (hasAnyPlanProgress(income, budgetExpenses, assets, liabilities, gamState.completedTaskKeys)) {
+        setStarted(true);
+      }
+      if (completed) {
+        setIsCompleted(true);
+      }
+      planHydratedRef.current = true;
+      setLoading(false);
+    }
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!started || loading || !planHydratedRef.current || !planDirtyRef.current) return;
+
+    if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    autosaveTimerRef.current = setTimeout(() => {
+      void flushAutosave(activeTab);
+    }, AUTOSAVE_DELAY_MS);
+
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, [incomeEntries, expenseEntries, assetEntries, liabilityEntries, activeTab, started, loading, flushAutosave]);
+
+  useEffect(() => {
+    return () => {
+      if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current);
+    };
+  }, []);
+
+  // ─── Income handlers ──────────────────────────────────────────────────
+
+  const updateIncomeEntry = (index: number, field: keyof IncomeEntry, value: string | number) => {
+    markPlanDirty();
+    setIncomeEntries((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      if (field === "personal") updated[index].total = Number(value) || 0;
+      return updated;
+    });
+  };
+
+  const addNewIncome = () => {
+    if (!newIncome.incomeType.trim()) return;
+    markPlanDirty();
+    setIncomeEntries((prev) => [...prev, { ...newIncome, id: crypto.randomUUID() }]);
+    setIsAddIncomeOpen(false);
+    setNewIncome({ incomeType: "", source: "", name: "", personal: 0, total: 0, points: 0, namePlaceholder: "" });
+  };
+
+  const handleSaveIncome = async () => {
+    setIncomeSaving(true);
+    setSaveError(null);
+    try {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      await persistSection("income", true);
+      planDirtyRef.current = false;
+      setIncomeSaved(true);
+      setAutosaveStatus("saved");
+      setTimeout(() => {
+        setIncomeSaved(false);
+        setAutosaveStatus("idle");
+      }, 2500);
+    } catch (error) {
+      console.error("[FinancialInsights] save income failed:", error);
+      setSaveError(error instanceof Error ? error.message : "Could not save income.");
+    } finally {
+      setIncomeSaving(false);
+    }
+  };
+
+  // ─── Expenses handlers ────────────────────────────────────────────────
+
+  const updateExpenseEntry = (index: number, field: keyof ExpenseEntry, value: string | number) => {
+    markPlanDirty();
+    setExpenseEntries((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      if (field === "personal") updated[index].total = Number(value) || 0;
+      return updated;
+    });
+  };
+
+  const addNewExpense = () => {
+    if (!newExpense.expenseCategory.trim() || !newExpense.expenseType.trim()) return;
+    markPlanDirty();
+    setExpenseEntries((prev) => [...prev, { ...newExpense, id: crypto.randomUUID() }]);
+    setIsAddExpenseOpen(false);
+    setNewExpense({ expenseCategory: "", expenseType: "", name: "", personal: 0, total: 0, points: 0, namePlaceholder: "" });
+  };
+
+  const handleSaveExpenses = async () => {
+    setExpenseSaving(true);
+    setSaveError(null);
+    try {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      await persistSection("expenses", true);
+      planDirtyRef.current = false;
+      setExpenseSaved(true);
+      setAutosaveStatus("saved");
+      setTimeout(() => {
+        setExpenseSaved(false);
+        setAutosaveStatus("idle");
+      }, 2500);
+    } catch (error) {
+      console.error("[FinancialInsights] save expenses failed:", error);
+      setSaveError(error instanceof Error ? error.message : "Could not save expenses.");
+    } finally {
+      setExpenseSaving(false);
+    }
+  };
+
+  // ─── Assets handlers ──────────────────────────────────────────────────
+
+  const updateAssetEntry = (index: number, field: keyof AssetEntry, value: string | number) => {
+    markPlanDirty();
+    setAssetEntries((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      if (field === "personal") updated[index].total = Number(value) || 0;
+      return updated;
+    });
+  };
+
+  const addNewAsset = () => {
+    if (!newAsset.expenses.trim() || !newAsset.expenseType.trim()) return;
+    markPlanDirty();
+    setAssetEntries((prev) => [...prev, { ...newAsset, id: crypto.randomUUID() }]);
+    setIsAddAssetOpen(false);
+    setNewAsset({ expenses: "", expenseType: "", name: "", personal: 0, total: 0, points: 0, interestRate: 0, namePlaceholder: "" });
+  };
+
+  const handleSaveAssets = async () => {
+    setAssetSaving(true);
+    setSaveError(null);
+    try {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      await persistSection("assets", true);
+      planDirtyRef.current = false;
+      setAssetSaved(true);
+      setAutosaveStatus("saved");
+      setTimeout(() => {
+        setAssetSaved(false);
+        setAutosaveStatus("idle");
+      }, 2500);
+    } catch (error) {
+      console.error("[FinancialInsights] save assets failed:", error);
+      setSaveError(error instanceof Error ? error.message : "Could not save assets.");
+    } finally {
+      setAssetSaving(false);
+    }
+  };
+
+  // ─── Liabilities handlers ─────────────────────────────────────────────
+
+  const updateLiabilityEntry = (index: number, field: keyof AssetEntry, value: string | number) => {
+    markPlanDirty();
+    setLiabilityEntries((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      if (field === "personal") updated[index].total = Number(value) || 0;
+      return updated;
+    });
+  };
+
+  const addNewLiability = () => {
+    if (!newLiability.expenses.trim() || !newLiability.expenseType.trim()) return;
+    markPlanDirty();
+    setLiabilityEntries((prev) => [...prev, { ...newLiability, id: crypto.randomUUID() }]);
+    setIsAddLiabilityOpen(false);
+    setNewLiability({ expenses: "", expenseType: "", name: "", personal: 0, total: 0, points: 0, interestRate: 0, namePlaceholder: "" });
+  };
+
+  const handleSaveLiabilities = async () => {
+    setLiabilitySaving(true);
+    setSaveError(null);
+    try {
+      if (autosaveTimerRef.current) {
+        clearTimeout(autosaveTimerRef.current);
+        autosaveTimerRef.current = null;
+      }
+      await persistSection("liabilities", true);
+      planDirtyRef.current = false;
       setLiabilitySaved(true);
-      setTimeout(() => setLiabilitySaved(false), 2500);
+      setAutosaveStatus("saved");
+      setTimeout(() => {
+        setLiabilitySaved(false);
+        setAutosaveStatus("idle");
+      }, 2500);
+    } catch (error) {
+      console.error("[FinancialInsights] save liabilities failed:", error);
+      setSaveError(error instanceof Error ? error.message : "Could not save liabilities.");
     } finally {
       setLiabilitySaving(false);
     }
@@ -609,14 +996,37 @@ export default function FinancialInsights() {
   return (
     <div className="w-full max-w-7xl mx-auto px-4 py-6 space-y-6">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Financial Plan</h1>
-        <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
-          {isCompleted
-            ? "Your submitted financial information is shown below. You can edit and save updates at any time."
-            : "Enter your income, expenses, assets and liabilities to build your financial plan."}
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Financial Plan</h1>
+          <p className="text-gray-500 dark:text-gray-400 text-sm mt-1">
+            {isCompleted
+              ? "Your submitted financial information is shown below. Changes save automatically."
+              : "Enter your income, expenses, assets and liabilities. Changes save automatically after you edit."}
+          </p>
+        </div>
+        <div className="text-sm shrink-0 min-h-[1.25rem]">
+          {autosaveStatus === "saving" && (
+            <span className="inline-flex items-center gap-1.5 text-gray-500 dark:text-gray-400">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" /> Saving…
+            </span>
+          )}
+          {autosaveStatus === "saved" && (
+            <span className="inline-flex items-center gap-1.5 text-green-600 dark:text-green-400">
+              <Check className="h-3.5 w-3.5" /> All changes saved
+            </span>
+          )}
+          {autosaveStatus === "error" && (
+            <span className="text-red-600 dark:text-red-400">Save failed — use Save Changes or try again</span>
+          )}
+        </div>
       </div>
+
+      {saveError && (
+        <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-800 dark:text-red-200">
+          {saveError}
+        </div>
+      )}
 
       {isCompleted && (
         <div className="flex items-start gap-3 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl text-sm text-green-800 dark:text-green-200">
@@ -647,15 +1057,15 @@ export default function FinancialInsights() {
         <div className="flex border-b border-gray-200 dark:border-gray-700">
           {TABS.map((tab) => {
             const Icon = tab.icon;
+            const theme = TAB_THEMES[tab.id];
+            const isActive = activeTab === tab.id;
             return (
               <button
                 key={tab.id}
                 type="button"
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => void switchTab(tab.id)}
                 className={`flex items-center gap-2 flex-1 justify-center py-3.5 text-sm font-semibold transition-colors ${
-                  activeTab === tab.id
-                    ? "border-b-2 border-[#2f6064] text-[#2f6064] bg-[#2f6064]/5"
-                    : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  isActive ? theme.active : `${theme.inactive} ${theme.inactiveHover}`
                 }`}
               >
                 <Icon className="h-4 w-4" />
