@@ -1,19 +1,65 @@
-function layout(content: string): string {
+import { getAppUrl } from "@/lib/siteUrl";
+
+function getEmailLogoUrl(): string {
+  return (
+    process.env.EMAIL_LOGO_URL?.trim() ||
+    getAppUrl("/onewayout-logo.png")
+  );
+}
+
+function layout(content: string, footerHtml?: string): string {
+  const footer =
+    footerHtml ??
+    `<p style="margin-top:28px;font-size:12px;color:#666;">One Way Out Portal · This is an automated message.</p>`;
+  const logoUrl = getEmailLogoUrl();
+
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>One Way Out</title></head>
 <body style="margin:0;padding:0;background:#f4f7f7;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#1a1a1a;">
   <div style="max-width:560px;margin:0 auto;padding:24px;">
-    <div style="background:#2f6064;border-radius:12px 12px 0 0;padding:20px 24px;">
-      <p style="margin:0;font-size:18px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">One Way Out</p>
+    <div style="background:#2f6064;border-radius:12px 12px 0 0;padding:24px;text-align:center;">
+      <img src="${logoUrl}" alt="OneWayOut" width="96" height="96" style="display:block;margin:0 auto;width:96px;height:96px;border-radius:16px;object-fit:cover;border:0;" />
     </div>
     <div style="background:#ffffff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px;">
       ${content}
-      <p style="margin-top:28px;font-size:12px;color:#666;">One Way Out Portal · This is an automated message.</p>
+      ${footer}
     </div>
   </div>
 </body>
 </html>`;
+}
+
+function welcomeEmailFooter(unsubscribeUrl: string): { html: string; text: string } {
+  const html = `
+    <div style="margin-top:28px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:11px;line-height:1.6;color:#666;">
+      <p style="margin:0 0 8px;">OneWayOut (Pty) Ltd · W17, 17 Dock Road, V&amp;A Waterfront, Cape Town, South Africa</p>
+      <p style="margin:0 0 8px;">
+        <a href="https://onewayout.co.za" style="color:#2f6064;text-decoration:none;">onewayout.co.za</a>
+        · WA: <a href="https://wa.me/27781765677" style="color:#2f6064;text-decoration:none;">+27 78 176 5677</a>
+      </p>
+      <p style="margin:0 0 8px;">
+        Socials:
+        <a href="https://www.linkedin.com/company/onewayout" style="color:#2f6064;text-decoration:none;">LinkedIn OneWayOut (Pty) Ltd</a>
+        · <a href="https://www.facebook.com/onewayout.official" style="color:#2f6064;text-decoration:none;">Facebook @onewayout.official</a>
+        · <a href="https://www.instagram.com/one1wayout_official" style="color:#2f6064;text-decoration:none;">Instagram @one1wayout_official</a>
+        · <a href="https://www.tiktok.com/@1onewayout" style="color:#2f6064;text-decoration:none;">TikTok @1onewayout</a>
+      </p>
+      <p style="margin:0 0 8px;">Authorised juristic representative under FinMeUp, FSP No. 51310</p>
+      <p style="margin:0;">
+        <a href="${unsubscribeUrl}" style="color:#2f6064;text-decoration:underline;">Unsubscribe</a>
+        · You're receiving this because you signed up at onewayout.co.za
+      </p>
+    </div>`;
+
+  const text = `
+OneWayOut (Pty) Ltd · W17, 17 Dock Road, V&A Waterfront, Cape Town, South Africa
+onewayout.co.za · WA: +27 78 176 5677
+Socials: LinkedIn OneWayOut (Pty) Ltd · Facebook @onewayout.official · Instagram @one1wayout_official · TikTok @1onewayout
+Authorised juristic representative under FinMeUp, FSP No. 51310
+Unsubscribe (${unsubscribeUrl}) · You're receiving this because you signed up at onewayout.co.za`;
+
+  return { html, text };
 }
 
 export function passwordResetEmail(params: {
@@ -38,6 +84,52 @@ This link expires for security. If you did not request a password reset, you can
     <p style="font-size:14px;color:#555;">Or copy this link:<br>${params.resetUrl}</p>
     <p style="font-size:13px;color:#777;">This link expires for security. If you did not request this, you can ignore this email.</p>
   `);
+
+  return { subject, html, text };
+}
+
+export function userWelcomeEmail(params: {
+  name: string;
+  email: string;
+  actionUrl: string;
+  /** When true, CTA confirms the email; otherwise it opens the portal. */
+  needsConfirmation?: boolean;
+  unsubscribeUrl?: string;
+}): { subject: string; html: string; text: string } {
+  const firstName = params.name.trim().split(/\s+/)[0] || "there";
+  const subject = `Your first mission is waiting, ${firstName}`;
+  const ctaLabel = params.needsConfirmation ? "Confirm your email" : "Start my first mission";
+  const unsubscribeUrl =
+    params.unsubscribeUrl?.trim() ||
+    getAppUrl(`/unsubscribe?email=${encodeURIComponent(params.email.trim().toLowerCase())}`);
+  const footer = welcomeEmailFooter(unsubscribeUrl);
+
+  const text = `Hi ${firstName},
+
+You've just taken the hardest step — deciding that things are going to change. Welcome. You're in the right place.
+
+OneWayOut turns the road out of financial stress into a game you can actually win: small missions, real rewards, and a human coach in your corner when you need one.
+
+Your first mission is ready. It takes about 10 minutes and you could unlock up to 5,000 reward points: complete your financial information and goals so we can map your way out.
+
+${ctaLabel}:
+${params.actionUrl}
+
+If you did not create this account, you can ignore this email.
+${footer.text}`;
+
+  const html = layout(
+    `
+    <h2 style="margin-top:0;color:#1a1a1a;">Hi ${firstName},</h2>
+    <p>You've just taken the hardest step — deciding that things are going to change. Welcome. You're in the right place.</p>
+    <p>OneWayOut turns the road out of financial stress into a game you can actually win: small missions, real rewards, and a human coach in your corner when you need one.</p>
+    <p>Your first mission is ready. It takes about 10 minutes and you could unlock up to 5,000 reward points: complete your financial information and goals so we can map your way out.</p>
+    <p><a href="${params.actionUrl}" style="display:inline-block;padding:12px 20px;background:#ffffff;color:#2f6064;border:2px solid #2f6064;text-decoration:none;border-radius:6px;font-weight:700;">${ctaLabel}</a></p>
+    <p style="font-size:14px;color:#555;">Or copy this link:<br>${params.actionUrl}</p>
+    <p style="font-size:13px;color:#777;">If you did not create this account, you can ignore this email.</p>
+  `,
+    footer.html
+  );
 
   return { subject, html, text };
 }

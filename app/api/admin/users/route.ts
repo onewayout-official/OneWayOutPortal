@@ -215,5 +215,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: upsertError.message }, { status: 500 });
   }
 
+  const { sendBrandedUserWelcome } = await import("@/lib/userWelcome");
+  void sendBrandedUserWelcome({
+    adminClient: context.adminClient,
+    email,
+    name,
+    needsConfirmation: false,
+  });
+
   return NextResponse.json({ user: toUserDto(profileRow) }, { status: 201 });
 }

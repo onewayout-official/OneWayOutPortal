@@ -194,9 +194,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (data.session) {
         setUser(toAuthSession(data.session));
       }
+      const needsEmailConfirmation = !data.session;
+      // Branded welcome via Graph — never block signup if mail fails
+      void fetch("/api/auth/welcome", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email,
+          name,
+          needsConfirmation: needsEmailConfirmation,
+        }),
+      }).catch(() => {
+        /* ignore network errors */
+      });
       return {
         success: true,
-        needsEmailConfirmation: !data.session,
+        needsEmailConfirmation,
       };
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : "An error occurred during registration.";

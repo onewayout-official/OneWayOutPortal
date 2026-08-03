@@ -17,6 +17,9 @@ let tokenCache: TokenCache | null = null;
 
 const scheduleCache = new Map<string, { expiresAt: number; intervals: BusyInterval[] }>();
 
+/** Avoid re-PATCHing the same mailbox display name on every send. */
+const mailboxDisplayNameEnsured = new Set<string>();
+
 const MICROSOFT_FETCH_TIMEOUT_MS = 30_000;
 
 async function fetchMicrosoft(url: string, init: RequestInit): Promise<Response> {
@@ -361,12 +364,20 @@ export async function sendGraphEmail({
   subject: string;
   html: string;
   replyTo?: string | null;
-  /** Shown as the From display name (e.g. "One Way Out" instead of mailbox name "No Reply"). */
+  /** Shown as the From display name (e.g. "OneWayOut" instead of mailbox name "No Reply"). */
   fromDisplayName?: string | null;
 }): Promise<void> {
   const token = await getGraphAccessToken();
   if (!token) {
     throw new Error("Microsoft Graph is not configured.");
+  }
+
+  const displayName = fromDisplayName?.trim() || null;
+
+  // Exchange often ignores message.from.name and uses the mailbox Display Name.
+  // Best-effort: align the mailbox display name in Entra ID / Exchange.
+  if (displayName) {
+    await ensureMailboxDisplayName(senderMailbox, displayName, token);
   }
 
   const message: Record<string, unknown> = {
@@ -378,9 +389,15 @@ export async function sendGraphEmail({
     toRecipients: [{ emailAddress: { address: to } }],
   };
 
-  const displayName = fromDisplayName?.trim();
   if (displayName) {
     message.from = {
+      emailAddress: {
+        address: senderMailbox,
+        name: displayName,
+      },
+    };
+    // Some clients read sender() when from is rewritten by Exchange.
+    message.sender = {
       emailAddress: {
         address: senderMailbox,
         name: displayName,
@@ -418,5 +435,65 @@ export async function sendGraphEmail({
       );
     }
     throw new Error(detail);
+  }
+}
+
+/**
+ * Sets the Azure AD / mailbox display name so Graph sendMail shows the right From name.
+ * Requires User.ReadWrite.All (or equivalent). Failures are logged and ignored.
+ */
+async function ensureMailboxDisplayName(
+  mailbox: string,
+  displayName: string,
+  token: string
+): Promise<void> {
+  const cacheKey = `${mailbox.toLowerCase()}::${displayName}`;
+  if (mailboxDisplayNameEnsured.has(cacheKey)) return;
+
+  try {
+    const getResponse = await fetchMicrosoft(
+      `${GRAPH_BASE}/users/${encodeURIComponent(mailbox)}?$select=displayName,mail,userPrincipalName`,
+      {
+        method: "GET",
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+
+    if (getResponse.ok) {
+      const user = (await getResponse.json()) as { displayName?: string };
+      if (user.displayName?.trim() === displayName) {
+        mailboxDisplayNameEnsured.add(cacheKey);
+        return;
+      }
+    }
+
+    const patchResponse = await fetchMicrosoft(
+      `${GRAPH_BASE}/users/${encodeURIComponent(mailbox)}`,
+      {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ displayName }),
+      }
+    );
+
+    if (patchResponse.ok || patchResponse.status === 204) {
+      mailboxDisplayNameEnsured.add(cacheKey);
+      return;
+    }
+
+    const json = (await patchResponse.json().catch(() => ({}))) as {
+      error?: { message?: string };
+    };
+    console.warn(
+      `[graph] Could not set mailbox display name for ${mailbox} to "${displayName}": ${
+        json.error?.message ?? patchResponse.status
+      }. Rename the mailbox Display name to "${displayName}" in Microsoft 365 admin (Users / Shared mailboxes), or grant the app User.ReadWrite.All.`
+    );
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.warn(`[graph] ensureMailboxDisplayName failed for ${mailbox}:`, msg);
   }
 }

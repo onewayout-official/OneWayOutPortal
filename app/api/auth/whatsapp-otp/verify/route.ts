@@ -392,6 +392,20 @@ export async function POST(request: NextRequest) {
     );
   }
 
+  if (createdThisRequest && email && !email.endsWith("@phone.onewayout.local")) {
+    const { sendBrandedUserWelcome } = await import("@/lib/userWelcome");
+    const welcomeName =
+      name ||
+      [firstName, lastName].filter(Boolean).join(" ").trim() ||
+      email.split("@")[0];
+    void sendBrandedUserWelcome({
+      adminClient: admin,
+      email,
+      name: welcomeName,
+      needsConfirmation: false,
+    });
+  }
+
   return NextResponse.json({
     success: true,
     access_token: sessionResult.access_token,

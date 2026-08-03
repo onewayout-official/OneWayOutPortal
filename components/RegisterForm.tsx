@@ -276,8 +276,9 @@ export default function RegisterForm() {
           Check your email
         </h2>
         <p className="terms-note" style={{ marginBottom: "1.25rem" }}>
-          We sent a confirmation link to <strong>{pendingEmailConfirmation}</strong>. Open it to
-          activate your account and sign in. After confirming, you can complete onboarding.
+          We sent a welcome email with a confirmation link to{" "}
+          <strong>{pendingEmailConfirmation}</strong>. Open it to activate your account, then
+          sign in to continue.
         </p>
         <Link href="/login" className="form-link primary" id="link-sign-in-after-confirm">
           Back to sign in
