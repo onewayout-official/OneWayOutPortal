@@ -23,6 +23,21 @@ export function getGraphMailSender(): string {
   return from.replace(/^["']|["']$/g, "").trim();
 }
 
+/**
+ * Sender for auth emails (password reset, coach setup).
+ * Prefer GRAPH_AUTH_MAIL_SENDER (e.g. no-reply@…); falls back to GRAPH_MAIL_SENDER.
+ */
+export function getAuthMailSender(): string {
+  const authSender = process.env.GRAPH_AUTH_MAIL_SENDER?.trim();
+  if (authSender) return authSender;
+  return getGraphMailSender();
+}
+
+/** From display name shown in inboxes (defaults to "OneWayOut"). */
+export function getMailFromDisplayName(): string {
+  return process.env.GRAPH_MAIL_FROM_NAME?.trim() || "OneWayOut";
+}
+
 function isPlaceholderMailbox(email: string): boolean {
   const lower = email.toLowerCase();
   return (
@@ -84,15 +99,22 @@ export interface SendEmailOptions {
   subject: string;
   html: string;
   text?: string;
+  /** Optional Graph mailbox override (e.g. no-reply@ for auth). Defaults to GRAPH_MAIL_SENDER. */
+  fromMailbox?: string;
+  /** Optional From display name (e.g. OneWayOut). Defaults to GRAPH_MAIL_FROM_NAME / OneWayOut. */
+  fromDisplayName?: string;
 }
 
 async function sendEmailViaSmtp(
   options: SendEmailOptions
 ): Promise<{ success: boolean; error?: string }> {
   const mailer = getTransporter();
-  const from = process.env.SMTP_FROM;
+  const mailbox =
+    options.fromMailbox?.trim() ||
+    process.env.SMTP_FROM;
+  const displayName = options.fromDisplayName?.trim() || getMailFromDisplayName();
 
-  if (!mailer || !from) {
+  if (!mailer || !mailbox) {
     return {
       success: false,
       error: "SMTP is not configured. Set SMTP_HOST, SMTP_PORT, and SMTP_FROM.",
@@ -101,8 +123,12 @@ async function sendEmailViaSmtp(
 
   try {
     const replyTo = process.env.SMTP_REPLY_TO?.trim();
+    const addressOnly =
+      mailbox.match(/<([^>]+)>/)?.[1]?.trim() ||
+      mailbox.replace(/^["']|["']$/g, "").trim();
+    const fromHeader = `${displayName} <${addressOnly}>`;
     await mailer.sendMail({
-      from,
+      from: fromHeader,
       to: options.to,
       replyTo: replyTo || undefined,
       subject: options.subject,
@@ -120,7 +146,7 @@ async function sendEmailViaSmtp(
 async function sendEmailViaGraph(
   options: SendEmailOptions
 ): Promise<{ success: boolean; error?: string }> {
-  const senderMailbox = getGraphMailSender();
+  const senderMailbox = options.fromMailbox?.trim() || getGraphMailSender();
   if (!senderMailbox) {
     return {
       success: false,
@@ -135,6 +161,7 @@ async function sendEmailViaGraph(
       subject: options.subject,
       html: options.html,
       replyTo: process.env.SMTP_REPLY_TO?.trim() || null,
+      fromDisplayName: options.fromDisplayName?.trim() || getMailFromDisplayName(),
     });
     return { success: true };
   } catch (err: unknown) {
@@ -142,7 +169,7 @@ async function sendEmailViaGraph(
     console.error("Graph sendMail failed:", msg);
     if (msg.toLowerCase().includes("invalid") && isPlaceholderMailbox(senderMailbox)) {
       console.error(
-        "Update GRAPH_MAIL_SENDER in .env.local to a real Microsoft 365 mailbox UPN, then restart the dev server."
+        "Update GRAPH_MAIL_SENDER / GRAPH_AUTH_MAIL_SENDER in .env.local to a real Microsoft 365 mailbox UPN, then restart the dev server."
       );
     }
     return { success: false, error: msg };

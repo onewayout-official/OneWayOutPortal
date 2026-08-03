@@ -18,10 +18,11 @@ import {
   Banknote,
   Plus,
   X,
-  ArrowLeft,
-  GripVertical,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+
+/** Cap absurd client-submitted money values (defense in depth; DB has no upper bound). */
+const MAX_MONEY_AMOUNT = 1_000_000_000;
 
 type IconItem = {
   id: string;
@@ -46,10 +47,10 @@ type TransferModal =
       incomeLabel: string;
       accountId: string;
       accountName: string;
-      existing: number;
       incomeTotal: number;
       previousUsed: number;
-      maxIncrement: number;
+      /** Defined income minus already allocated; negative when over-allocated. */
+      remaining: number;
     }
   | {
       mode: "account_to_account";
@@ -59,6 +60,16 @@ type TransferModal =
       toAccountName: string;
       existing: number;
     };
+
+function parseMoneyInput(raw: string): number | null {
+  const amount = Number(raw.replace(/,/g, "").trim());
+  if (!Number.isFinite(amount) || amount < 0 || amount > MAX_MONEY_AMOUNT) return null;
+  return Math.round(amount * 100) / 100;
+}
+
+function addToMapTotal(map: Map<string, number>, key: string, amount: number) {
+  map.set(key, (map.get(key) ?? 0) + amount);
+}
 
 const ACCOUNT_TYPE_META: { type: string; label: string; icon: LucideIcon; color: string }[] = [
   { type: "bank", label: "Bank", icon: Landmark, color: "blue" },
@@ -163,13 +174,8 @@ const COLOR_MAP: Record<string, { text: string; bg: string; border: string; ring
 
 function IconCard({
   item,
-  draggable,
-  disabled,
-  onDragStart,
-  onDragEnd,
   colorClass = "text-[#2f6064]",
   bgClass = "bg-[#2f6064]/5 dark:bg-[#2f6064]/10 border-[#2f6064]/20",
-  hoverRing = "hover:ring-[#2f6064]/40",
   liveAmount,
   liveAmountLabel,
   liveAmountPrefix,
@@ -178,14 +184,9 @@ function IconCard({
   onClick,
 }: {
   item: IconItem;
-  draggable?: boolean;
-  disabled?: boolean;
-  onDragStart?: (e: React.DragEvent) => void;
-  onDragEnd?: (e: React.DragEvent) => void;
   onClick?: () => void;
   colorClass?: string;
   bgClass?: string;
-  hoverRing?: string;
   liveAmount?: number;
   liveAmountLabel?: string;
   liveAmountPrefix?: string;
@@ -198,26 +199,28 @@ function IconCard({
       ? `${item.label}: R ${item.amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
       : item.label;
 
+  const amountClass =
+    liveAmountTone === "danger" || liveAmountPrefix === "−"
+      ? "text-red-600 dark:text-red-400"
+      : liveAmountTone === "success"
+        ? "text-green-600 dark:text-green-400"
+        : liveAmountTone === "neutral"
+          ? "text-gray-700 dark:text-gray-300"
+          : item.amount != null && liveAmount != null && liveAmount > item.amount
+            ? "text-red-600 dark:text-red-400"
+            : item.amount != null && liveAmount != null
+              ? "text-green-600 dark:text-green-400"
+              : "text-gray-900 dark:text-gray-100";
+
   return (
     <div
-      draggable={draggable && !disabled}
-      onDragStart={disabled ? undefined : onDragStart}
-      onDragEnd={onDragEnd}
-      onClick={disabled ? undefined : onClick}
+      onClick={onClick}
       className={`flex min-w-[76px] flex-none select-none flex-col items-center rounded-xl touch-manipulation sm:min-w-[88px] ${
-        disabled
-          ? "cursor-not-allowed opacity-60"
-          : draggable
-            ? "cursor-grab active:cursor-grabbing"
-            : onClick
-              ? "cursor-pointer"
-              : ""
+        onClick ? "cursor-pointer" : ""
       } ${selected ? "ring-2 ring-[#2f6064]/50 ring-offset-2 ring-offset-white dark:ring-offset-gray-800" : ""}`}
       title={title}
     >
-      <div
-        className={`p-3 rounded-full border ${bgClass} ${draggable && !disabled ? `hover:ring-2 ${hoverRing}` : ""} transition-shadow`}
-      >
+      <div className={`p-3 rounded-full border ${bgClass} transition-shadow`}>
         <Icon className={`h-6 w-6 ${colorClass}`} />
       </div>
       {item.category && (
@@ -236,25 +239,7 @@ function IconCard({
         </span>
       )}
       {liveAmount != null && (
-        <span
-          className={`text-[12px] font-semibold mt-0.5 ${
-            liveAmountTone === "danger" || liveAmountPrefix === "−"
-              ? "text-red-600 dark:text-red-400"
-              : liveAmountTone === "success"
-                ? "text-green-600 dark:text-green-400"
-              : liveAmountTone === "neutral"
-                ? "text-gray-700 dark:text-gray-300"
-              : liveAmountLabel === "Left"
-              ? liveAmount === 0
-                ? "text-gray-400 dark:text-gray-500"
-                : "text-red-600 dark:text-red-400"
-              : item.amount != null
-                ? liveAmount > item.amount
-                  ? "text-red-600 dark:text-red-400"
-                  : "text-green-600 dark:text-green-400"
-                : "text-gray-900 dark:text-gray-100"
-          }`}
-        >
+        <span className={`text-[12px] font-semibold mt-0.5 ${amountClass}`}>
           {liveAmountLabel ? `${liveAmountLabel}: ` : ""}
           {liveAmountPrefix}R {liveAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
         </span>
@@ -280,9 +265,6 @@ export default function BudgetManager() {
   const [incomeTransferAmounts, setIncomeTransferAmounts] = useState<Map<string, number>>(new Map());
   // account-to-account flow amounts: key = `${fromAccountId}::${toAccountId}`
   const [accountTransfers, setAccountTransfers] = useState<Map<string, number>>(new Map());
-  const [dragOverTarget, setDragOverTarget] = useState<string | null>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [isDraggingAccount, setIsDraggingAccount] = useState(false);
   const [selectedIncomeId, setSelectedIncomeId] = useState<string | null>(null);
   const [selectedSourceAccountId, setSelectedSourceAccountId] = useState<string | null>(null);
   const [addingAccountType, setAddingAccountType] = useState<string | null>(null);
@@ -455,106 +437,16 @@ export default function BudgetManager() {
     });
   }, []);
 
-  const getIncomeTotal = (item: IconItem): number => item.amount ?? 0;
-
-  const getAllocatedAmount = (incomeId: string): number =>
-    incomeTransferAmounts.get(incomeId) ?? 0;
-
-  const getRemainingIncome = (item: IconItem): number =>
-    Math.max(0, getIncomeTotal(item) - getAllocatedAmount(item.id));
-
-  const getItemsForAccount = (accountId: string): IconItem[] =>
-    allIncomeIcons.filter((i) => allocations.get(i.id) === accountId);
-
-  const getIncomeAmountForAccount = (item: IconItem): number =>
-    getAllocatedAmount(item.id);
-
-  const getAccountIncome = (accountId: string): number =>
-    getItemsForAccount(accountId).reduce((sum, i) => sum + getIncomeAmountForAccount(i), 0);
-
-  const getAccountExpenses = (accountId: string): number =>
-    monthlyExpensesByAccount.get(accountId) ?? 0;
-
-  const getAccountAllocated = (accountId: string): number => {
-    let total = 0;
-    for (const [key, amount] of expenseAllocations) {
-      if (key.startsWith(`${accountId}::`)) total += amount;
-    }
-    return total;
-  };
-
-  const getAccountTotal = (accountId: string): number =>
-    getAccountIncome(accountId) + getAccountTransferIn(accountId) - getAccountTransferOut(accountId) - getAccountExpenses(accountId) - getAccountAllocated(accountId);
-
-  const getAccountTransferOut = (accountId: string): number => {
-    let total = 0;
-    for (const [key, amount] of accountTransfers) {
-      if (key.startsWith(`${accountId}::`)) total += amount;
-    }
-    return total;
-  };
-
-  const getAccountTransferIn = (accountId: string): number => {
-    let total = 0;
-    for (const [key, amount] of accountTransfers) {
-      if (key.endsWith(`::${accountId}`)) total += amount;
-    }
-    return total;
-  };
-
-  const getAllocForExpense = (accountId: string, expenseId: string): number =>
-    expenseAllocations.get(`${accountId}::${expenseId}`) ?? 0;
-
-  const getTotalAllocForExpense = (expenseId: string): number => {
-    let total = 0;
-    for (const [key, amount] of expenseAllocations) {
-      if (key.endsWith(`::${expenseId}`)) total += amount;
-    }
-    return total;
-  };
-
-  const getTotalExpenseAllocations = (): number => {
-    let total = 0;
-    for (const amount of expenseAllocations.values()) total += amount;
-    return total;
-  };
-
-  const resetDragState = () => {
-    setIsDragging(false);
-    setIsDraggingAccount(false);
-    setDragOverTarget(null);
-  };
-
   const clearTapSelection = () => {
     setSelectedIncomeId(null);
     setSelectedSourceAccountId(null);
-  };
-
-  const handleDragStart = (e: React.DragEvent, item: IconItem) => {
-    if (getRemainingIncome(item) <= 0) {
-      e.preventDefault();
-      return;
-    }
-    e.dataTransfer.setData("application/income-id", item.id);
-    e.dataTransfer.effectAllowed = "move";
-    setIsDragging(true);
-  };
-
-  const handleDragEnd = () => {
-    resetDragState();
-  };
-
-  const handleAccountDragStart = (e: React.DragEvent, acc: UserAccount) => {
-    e.dataTransfer.setData("application/account-id", acc.id);
-    e.dataTransfer.effectAllowed = "copy";
-    setIsDraggingAccount(true);
   };
 
   const openExpenseAllocationModal = (accountId: string, expItem: IconItem): boolean => {
     const acc = userAccounts.find((a) => a.id === accountId);
     if (!acc) return false;
 
-    const existing = getAllocForExpense(acc.id, expItem.id);
+    const existing = expenseAllocations.get(`${acc.id}::${expItem.id}`) ?? 0;
     setAllocAmount(existing > 0 ? String(existing) : "");
     setAllocModal({
       accountId: acc.id,
@@ -571,22 +463,21 @@ export default function BudgetManager() {
     const targetAccount = userAccounts.find((a) => a.id === accountId);
     if (!incomeItem || !targetAccount || targetAccount.accountType === "wallet") return false;
 
-    const incomeTotal = getIncomeTotal(incomeItem);
-    const previousUsed = getAllocatedAmount(incomeId);
-    const maxIncrement = Math.max(0, incomeTotal - previousUsed);
-    if (maxIncrement <= 0) return false;
+    const incomeTotal = incomeItem.amount ?? 0;
+    const previousUsed = incomeTransferAmounts.get(incomeId) ?? 0;
+    const remaining = incomeTotal - previousUsed;
 
-    setTransferAmount(String(maxIncrement));
+    // Suggest remaining when under-allocated; leave blank when already at/over so the user can add more.
+    setTransferAmount(remaining > 0 ? String(remaining) : "");
     setTransferModal({
       mode: "income_to_account",
       incomeId,
       incomeLabel: incomeItem.category ?? incomeItem.label,
       accountId,
       accountName: targetAccount.name,
-      existing: previousUsed,
       incomeTotal,
       previousUsed,
-      maxIncrement,
+      remaining,
     });
     return true;
   };
@@ -612,9 +503,8 @@ export default function BudgetManager() {
   };
 
   const handleIncomeTap = (item: IconItem) => {
-    if (getRemainingIncome(item) <= 0) return;
     setSelectedSourceAccountId(null);
-    setSelectedIncomeId((current) => current === item.id ? null : item.id);
+    setSelectedIncomeId((current) => (current === item.id ? null : item.id));
   };
 
   const handleAccountTap = (acc: UserAccount) => {
@@ -631,7 +521,7 @@ export default function BudgetManager() {
     }
 
     setSelectedIncomeId(null);
-    setSelectedSourceAccountId((current) => current === acc.id ? null : acc.id);
+    setSelectedSourceAccountId((current) => (current === acc.id ? null : acc.id));
   };
 
   const handleExpenseTap = (expItem: IconItem) => {
@@ -639,19 +529,11 @@ export default function BudgetManager() {
     if (openExpenseAllocationModal(selectedSourceAccountId, expItem)) clearTapSelection();
   };
 
-  const handleDropOnExpense = (e: React.DragEvent, expItem: IconItem) => {
-    e.preventDefault();
-    resetDragState();
-    const raw = e.dataTransfer.getData("application/account-id");
-    if (!raw) return;
-    openExpenseAllocationModal(raw, expItem);
-  };
-
   const handleSaveAllocation = async () => {
     if (!allocModal) return;
+    const amount = parseMoneyInput(allocAmount);
+    if (amount === null) return;
     invalidateBudgetLoads();
-    const amount = Number(allocAmount.replace(/,/g, "").trim());
-    if (isNaN(amount) || amount < 0) return;
     const currentModal = allocModal;
     // Close immediately for smoother UX; persist in background.
     setAllocModal(null);
@@ -676,37 +558,16 @@ export default function BudgetManager() {
     }
   };
 
-  const handleDropOnAccount = async (e: React.DragEvent, accountId: string) => {
-    e.preventDefault();
-    resetDragState();
-    const incomeId = e.dataTransfer.getData("application/income-id");
-    if (incomeId) {
-      openIncomeTransferModal(incomeId, accountId);
-      return;
-    }
-
-    const sourceAccountId = e.dataTransfer.getData("application/account-id");
-    if (sourceAccountId && sourceAccountId !== accountId) {
-      openAccountTransferModal(sourceAccountId, accountId);
-      return;
-    }
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
   const closeTransferModal = () => {
     setTransferModal(null);
     setTransferAmount("");
-    resetDragState();
     clearTapSelection();
   };
 
   const handleSaveTransfer = async () => {
     if (!transferModal) return;
-    const rawAmount = Number(transferAmount.replace(/,/g, "").trim());
-    if (isNaN(rawAmount) || rawAmount < 0) return;
+    const rawAmount = parseMoneyInput(transferAmount);
+    if (rawAmount === null) return;
     const currentTransfer = transferModal;
     invalidateBudgetLoads();
     // Close immediately for smoother UX; persist in background.
@@ -727,12 +588,9 @@ export default function BudgetManager() {
           });
           await storage.removeIncomeAllocation(currentTransfer.incomeId);
         } else {
-          const increment = Math.min(rawAmount, currentTransfer.maxIncrement);
-          const newTotal = Math.min(
-            currentTransfer.incomeTotal,
-            currentTransfer.previousUsed + increment
-          );
-          if (newTotal <= 0) return;
+          // Allow allocating beyond defined income (overage shown in red on the income card).
+          const newTotal = Math.round((currentTransfer.previousUsed + rawAmount) * 100) / 100;
+          if (newTotal <= 0 || newTotal > MAX_MONEY_AMOUNT) return;
 
           setAllocations((prev) => new Map(prev).set(currentTransfer.incomeId, currentTransfer.accountId));
           setIncomeTransferAmounts((prev) => new Map(prev).set(currentTransfer.incomeId, newTotal));
@@ -753,7 +611,6 @@ export default function BudgetManager() {
           await storage.saveAccountTransferAmount(currentTransfer.fromAccountId, currentTransfer.toAccountId, amount);
         }
       }
-      invalidateBudgetLoads();
       storage.logBudgetActivity();
     } catch (err) {
       console.error(err);
@@ -782,14 +639,29 @@ export default function BudgetManager() {
     if (!deleteConfirm) return;
     invalidateBudgetLoads();
     const accountId = deleteConfirm.id;
+
+    // Snapshot before optimistic updates so cleanup uses a stable view of related rows.
+    const affectedIncomeIds = Array.from(allocations.entries())
+      .filter(([, accId]) => accId === accountId)
+      .map(([incomeId]) => incomeId);
+    const transferPairs = Array.from(accountTransfers.keys())
+      .filter((key) => {
+        const [fromId, toId] = key.split("::");
+        return fromId === accountId || toId === accountId;
+      })
+      .map((key) => key.split("::") as [string, string]);
+
     try {
       await storage.deleteUserAccount(accountId);
       setUserAccounts((prev) => prev.filter((a) => a.id !== accountId));
       setAllocations((prev) => {
         const next = new Map(prev);
-        for (const [incomeId, accId] of next) {
-          if (accId === accountId) next.delete(incomeId);
-        }
+        for (const incomeId of affectedIncomeIds) next.delete(incomeId);
+        return next;
+      });
+      setIncomeTransferAmounts((prev) => {
+        const next = new Map(prev);
+        for (const incomeId of affectedIncomeIds) next.delete(incomeId);
         return next;
       });
       setExpenseAllocations((prev) => {
@@ -801,32 +673,16 @@ export default function BudgetManager() {
       });
       setAccountTransfers((prev) => {
         const next = new Map(prev);
-        for (const key of next.keys()) {
-          if (key.startsWith(`${accountId}::`) || key.endsWith(`::${accountId}`)) next.delete(key);
-        }
-        return next;
-      });
-      setIncomeTransferAmounts((prev) => {
-        const next = new Map(prev);
-        for (const [incomeId, accId] of allocations.entries()) {
-          if (accId === accountId) next.delete(incomeId);
-        }
+        for (const [fromId, toId] of transferPairs) next.delete(`${fromId}::${toId}`);
         return next;
       });
 
-      const affectedIncomeIds = Array.from(allocations.entries())
-        .filter(([, accId]) => accId === accountId)
-        .map(([incomeId]) => incomeId);
-      await Promise.all(affectedIncomeIds.map((incomeId) => storage.removeIncomeTransferAmount(incomeId)));
-
-      const transferPairs = Array.from(accountTransfers.keys())
-        .filter((key) => key.startsWith(`${accountId}::`) || key.endsWith(`::${accountId}`))
-        .map((key) => key.split("::") as [string, string]);
-      await Promise.all(
-        transferPairs.map(([fromAccountId, toAccountId]) =>
+      await Promise.all([
+        ...affectedIncomeIds.map((incomeId) => storage.removeIncomeTransferAmount(incomeId)),
+        ...transferPairs.map(([fromAccountId, toAccountId]) =>
           storage.removeAccountTransferAmount(fromAccountId, toAccountId)
-        )
-      );
+        ),
+      ]);
     } catch (err) {
       console.error(err);
     }
@@ -836,8 +692,8 @@ export default function BudgetManager() {
   const handleAddIncome = async () => {
     if (isAddingIncomeRef.current) return;
 
-    const amount = Number(newIncomeAmount.replace(/,/g, "").trim());
-    if (!newIncomeName.trim() || isNaN(amount) || amount <= 0) return;
+    const amount = parseMoneyInput(newIncomeAmount);
+    if (!newIncomeName.trim() || amount === null || amount <= 0) return;
 
     isAddingIncomeRef.current = true;
     setIsAddingIncome(true);
@@ -883,8 +739,8 @@ export default function BudgetManager() {
   const handleAddExpense = async () => {
     if (isAddingExpenseRef.current) return;
 
-    const amount = Number(newExpenseAmount.replace(/,/g, "").trim());
-    if (!newExpenseName.trim() || isNaN(amount) || amount <= 0) return;
+    const amount = parseMoneyInput(newExpenseAmount);
+    if (!newExpenseName.trim() || amount === null || amount <= 0) return;
 
     isAddingExpenseRef.current = true;
     setIsAddingExpense(true);
@@ -943,12 +799,61 @@ export default function BudgetManager() {
   const pooledIncome = computePooledIncome(onboardingIncome, profile);
   const pooledExpenses = computePooledExpenses(onboardingExpenses, profile);
 
-  const actualIncomeLeft = allIncomeIcons.reduce((sum, inc) => sum + getRemainingIncome(inc), 0);
-  const totalExpenses = expenseIcons.reduce((sum, exp) => sum + getTotalAllocForExpense(exp.id), 0);
+  // Precompute O(n) indexes once per render instead of rescanning Maps per account/expense.
+  const accountsByType = new Map<string, UserAccount[]>();
+  for (const acc of userAccounts) {
+    const list = accountsByType.get(acc.accountType);
+    if (list) list.push(acc);
+    else accountsByType.set(acc.accountType, [acc]);
+  }
+
+  const incomeItemsByAccount = new Map<string, IconItem[]>();
+  const incomeAmountByAccount = new Map<string, number>();
+  let actualIncomeLeft = 0;
+  for (const inc of allIncomeIcons) {
+    const allocated = incomeTransferAmounts.get(inc.id) ?? 0;
+    const defined = inc.amount ?? 0;
+    actualIncomeLeft += Math.max(0, defined - allocated);
+
+    const accountId = allocations.get(inc.id);
+    if (!accountId || allocated <= 0) continue;
+    const list = incomeItemsByAccount.get(accountId);
+    if (list) list.push(inc);
+    else incomeItemsByAccount.set(accountId, [inc]);
+    addToMapTotal(incomeAmountByAccount, accountId, allocated);
+  }
+
+  const expenseAllocByAccount = new Map<string, number>();
+  const expenseAllocByExpense = new Map<string, number>();
+  for (const [key, amount] of expenseAllocations) {
+    const sep = key.indexOf("::");
+    if (sep < 0) continue;
+    const accountId = key.slice(0, sep);
+    const expenseId = key.slice(sep + 2);
+    addToMapTotal(expenseAllocByAccount, accountId, amount);
+    addToMapTotal(expenseAllocByExpense, expenseId, amount);
+  }
+
+  const transferOutByAccount = new Map<string, number>();
+  const transferInByAccount = new Map<string, number>();
+  for (const [key, amount] of accountTransfers) {
+    const sep = key.indexOf("::");
+    if (sep < 0) continue;
+    addToMapTotal(transferOutByAccount, key.slice(0, sep), amount);
+    addToMapTotal(transferInByAccount, key.slice(sep + 2), amount);
+  }
+
+  let totalExpenses = 0;
+  for (const exp of expenseIcons) {
+    totalExpenses += expenseAllocByExpense.get(exp.id) ?? 0;
+  }
   const monthlyBalance = actualIncomeLeft - totalExpenses;
   const isOverBudget = monthlyBalance < 0;
   const selectedIncome = selectedIncomeId ? allIncomeIcons.find((item) => item.id === selectedIncomeId) : null;
-  const selectedSourceAccount = selectedSourceAccountId ? userAccounts.find((account) => account.id === selectedSourceAccountId) : null;
+  const selectedSourceAccount = selectedSourceAccountId
+    ? userAccounts.find((account) => account.id === selectedSourceAccountId)
+    : null;
+  const monthLabel = new Date().toLocaleString(undefined, { month: "long", year: "numeric" });
 
   return (
     <div className="space-y-5">
@@ -964,24 +869,24 @@ export default function BudgetManager() {
             </div>
           </div>
           <div className="text-sm text-gray-500 sm:text-right">
-            {new Date().toLocaleString(undefined, { month: "long", year: "numeric" })}
+            {monthLabel}
           </div>
         </div>
       </header>
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
-        {/* Left vertical bar — account drop zones grouped by type */}
+        {/* Left vertical bar — accounts grouped by type */}
         <aside className="flex flex-col items-stretch space-y-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 xl:col-span-3 xl:border-0 xl:bg-transparent xl:p-0 xl:py-6 2xl:col-span-2">
           <div>
             <div className="text-sm font-semibold text-gray-900 dark:text-white">Cash and Liquid Investments</div>
             <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 xl:hidden">
-              Add accounts here, then tap or drag to allocate income and expenses.
+              Add accounts here, then tap to allocate income and expenses.
             </p>
           </div>
 
           {ACCOUNT_TYPE_META.map(({ type, label, icon: TypeIcon, color }) => {
             const c = COLOR_MAP[color];
-            const accountsOfType = userAccounts.filter((a) => a.accountType === type);
+            const accountsOfType = accountsByType.get(type) ?? [];
             const isWalletType = type === "wallet";
             const hideIncomeItems = type === "bank";
 
@@ -1007,7 +912,7 @@ export default function BudgetManager() {
                   )}
                 </div>
 
-                {/* Wallet: read-only available balance (no drag and drop) */}
+                {/* Wallet: read-only available balance */}
                 {isWalletType ? (
                   <div
                     className={`w-full rounded-xl border-2 p-3 border-gray-200 dark:border-gray-700 ${c.bg}`}
@@ -1043,46 +948,34 @@ export default function BudgetManager() {
                   </div>
                 )}
 
-                {/* Individual accounts as drop zones */}
+                {/* Individual accounts */}
                 {accountsOfType.map((acc) => {
-                  const items = getItemsForAccount(acc.id);
-                  const accountIncome = getAccountIncome(acc.id);
-                  const transferIn = getAccountTransferIn(acc.id);
-                  const transferOut = getAccountTransferOut(acc.id);
-                  const accountExpenses = getAccountExpenses(acc.id);
-                  const accountAllocated = getAccountAllocated(acc.id);
-                  const total = getAccountTotal(acc.id);
-                  const isOver = dragOverTarget === acc.id;
+                  const items = incomeItemsByAccount.get(acc.id) ?? [];
+                  const accountIncome = incomeAmountByAccount.get(acc.id) ?? 0;
+                  const transferIn = transferInByAccount.get(acc.id) ?? 0;
+                  const transferOut = transferOutByAccount.get(acc.id) ?? 0;
+                  const accountExpenses = monthlyExpensesByAccount.get(acc.id) ?? 0;
+                  const accountAllocated = expenseAllocByAccount.get(acc.id) ?? 0;
+                  const total = accountIncome + transferIn - transferOut - accountExpenses - accountAllocated;
                   const isSelectedSource = selectedSourceAccountId === acc.id;
 
                   return (
                     <div
                       key={acc.id}
-                      draggable
                       onClick={() => handleAccountTap(acc)}
-                      onDragStart={(e) => { e.stopPropagation(); handleAccountDragStart(e, acc); }}
-                      onDragEnd={handleDragEnd}
-                      className={`w-full rounded-xl border-2 p-3 transition-all cursor-grab active:cursor-grabbing select-none touch-manipulation ${
-                        isOver
-                          ? `${c.border} ${c.ring} ring-2 scale-[1.02]`
-                          : isSelectedSource
-                            ? `${c.border} ${c.ring} ring-2 scale-[1.01]`
+                      className={`w-full rounded-xl border-2 p-3 transition-all cursor-pointer select-none touch-manipulation ${
+                        isSelectedSource
+                          ? `${c.border} ${c.ring} ring-2 scale-[1.01]`
                           : selectedIncomeId
                             ? `border-gray-300 dark:border-gray-600 ${c.ring}/30 ring-1`
-                          : isDragging || isDraggingAccount
-                            ? `border-gray-300 dark:border-gray-600 ${c.ring}/30 ring-1 animate-pulse`
                             : `border-gray-200 dark:border-gray-700 hover:${c.border} hover:shadow-sm`
                       }`}
-                      title={selectedIncomeId ? `Tap to transfer selected income to ${acc.name}` : `Drag or tap this card to allocate budget from ${acc.name}`}
-                      onDrop={(e) => handleDropOnAccount(e, acc.id)}
-                      onDragOver={(e) => { handleDragOver(e); setDragOverTarget(acc.id); }}
-                      onDragLeave={() => setDragOverTarget(null)}
+                      title={selectedIncomeId ? `Tap to transfer selected income to ${acc.name}` : `Tap this card to allocate budget from ${acc.name}`}
                     >
                       <div className="flex items-center justify-between mb-1">
                         <div className="flex flex-col items-start gap-0.5">
                           <div className="flex items-center gap-1">
-                            <GripVertical className={`h-3.5 w-3.5 ${c.text} opacity-60 flex-shrink-0`} />
-                            <span className="text-xs font-semibold text-gray-900 dark:text-white truncate max-w-[80px]" title={acc.name}>
+                            <span className="text-xs font-semibold text-gray-900 dark:text-white truncate max-w-[100px]" title={acc.name}>
                               {acc.name}
                             </span>
                           </div>
@@ -1150,20 +1043,23 @@ export default function BudgetManager() {
                         </div>
                       ) : items.length > 0 ? (
                         <div className="flex flex-col items-stretch gap-1.5 w-full">
-                          {items.map((inc) => (
-                            <div
-                              key={inc.id}
-                              className={`rounded-lg border px-2 py-1.5 text-center ${c.bg} ${c.border}`}
-                              title={`${inc.category ?? inc.label}: R ${getIncomeAmountForAccount(inc).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-                            >
-                              <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight block truncate">
-                                {inc.category ?? inc.label}
-                              </span>
-                              <span className={`text-[12px] font-semibold ${c.text}`}>
-                                +R {getIncomeAmountForAccount(inc).toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                              </span>
-                            </div>
-                          ))}
+                          {items.map((inc) => {
+                            const allocatedAmount = incomeTransferAmounts.get(inc.id) ?? 0;
+                            return (
+                              <div
+                                key={inc.id}
+                                className={`rounded-lg border px-2 py-1.5 text-center ${c.bg} ${c.border}`}
+                                title={`${inc.category ?? inc.label}: R ${allocatedAmount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                              >
+                                <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight block truncate">
+                                  {inc.category ?? inc.label}
+                                </span>
+                                <span className={`text-[12px] font-semibold ${c.text}`}>
+                                  +R {allocatedAmount.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                                </span>
+                              </div>
+                            );
+                          })}
                           <div className={`rounded-lg border px-2 py-1.5 text-center ${c.bg} ${c.border}`}>
                             <span className="text-[10px] text-gray-500 dark:text-gray-400 leading-tight block">
                               Remaining
@@ -1184,7 +1080,7 @@ export default function BudgetManager() {
                       ) : (
                         <div className="flex items-center justify-center border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg min-h-[40px]">
                           <span className="text-[10px] text-gray-400 text-center px-1">
-                            {selectedIncomeId ? "Tap to add income" : "Drop income here"}
+                            {selectedIncomeId ? "Tap to add income" : "Tap income, then here"}
                           </span>
                         </div>
                       )}
@@ -1210,12 +1106,11 @@ export default function BudgetManager() {
           })}
 
           {/* Flow hints */}
-          <div className={`hidden w-full rounded-lg px-2 py-2 text-center transition-all duration-300 xl:block ${isDraggingAccount ? "bg-[#2f6064]/10 opacity-100" : "opacity-50"}`}>
+          <div className="hidden w-full rounded-lg px-2 py-2 text-center opacity-50 xl:block">
             <p className="text-[9px] text-gray-500 dark:text-gray-400 leading-snug">
-              {isDraggingAccount
-                ? <span className="font-semibold text-[#2f6064]">Drop on an expense →</span>
-                : <><span className="font-semibold">Drag any account card</span><br />→ drop on an expense to budget it</>
-              }
+              <span className="font-semibold">Tap an account</span>
+              <br />
+              → then tap an expense to budget it
             </p>
           </div>
         </aside>
@@ -1230,8 +1125,8 @@ export default function BudgetManager() {
               <h3 className="text-md flex flex-wrap items-center gap-2 font-semibold">
                 <TrendingUp className="h-5 w-5 text-[#2f6064]" />
                 Income
-                <span className="hidden items-center gap-1 text-[10px] font-normal text-gray-400 sm:flex">
-                  <ArrowLeft className="h-3 w-3" /> drag to accounts
+                <span className="hidden text-[10px] font-normal text-gray-400 sm:inline">
+                  tap, then select an account
                 </span>
               </h3>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
@@ -1257,20 +1152,19 @@ export default function BudgetManager() {
             {allIncomeIcons.length > 0 ? (
               <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:items-center sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                 {allIncomeIcons.map((inc) => {
-                  const remaining = getRemainingIncome(inc);
-                  const isFullyAllocated = getIncomeTotal(inc) > 0 && remaining === 0;
+                  const allocated = incomeTransferAmounts.get(inc.id) ?? 0;
+                  const balance = (inc.amount ?? 0) - allocated;
+                  const isOverAllocated = balance < 0;
                   return (
                     <IconCard
                       key={inc.id}
                       item={inc}
-                      draggable={!isFullyAllocated}
-                      disabled={isFullyAllocated}
-                      onDragStart={(e) => handleDragStart(e, inc)}
-                      onDragEnd={handleDragEnd}
                       onClick={() => handleIncomeTap(inc)}
                       selected={selectedIncomeId === inc.id}
-                      liveAmount={remaining}
-                      liveAmountLabel="Left"
+                      liveAmount={Math.abs(balance)}
+                      liveAmountLabel={isOverAllocated ? "Over" : "Left"}
+                      liveAmountPrefix={isOverAllocated ? "−" : undefined}
+                      liveAmountTone={isOverAllocated ? "danger" : "success"}
                     />
                   );
                 })}
@@ -1280,7 +1174,7 @@ export default function BudgetManager() {
             )}
           </div>
 
-          {/* Row 3: Planned expenses — drop target for account allocations */}
+          {/* Row 3: Planned expenses */}
           <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 sm:p-6">
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
               <h3 className="text-md flex items-center gap-2 font-semibold">
@@ -1307,36 +1201,23 @@ export default function BudgetManager() {
                 {selectedSourceAccount.name} selected. Tap an expense to budget from this account, or tap another account to transfer between accounts.
               </p>
             )}
-            {isDraggingAccount && (
-              <p className="text-[11px] text-orange-500 font-medium mb-3 flex items-center gap-1">
-                <Receipt className="h-3 w-3" /> Drop on an expense to set your budget for it
-              </p>
-            )}
             {expenseIcons.length > 0 ? (
               <div className="-mx-4 mt-2 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:items-start sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                 {expenseIcons.map((exp) => {
-                  const allocated = getTotalAllocForExpense(exp.id);
-                  const isDropOver = dragOverTarget === `exp-${exp.id}`;
+                  const allocated = expenseAllocByExpense.get(exp.id) ?? 0;
                   return (
                     <div
                       key={exp.id}
                       className={`relative flex w-[104px] flex-none snap-start flex-col items-center gap-1 rounded-xl border-2 transition-all duration-150 sm:w-auto ${
-                        isDropOver
-                          ? "border-orange-400 ring-2 ring-orange-300 bg-orange-50 dark:bg-orange-900/20 scale-105 p-3"
-                          : selectedSourceAccountId
-                            ? "border-dashed border-orange-300 dark:border-orange-600 bg-orange-50/50 dark:bg-orange-900/10 cursor-pointer p-3 min-w-[96px] min-h-[100px] justify-center"
-                          : isDraggingAccount
-                            ? "border-dashed border-orange-300 dark:border-orange-600 bg-orange-50/50 dark:bg-orange-900/10 cursor-copy p-3 min-w-[96px] min-h-[100px] justify-center"
-                            : "border-transparent p-2"
+                        selectedSourceAccountId
+                          ? "border-dashed border-orange-300 dark:border-orange-600 bg-orange-50/50 dark:bg-orange-900/10 cursor-pointer p-3 min-w-[96px] min-h-[100px] justify-center"
+                          : "border-transparent p-2"
                       }`}
                       onClick={selectedSourceAccountId ? () => handleExpenseTap(exp) : undefined}
-                      onDrop={(e) => handleDropOnExpense(e, exp)}
-                      onDragOver={(e) => { e.preventDefault(); setDragOverTarget(`exp-${exp.id}`); }}
-                      onDragLeave={() => setDragOverTarget(null)}
                     >
-                      {(isDraggingAccount || selectedSourceAccountId) && !isDropOver && (
+                      {selectedSourceAccountId && (
                         <span className="absolute top-1 right-1.5 text-[9px] font-semibold text-orange-400">
-                          {selectedSourceAccountId ? "tap here" : "drop here"}
+                          tap here
                         </span>
                       )}
                       <IconCard
@@ -1664,7 +1545,6 @@ export default function BudgetManager() {
                 autoFocus
                 type="number"
                 min="0"
-                max={transferModal.mode === "income_to_account" ? transferModal.maxIncrement : undefined}
                 step="0.01"
                 value={transferAmount}
                 onChange={(e) => setTransferAmount(e.target.value)}
@@ -1675,11 +1555,20 @@ export default function BudgetManager() {
             </div>
 
             {transferModal.mode === "income_to_account" && (
-              <p className="text-xs text-gray-400 mb-4">
-                Income total: R {transferModal.incomeTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
+              <p className={`text-xs mb-4 ${transferModal.remaining < 0 ? "text-red-600 dark:text-red-400" : "text-gray-400"}`}>
+                Defined income: R {transferModal.incomeTotal.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
                 {" "}Already allocated: R {transferModal.previousUsed.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
-                {" "}Left to drag: R {transferModal.maxIncrement.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
-                {" "}Enter how much to allocate from this drag (max R {transferModal.maxIncrement.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}). Enter 0 to remove.
+                {transferModal.remaining < 0 ? (
+                  <>
+                    {" "}Over by: R {Math.abs(transferModal.remaining).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
+                    {" "}You can allocate more. Enter 0 to remove.
+                  </>
+                ) : (
+                  <>
+                    {" "}Left: R {transferModal.remaining.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}.
+                    {" "}Enter how much to add to this account (over-allocation is allowed). Enter 0 to remove.
+                  </>
+                )}
               </p>
             )}
 

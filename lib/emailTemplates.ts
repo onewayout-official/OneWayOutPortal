@@ -1,23 +1,54 @@
-import { getAppUrl } from "@/lib/siteUrl";
-
 function layout(content: string): string {
   return `<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"><title>One Way Out</title></head>
-<body style="font-family: Arial, sans-serif; line-height: 1.5; color: #1a1a1a;">
-  <div style="max-width: 560px; margin: 0 auto; padding: 24px;">
-    ${content}
-    <p style="margin-top: 32px; font-size: 12px; color: #666;">One Way Out Portal</p>
+<body style="margin:0;padding:0;background:#f4f7f7;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#1a1a1a;">
+  <div style="max-width:560px;margin:0 auto;padding:24px;">
+    <div style="background:#2f6064;border-radius:12px 12px 0 0;padding:20px 24px;">
+      <p style="margin:0;font-size:18px;font-weight:700;color:#ffffff;letter-spacing:-0.02em;">One Way Out</p>
+    </div>
+    <div style="background:#ffffff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px;">
+      ${content}
+      <p style="margin-top:28px;font-size:12px;color:#666;">One Way Out Portal · This is an automated message.</p>
+    </div>
   </div>
 </body>
 </html>`;
 }
 
+export function passwordResetEmail(params: {
+  email: string;
+  resetUrl: string;
+}): { subject: string; html: string; text: string } {
+  const subject = "Reset your One Way Out password";
+  const text = `Reset your One Way Out password
+
+We received a request to reset the password for ${params.email}.
+
+Open this link to choose a new password:
+${params.resetUrl}
+
+This link expires for security. If you did not request a password reset, you can ignore this email.`;
+
+  const html = layout(`
+    <h2 style="margin-top:0;color:#1a1a1a;">Reset your password</h2>
+    <p>We received a request to reset the password for <strong>${params.email}</strong>.</p>
+    <p>Click the button below to choose a new password:</p>
+    <p><a href="${params.resetUrl}" style="display:inline-block;padding:12px 20px;background:#2f6064;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">Reset password</a></p>
+    <p style="font-size:14px;color:#555;">Or copy this link:<br>${params.resetUrl}</p>
+    <p style="font-size:13px;color:#777;">This link expires for security. If you did not request this, you can ignore this email.</p>
+  `);
+
+  return { subject, html, text };
+}
+
 export function coachWelcomeEmail(params: {
   name: string;
   email: string;
+  /** One-time Supabase recovery link. Must include the auth token — a bare /reset-password URL will not work. */
+  resetUrl: string;
 }): { subject: string; html: string; text: string } {
-  const resetUrl = getAppUrl("/reset-password");
+  const resetUrl = params.resetUrl;
   const subject = "Welcome to One Way Out — set up your coach account";
   const text = `Hi ${params.name},
 
@@ -26,14 +57,17 @@ Your coach account on One Way Out has been created.
 Sign in with this email (${params.email}) and set your password here:
 ${resetUrl}
 
+This link expires for security. If it has expired, use Forgot password on the sign-in page.
+
 If you did not expect this email, you can ignore it.`;
 
   const html = layout(`
-    <h2 style="margin-top: 0;">Welcome, ${params.name}</h2>
+    <h2 style="margin-top:0;color:#1a1a1a;">Welcome, ${params.name}</h2>
     <p>Your coach account on <strong>One Way Out</strong> has been created.</p>
     <p>Sign in with <strong>${params.email}</strong> and set your password:</p>
-    <p><a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Set your password</a></p>
-    <p style="font-size: 14px; color: #555;">Or copy this link: ${resetUrl}</p>
+    <p><a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#2f6064;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">Set your password</a></p>
+    <p style="font-size:14px;color:#555;">Or copy this link:<br>${resetUrl}</p>
+    <p style="font-size:13px;color:#777;">This link expires for security. If it has expired, use <em>Forgot password</em> on the sign-in page.</p>
   `);
 
   return { subject, html, text };

@@ -354,12 +354,15 @@ export async function sendGraphEmail({
   subject,
   html,
   replyTo,
+  fromDisplayName,
 }: {
   senderMailbox: string;
   to: string;
   subject: string;
   html: string;
   replyTo?: string | null;
+  /** Shown as the From display name (e.g. "One Way Out" instead of mailbox name "No Reply"). */
+  fromDisplayName?: string | null;
 }): Promise<void> {
   const token = await getGraphAccessToken();
   if (!token) {
@@ -374,6 +377,16 @@ export async function sendGraphEmail({
     },
     toRecipients: [{ emailAddress: { address: to } }],
   };
+
+  const displayName = fromDisplayName?.trim();
+  if (displayName) {
+    message.from = {
+      emailAddress: {
+        address: senderMailbox,
+        name: displayName,
+      },
+    };
+  }
 
   if (replyTo?.trim()) {
     message.replyTo = [{ emailAddress: { address: replyTo.trim() } }];

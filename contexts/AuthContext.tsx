@@ -345,11 +345,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return { success: false, error: "Supabase not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local (same folder as package.json), then restart the dev server." };
     }
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: getAppUrl("/reset-password"),
+      const response = await fetch("/api/auth/forgot-password", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.trim() }),
       });
-      if (error) {
-        return { success: false, error: error.message };
+      const json = (await response.json().catch(() => ({}))) as {
+        success?: boolean;
+        error?: string;
+      };
+      if (!response.ok) {
+        return {
+          success: false,
+          error: json.error || "Failed to send password reset email.",
+        };
       }
       return { success: true };
     } catch (err: unknown) {
@@ -358,7 +367,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return {
         success: false,
         error: isNetwork
-          ? "Cannot reach Supabase. Check .env.local and that your Supabase project is not paused."
+          ? "Cannot reach the server. Check your connection and try again."
           : msg,
       };
     }

@@ -1,8 +1,9 @@
 import { randomBytes } from "crypto";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getAppUrl } from "@/lib/siteUrl";
-import { sendEmail, getCoachSetupEmailMode, isEmailConfigured } from "@/lib/email";
+import { sendEmail, getCoachSetupEmailMode, isEmailConfigured, getAuthMailSender } from "@/lib/email";
 import { coachWelcomeEmail } from "@/lib/emailTemplates";
+import { generatePasswordResetLink } from "@/lib/authRecovery";
 
 function randomPassword(length = 16) {
   return randomBytes(length).toString("base64url").slice(0, length);
@@ -57,18 +58,27 @@ async function updatePasswordAndSendSetupEmail(
     const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email, {
       redirectTo: getAppUrl("/reset-password"),
     });
+    if (emailError) {
+      console.error("Supabase coach reset email failed:", emailError.message);
+    }
     setupEmailSent = !emailError;
   }
 
   if ((mode === "smtp" || mode === "both") && isEmailConfigured()) {
-    const template = coachWelcomeEmail({ name: coachName, email });
-    const smtpResult = await sendEmail({
-      to: email,
-      subject: template.subject,
-      html: template.html,
-      text: template.text,
-    });
-    setupEmailSent = setupEmailSent || smtpResult.success;
+    const linkResult = await generatePasswordResetLink(adminClient, email);
+    if ("error" in linkResult) {
+      console.error("Coach setup email skipped: could not generate recovery link for", email, linkResult.error);
+    } else {
+      const template = coachWelcomeEmail({ name: coachName, email, resetUrl: linkResult.resetUrl });
+      const smtpResult = await sendEmail({
+        to: email,
+        subject: template.subject,
+        html: template.html,
+        text: template.text,
+        fromMailbox: getAuthMailSender(),
+      });
+      setupEmailSent = setupEmailSent || smtpResult.success;
+    }
   }
 
   return { passwordUpdated: true, setupEmailSent };
@@ -86,18 +96,27 @@ async function sendCoachSetupEmail(
     const { error: emailError } = await adminClient.auth.resetPasswordForEmail(email, {
       redirectTo: getAppUrl("/reset-password"),
     });
+    if (emailError) {
+      console.error("Supabase coach reset email failed:", emailError.message);
+    }
     setupEmailSent = !emailError;
   }
 
   if ((mode === "smtp" || mode === "both") && isEmailConfigured()) {
-    const template = coachWelcomeEmail({ name: coachName, email });
-    const smtpResult = await sendEmail({
-      to: email,
-      subject: template.subject,
-      html: template.html,
-      text: template.text,
-    });
-    setupEmailSent = setupEmailSent || smtpResult.success;
+    const linkResult = await generatePasswordResetLink(adminClient, email);
+    if ("error" in linkResult) {
+      console.error("Coach setup email skipped: could not generate recovery link for", email, linkResult.error);
+    } else {
+      const template = coachWelcomeEmail({ name: coachName, email, resetUrl: linkResult.resetUrl });
+      const smtpResult = await sendEmail({
+        to: email,
+        subject: template.subject,
+        html: template.html,
+        text: template.text,
+        fromMailbox: getAuthMailSender(),
+      });
+      setupEmailSent = setupEmailSent || smtpResult.success;
+    }
   }
 
   return setupEmailSent;

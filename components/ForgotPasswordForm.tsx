@@ -3,7 +3,24 @@
 import { useState } from "react";
 import { useAuth } from "@/contexts/AuthContext";
 import Link from "next/link";
-import { Mail, AlertCircle, CheckCircle, ArrowLeft } from "lucide-react";
+
+function MailIcon() {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect width="20" height="16" x="2" y="4" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </svg>
+  );
+}
 
 export default function ForgotPasswordForm() {
   const [email, setEmail] = useState("");
@@ -16,7 +33,7 @@ export default function ForgotPasswordForm() {
     e.preventDefault();
     setError("");
     setSuccess(false);
-    
+
     if (!email.trim()) {
       setError("Please enter your email address.");
       return;
@@ -24,92 +41,76 @@ export default function ForgotPasswordForm() {
 
     setIsLoading(true);
     const result = await resetPasswordForEmail(email);
-    
+
     if (result.success) {
       setSuccess(true);
     } else {
       setError(result.error || "Failed to send reset email");
     }
-    
+
     setIsLoading(false);
   };
 
+  if (success) {
+    return (
+      <div>
+        <p className="terms-note" style={{ marginTop: 0, textAlign: "left", color: "var(--foreground)" }}>
+          Password reset link sent to <strong>{email}</strong>. Check your inbox
+          (and spam folder), then follow the link to set a new password.
+        </p>
+        <div
+          className="form-footer-links"
+          style={{ justifyContent: "center", marginTop: "1.25rem" }}
+        >
+          <Link href="/login" className="form-link primary" id="link-back-to-login-success">
+            Back to Sign In
+          </Link>
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="w-full max-w-md mx-auto">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 border border-gray-200 dark:border-gray-700">
-        <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-100 dark:bg-blue-900/30 rounded-full mb-4">
-            <Mail className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+    <div>
+      {error ? <p className="terms-note" style={{ marginTop: 0, color: "var(--danger)" }}>{error}</p> : null}
+
+      <form onSubmit={handleResetPassword} noValidate>
+        <div className="form-group">
+          <label htmlFor="forgot-email">Email Address</label>
+          <div className="input-wrapper">
+            <span className="input-icon">
+              <MailIcon />
+            </span>
+            <input
+              id="forgot-email"
+              type="email"
+              className="form-input"
+              placeholder="you@example.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              required
+              autoComplete="email"
+            />
           </div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Reset Password</h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-2">Enter your email to receive a password reset link</p>
         </div>
 
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg flex items-center gap-2 text-red-800 dark:text-red-200">
-            <AlertCircle className="h-5 w-5 flex-shrink-0" />
-            <span className="text-sm">{error}</span>
-          </div>
-        )}
+        <button
+          id="btn-forgot-password-submit"
+          type="submit"
+          className="btn-primary"
+          disabled={isLoading}
+        >
+          {isLoading ? "Sending..." : "Send Reset Link"}
+        </button>
+      </form>
 
-        {success ? (
-          <div className="text-center">
-            <div className="mb-6 p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg flex flex-col items-center gap-3 text-green-800 dark:text-green-200">
-              <CheckCircle className="h-8 w-8 text-green-600 dark:text-green-400" />
-              <p>Password reset link sent to <strong>{email}</strong>.</p>
-              <p className="text-sm">Please check your inbox (and spam folder) and click the link to reset your password.</p>
-            </div>
-            <Link href="/login" className="inline-flex items-center justify-center gap-2 text-blue-600 dark:text-blue-400 hover:underline font-medium">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Sign In
-            </Link>
-          </div>
-        ) : (
-          <form onSubmit={handleResetPassword} className="space-y-6">
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Email Address
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-400" />
-                <input
-                  id="email"
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent dark:bg-gray-700 dark:text-white"
-                  placeholder="you@example.com"
-                  required
-                  autoComplete="email"
-                />
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-blue-600 text-white py-3 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Mail className="h-5 w-5" />
-                  Send Reset Link
-                </>
-              )}
-            </button>
-            <div className="mt-6 text-center">
-              <Link href="/login" className="inline-flex items-center justify-center gap-2 text-sm text-gray-600 dark:text-gray-400 hover:underline font-medium">
-                <ArrowLeft className="h-4 w-4" />
-                Back to Sign In
-              </Link>
-            </div>
-          </form>
-        )}
+      <div
+        className="form-footer-links"
+        style={{ justifyContent: "center", marginTop: "1.25rem" }}
+      >
+        <Link href="/login" className="form-link" id="link-back-to-login-forgot">
+          Back to Sign In
+        </Link>
       </div>
     </div>
   );

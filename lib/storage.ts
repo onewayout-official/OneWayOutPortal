@@ -796,8 +796,13 @@ export const storage = {
   saveIncomeAllocation: async (incomeId: string, accountId: string, amount: number): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error("You must be signed in.");
+    if (typeof incomeId !== "string" || !incomeId.trim()) throw new Error("Invalid income.");
+    if (typeof accountId !== "string" || !accountId.trim()) throw new Error("Invalid account.");
+    if (!Number.isFinite(amount) || amount < 0) throw new Error("Invalid amount.");
+    const safeAmount = Math.round(amount * 100) / 100;
+    if (safeAmount > 1_000_000_000) throw new Error("Amount exceeds allowed limit.");
     const { error } = await supabase.from("income_allocations").upsert(
-      { user_id: userId, income_id: incomeId, account_id: accountId, amount },
+      { user_id: userId, income_id: incomeId.trim(), account_id: accountId.trim(), amount: safeAmount },
       { onConflict: "user_id,income_id" }
     );
     if (error) {
