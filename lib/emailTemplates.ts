@@ -18,11 +18,22 @@ function withQueryParam(url: string, key: string, value: string): string {
   }
 }
 
-function layout(content: string, footerHtml?: string): string {
+function layout(
+  content: string,
+  options?: {
+    footerHtml?: string;
+    headerTitle?: string;
+    headerSubtitle?: string;
+  }
+): string {
   const footer =
-    footerHtml ??
+    options?.footerHtml ??
     `<p style="margin-top:28px;font-size:12px;color:#666;">One Way Out Portal · This is an automated message.</p>`;
   const logoUrl = getEmailLogoUrl();
+  const headerTitle = options?.headerTitle ?? "Welcome to OneWayOut";
+  const headerSubtitle =
+    options?.headerSubtitle ??
+    "From financial crisis to Financial Freedom — the gamified way";
 
   // Single-table card layout — Gmail is less likely to fold the body after the header.
   return `<!DOCTYPE html>
@@ -41,8 +52,8 @@ function layout(content: string, footerHtml?: string): string {
           <tr>
             <td align="center" style="background:#2f6064;padding:24px 24px 20px;text-align:center;">
               <img src="${logoUrl}" alt="OneWayOut" width="96" height="96" style="display:block;margin:0 auto;width:96px;height:96px;border-radius:16px;object-fit:cover;border:0;" />
-              <p style="margin:16px 0 0;font-size:22px;font-weight:700;color:#fae3c8;letter-spacing:-0.02em;text-align:center;">Welcome to OneWayOut</p>
-              <p style="margin:8px 0 0;font-size:13px;font-style:italic;color:#ffffff;text-align:center;line-height:1.4;">From financial crisis to Financial Freedom — the gamified way</p>
+              <p style="margin:16px 0 0;font-size:22px;font-weight:700;color:#fae3c8;letter-spacing:-0.02em;text-align:center;">${headerTitle}</p>
+              <p style="margin:8px 0 0;font-size:13px;font-style:italic;color:#ffffff;text-align:center;line-height:1.4;">${headerSubtitle}</p>
             </td>
           </tr>
           <tr>
@@ -59,7 +70,17 @@ function layout(content: string, footerHtml?: string): string {
 </html>`;
 }
 
-function welcomeEmailFooter(unsubscribeUrl: string): { html: string; text: string } {
+function companyFooter(params: {
+  unsubscribeUrl?: string;
+  reason: string;
+}): { html: string; text: string } {
+  const unsubscribeHtml = params.unsubscribeUrl
+    ? `<a href="${params.unsubscribeUrl}" style="color:#2f6064;text-decoration:underline;">Unsubscribe</a> · `
+    : "";
+  const unsubscribeText = params.unsubscribeUrl
+    ? `Unsubscribe (${params.unsubscribeUrl}) · `
+    : "";
+
   const html = `
     <div style="margin-top:28px;padding-top:20px;border-top:1px solid #e5e7eb;font-size:11px;line-height:1.6;color:#666;">
       <p style="margin:0 0 8px;">OneWayOut (Pty) Ltd · W17, 17 Dock Road, V&amp;A Waterfront, Cape Town, South Africa</p>
@@ -75,10 +96,7 @@ function welcomeEmailFooter(unsubscribeUrl: string): { html: string; text: strin
         · <a href="https://www.tiktok.com/@1onewayout" style="color:#2f6064;text-decoration:none;">TikTok @1onewayout</a>
       </p>
       <p style="margin:0 0 8px;">Authorised juristic representative under FinMeUp, FSP No. 51310</p>
-      <p style="margin:0;">
-        <a href="${unsubscribeUrl}" style="color:#2f6064;text-decoration:underline;">Unsubscribe</a>
-        · You're receiving this because you signed up at onewayout.co.za
-      </p>
+      <p style="margin:0;">${unsubscribeHtml}${params.reason}</p>
     </div>`;
 
   const text = `
@@ -86,9 +104,43 @@ OneWayOut (Pty) Ltd · W17, 17 Dock Road, V&A Waterfront, Cape Town, South Afric
 onewayout.co.za · WA: +27 78 176 5677
 Socials: LinkedIn OneWayOut (Pty) Ltd · Facebook @onewayout.official · Instagram @one1wayout_official · TikTok @1onewayout
 Authorised juristic representative under FinMeUp, FSP No. 51310
-Unsubscribe (${unsubscribeUrl}) · You're receiving this because you signed up at onewayout.co.za`;
+${unsubscribeText}${params.reason}`;
 
   return { html, text };
+}
+
+function teamSignOffHtml(): string {
+  return `
+    <div style="margin:24px 0 8px;text-align:left;">
+      <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#1a1a1a;">We're glad you're here. One way out — forward.</p>
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#306164;">The OneWayOut Team</p>
+      <p style="margin:0;font-size:14px;line-height:1.7;color:#1a1a1a;">Questions? Just reply to this email — a real person reads every one.</p>
+    </div>`;
+}
+
+function teamSignOffText(): string {
+  return `We're glad you're here. One way out — forward.
+The OneWayOut Team
+Questions? Just reply to this email — a real person reads every one.`;
+}
+
+function primaryButtonHtml(href: string, label: string): string {
+  return `<p style="text-align:center;margin:24px 0;"><a href="${href}" style="display:inline-block;padding:12px 20px;background:#2f6064;color:#ffffff;border:2px solid #2f6064;text-decoration:none;border-radius:6px;font-weight:700;">${label}</a></p>`;
+}
+
+function creamSectionHtml(title: string, bodyHtml: string): string {
+  return `
+    <div style="margin:24px 0;padding:20px;background:#f5f2ec;border-radius:8px;">
+      <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#306164;letter-spacing:0.04em;text-transform:uppercase;">${title}</p>
+      ${bodyHtml}
+    </div>`;
+}
+
+function welcomeEmailFooter(unsubscribeUrl: string): { html: string; text: string } {
+  return companyFooter({
+    unsubscribeUrl,
+    reason: "You're receiving this because you signed up at onewayout.co.za",
+  });
 }
 
 export function passwordResetEmail(params: {
@@ -105,14 +157,22 @@ ${params.resetUrl}
 
 This link expires for security. If you did not request a password reset, you can ignore this email.`;
 
-  const html = layout(`
+  const html = layout(
+    `
     <h2 style="margin-top:0;color:#1a1a1a;">Reset your password</h2>
     <p>We received a request to reset the password for <strong>${params.email}</strong>.</p>
     <p>Click the button below to choose a new password:</p>
-    <p><a href="${params.resetUrl}" style="display:inline-block;padding:12px 20px;background:#2f6064;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">Reset password</a></p>
-    <p style="font-size:14px;color:#555;">Or copy this link:<br>${params.resetUrl}</p>
+    ${primaryButtonHtml(params.resetUrl, "Reset password")}
     <p style="font-size:13px;color:#777;">This link expires for security. If you did not request this, you can ignore this email.</p>
-  `);
+  `,
+    {
+      headerTitle: "Reset your password",
+      headerSubtitle: "Secure your OneWayOut account",
+      footerHtml: companyFooter({
+        reason: "You're receiving this because a password reset was requested for your account.",
+      }).html,
+    }
+  );
 
   return { subject, html, text };
 }
@@ -178,33 +238,29 @@ ${footer.text}`;
     <p>You've just taken the hardest step — deciding that things are going to change. Welcome. You're in the right place.</p>
     <p>OneWayOut turns the road out of financial stress into a game you can actually win: small missions, real rewards, and a human coach in your corner when you need one.</p>
     <p><strong style="color:#2f6064;font-size:17px;font-weight:800;">Your first mission is ready.</strong> It takes about 10 minutes and you could unlock up to 5,000 reward points: complete your financial information and goals so we can map your way out.</p>
-    <p style="text-align:center;margin:24px 0;"><a href="${actionUrl}" style="display:inline-block;padding:12px 20px;background:#2f6064;color:#ffffff;border:2px solid #2f6064;text-decoration:none;border-radius:6px;font-weight:700;">${ctaLabel}</a></p>
-    <div style="margin:24px 0;padding:20px;background:#f5f2ec;border-radius:8px;">
-      <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#306164;letter-spacing:0.04em;text-transform:uppercase;">What happens next</p>
-      <ol style="margin:0;padding-left:20px;color:#1a1a1a;font-size:14px;line-height:1.7;">
+    ${primaryButtonHtml(actionUrl, ctaLabel)}
+    ${creamSectionHtml(
+      "What happens next",
+      `<ol style="margin:0;padding-left:20px;color:#1a1a1a;font-size:14px;line-height:1.7;">
         <li style="margin-bottom:8px;">Complete your financial snapshot — see exactly where you stand.</li>
         <li style="margin-bottom:8px;">Get your plan/goals — missions sized to your life, not someone else's.</li>
         <li style="margin-bottom:0;">Level up — every mission you clear unlocks rewards and moves you closer to freedom.</li>
-      </ol>
-    </div>
-    <div style="margin:24px 0;padding:20px;background:#f5f2ec;border-radius:8px;">
-      <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#306164;letter-spacing:0.04em;text-transform:uppercase;">Easy ways to earn rewards</p>
-      <p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;">✓ Log in daily — every day counts.</p>
+      </ol>`
+    )}
+    ${creamSectionHtml(
+      "Easy ways to earn rewards",
+      `<p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;">✓ Log in daily — every day counts.</p>
       <p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;">✓ Track your mood — a minute a day.</p>
-      <p style="margin:0;color:#1a1a1a;font-size:14px;line-height:1.7;">✓ Track your expenses — small habit, big points.</p>
-    </div>
+      <p style="margin:0;color:#1a1a1a;font-size:14px;line-height:1.7;">✓ Track your expenses — small habit, big points.</p>`
+    )}
     <div style="margin:24px 0;padding:24px 20px;background:#2f6064;border-radius:8px;text-align:center;">
       <p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#fae3bb;text-align:center;">Your free session is on us</p>
       <p style="margin:0;font-size:14px;line-height:1.7;color:#ffffff;text-align:center;">Money stress is human. Your signup includes a free one-on-one session with one of our Life Coaches / Counsellors — book it whenever you're ready.</p>
     </div>
-    <div style="margin:24px 0 8px;text-align:left;">
-      <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#1a1a1a;">We're glad you're here. One way out — forward.</p>
-      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#306164;">The OneWayOut Team</p>
-      <p style="margin:0;font-size:14px;line-height:1.7;color:#1a1a1a;">Questions? Just reply to this email — a real person reads every one.</p>
-    </div>
+    ${teamSignOffHtml()}
     <p style="font-size:13px;color:#777;">If you did not create this account, you can ignore this email.</p>
   `,
-    footer.html
+    { footerHtml: footer.html }
   );
 
   return { subject, html, text };
@@ -216,27 +272,56 @@ export function coachWelcomeEmail(params: {
   /** One-time Supabase recovery link. Must include the auth token — a bare /reset-password URL will not work. */
   resetUrl: string;
 }): { subject: string; html: string; text: string } {
+  const firstName = params.name.trim().split(/\s+/)[0] || "there";
   const resetUrl = params.resetUrl;
-  const subject = "Welcome to One Way Out — set up your coach account";
-  const text = `Hi ${params.name},
+  const subject = "Welcome to OneWayOut — set up your coach account";
+  const footer = companyFooter({
+    reason: "You're receiving this because a coach account was created for you on OneWayOut.",
+  });
 
-Your coach account on One Way Out has been created.
+  const text = `Hi ${firstName},
+
+Your coach account on OneWayOut has been created.
 
 Sign in with this email (${params.email}) and set your password here:
 ${resetUrl}
 
+WHAT HAPPENS NEXT
+1. Set your password with the button below.
+2. Sign in to your coach portal.
+3. Review upcoming sessions and support your clients.
+
 This link expires for security. If it has expired, use Forgot password on the sign-in page.
 
-If you did not expect this email, you can ignore it.`;
+${teamSignOffText()}
 
-  const html = layout(`
-    <h2 style="margin-top:0;color:#1a1a1a;">Welcome, ${params.name}</h2>
-    <p>Your coach account on <strong>One Way Out</strong> has been created.</p>
-    <p>Sign in with <strong>${params.email}</strong> and set your password:</p>
-    <p><a href="${resetUrl}" style="display:inline-block;padding:12px 20px;background:#2f6064;color:#fff;text-decoration:none;border-radius:6px;font-weight:600;">Set your password</a></p>
-    <p style="font-size:14px;color:#555;">Or copy this link:<br>${resetUrl}</p>
+If you did not expect this email, you can ignore it.
+${footer.text}`;
+
+  const html = layout(
+    `
+    <h2 style="margin-top:0;color:#1a1a1a;">Hi ${firstName},</h2>
+    <p>Your coach account on <strong>OneWayOut</strong> has been created.</p>
+    <p><strong style="color:#2f6064;font-size:17px;font-weight:800;">Set your password to get started.</strong> Sign in with <strong>${params.email}</strong> after you choose a password.</p>
+    ${primaryButtonHtml(resetUrl, "Set your password")}
+    ${creamSectionHtml(
+      "What happens next",
+      `<ol style="margin:0;padding-left:20px;color:#1a1a1a;font-size:14px;line-height:1.7;">
+        <li style="margin-bottom:8px;">Set your password with the button above.</li>
+        <li style="margin-bottom:8px;">Sign in to your coach portal.</li>
+        <li style="margin-bottom:0;">Review upcoming sessions and support your clients.</li>
+      </ol>`
+    )}
     <p style="font-size:13px;color:#777;">This link expires for security. If it has expired, use <em>Forgot password</em> on the sign-in page.</p>
-  `);
+    ${teamSignOffHtml()}
+    <p style="font-size:13px;color:#777;">If you did not expect this email, you can ignore it.</p>
+  `,
+    {
+      footerHtml: footer.html,
+      headerTitle: "Welcome to OneWayOut",
+      headerSubtitle: "Your coach account is ready — let's get you set up",
+    }
+  );
 
   return { subject, html, text };
 }
@@ -248,11 +333,14 @@ export function appointmentConfirmationEmail(params: {
   appointmentTime: string;
   meetingLink?: string | null;
 }): { subject: string; html: string; text: string } {
+  const firstName = params.userName.trim().split(/\s+/)[0] || "there";
   const subject = `Appointment confirmed with ${params.coachName}`;
-  const meetingLine = params.meetingLink
-    ? `\nJoin: ${params.meetingLink}`
-    : "";
-  const text = `Hi ${params.userName},
+  const footer = companyFooter({
+    reason: "You're receiving this because you booked a session on OneWayOut.",
+  });
+  const meetingLine = params.meetingLink ? `\nJoin: ${params.meetingLink}` : "";
+
+  const text = `Hi ${firstName},
 
 Your counseling appointment is confirmed.
 
@@ -260,22 +348,32 @@ Coach: ${params.coachName}
 Date: ${params.appointmentDate}
 Time: ${params.appointmentTime}${meetingLine}
 
-See you then!`;
+${teamSignOffText()}
+${footer.text}`;
 
   const meetingHtml = params.meetingLink
-    ? `<p><a href="${params.meetingLink}" style="display:inline-block;padding:12px 20px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;">Join Teams meeting</a></p>`
-    : `<p style="font-size:14px;color:#555;">Your Teams link will be available in the portal before the session.</p>`;
+    ? primaryButtonHtml(params.meetingLink, "Join Teams meeting")
+    : `<p style="font-size:14px;color:#555;text-align:center;">Your Teams link will be available in the portal before the session.</p>`;
 
-  const html = layout(`
-    <h2 style="margin-top: 0;">Appointment confirmed</h2>
-    <p>Hi ${params.userName},</p>
+  const html = layout(
+    `
+    <h2 style="margin-top:0;color:#1a1a1a;">Hi ${firstName},</h2>
     <p>Your session with <strong>${params.coachName}</strong> is booked.</p>
-    <ul>
-      <li><strong>Date:</strong> ${params.appointmentDate}</li>
-      <li><strong>Time:</strong> ${params.appointmentTime}</li>
-    </ul>
+    ${creamSectionHtml(
+      "Session details",
+      `<p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Coach:</strong> ${params.coachName}</p>
+      <p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Date:</strong> ${params.appointmentDate}</p>
+      <p style="margin:0;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Time:</strong> ${params.appointmentTime}</p>`
+    )}
     ${meetingHtml}
-  `);
+    ${teamSignOffHtml()}
+  `,
+    {
+      footerHtml: footer.html,
+      headerTitle: "Session confirmed",
+      headerSubtitle: "You're one step closer — we look forward to seeing you",
+    }
+  );
 
   return { subject, html, text };
 }
@@ -288,12 +386,17 @@ export function coachBookingNotificationEmail(params: {
   appointmentTime: string;
   meetingLink?: string | null;
 }): { subject: string; html: string; text: string } {
+  const firstName = params.coachName.trim().split(/\s+/)[0] || "there";
   const subject = `New session booked — ${params.userName}`;
+  const footer = companyFooter({
+    reason: "You're receiving this because a client booked a session with you on OneWayOut.",
+  });
   const clientLine = params.userEmail
     ? `${params.userName} (${params.userEmail})`
     : params.userName;
   const meetingLine = params.meetingLink ? `\nJoin: ${params.meetingLink}` : "";
-  const text = `Hi ${params.coachName},
+
+  const text = `Hi ${firstName},
 
 A new coaching session has been booked.
 
@@ -301,23 +404,36 @@ Client: ${clientLine}
 Date: ${params.appointmentDate}
 Time: ${params.appointmentTime}${meetingLine}
 
-The session has been added to your Outlook calendar.`;
+The session has been added to your Outlook calendar.
+
+${teamSignOffText()}
+${footer.text}`;
 
   const meetingHtml = params.meetingLink
-    ? `<p><a href="${params.meetingLink}">Join Teams meeting</a></p>`
+    ? primaryButtonHtml(params.meetingLink, "Join Teams meeting")
     : "";
 
-  const html = layout(`
-    <h2 style="margin-top: 0;">New session booked</h2>
-    <p>Hi ${params.coachName},</p>
+  const html = layout(
+    `
+    <h2 style="margin-top:0;color:#1a1a1a;">Hi ${firstName},</h2>
+    <p><strong style="color:#2f6064;font-size:17px;font-weight:800;">A new session has been booked.</strong></p>
     <p><strong>${clientLine}</strong> booked a session with you.</p>
-    <ul>
-      <li><strong>Date:</strong> ${params.appointmentDate}</li>
-      <li><strong>Time:</strong> ${params.appointmentTime}</li>
-    </ul>
+    ${creamSectionHtml(
+      "Session details",
+      `<p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Client:</strong> ${clientLine}</p>
+      <p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Date:</strong> ${params.appointmentDate}</p>
+      <p style="margin:0;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Time:</strong> ${params.appointmentTime}</p>`
+    )}
     ${meetingHtml}
     <p style="font-size:14px;color:#555;">This session is on your Outlook calendar.</p>
-  `);
+    ${teamSignOffHtml()}
+  `,
+    {
+      footerHtml: footer.html,
+      headerTitle: "New session booked",
+      headerSubtitle: "A client is ready to meet with you",
+    }
+  );
 
   return { subject, html, text };
 }
@@ -330,31 +446,47 @@ export function appointmentCancellationEmail(params: {
   appointmentTime: string;
   cancelledBy: "user" | "coach";
 }): { subject: string; html: string; text: string } {
+  const firstName = params.recipientName.trim().split(/\s+/)[0] || "there";
   const subject = `Session cancelled — ${params.appointmentDate} ${params.appointmentTime}`;
+  const footer = companyFooter({
+    reason: "You're receiving this because a session on OneWayOut was cancelled.",
+  });
   const cancelledByLine =
     params.cancelledBy === "user"
       ? `${params.userName} cancelled their session.`
       : "This session was cancelled.";
-  const text = `Hi ${params.recipientName},
+
+  const text = `Hi ${firstName},
 
 ${cancelledByLine}
 
 Coach: ${params.coachName}
 Client: ${params.userName}
 Date: ${params.appointmentDate}
-Time: ${params.appointmentTime}`;
+Time: ${params.appointmentTime}
 
-  const html = layout(`
-    <h2 style="margin-top: 0;">Session cancelled</h2>
-    <p>Hi ${params.recipientName},</p>
+${teamSignOffText()}
+${footer.text}`;
+
+  const html = layout(
+    `
+    <h2 style="margin-top:0;color:#1a1a1a;">Hi ${firstName},</h2>
     <p>${cancelledByLine}</p>
-    <ul>
-      <li><strong>Coach:</strong> ${params.coachName}</li>
-      <li><strong>Client:</strong> ${params.userName}</li>
-      <li><strong>Date:</strong> ${params.appointmentDate}</li>
-      <li><strong>Time:</strong> ${params.appointmentTime}</li>
-    </ul>
-  `);
+    ${creamSectionHtml(
+      "Cancelled session",
+      `<p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Coach:</strong> ${params.coachName}</p>
+      <p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Client:</strong> ${params.userName}</p>
+      <p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Date:</strong> ${params.appointmentDate}</p>
+      <p style="margin:0;color:#1a1a1a;font-size:14px;line-height:1.7;"><strong>Time:</strong> ${params.appointmentTime}</p>`
+    )}
+    ${teamSignOffHtml()}
+  `,
+    {
+      footerHtml: footer.html,
+      headerTitle: "Session cancelled",
+      headerSubtitle: "This booking is no longer on the calendar",
+    }
+  );
 
   return { subject, html, text };
 }
