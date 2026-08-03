@@ -1,4 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { randomUUID } from "crypto";
 import { getAppUrl } from "@/lib/siteUrl";
 import { sendEmail, isEmailConfigured, getAuthMailSender, getMailFromDisplayName } from "@/lib/email";
 import { userWelcomeEmail } from "@/lib/emailTemplates";
@@ -59,6 +60,7 @@ export async function sendBrandedUserWelcome(params: {
     email,
     actionUrl,
     needsConfirmation,
+    sendId: randomUUID(),
   });
 
   const sendResult = await sendEmail({

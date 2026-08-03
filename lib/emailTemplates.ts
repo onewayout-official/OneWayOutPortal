@@ -7,25 +7,54 @@ function getEmailLogoUrl(): string {
   );
 }
 
+function withQueryParam(url: string, key: string, value: string): string {
+  try {
+    const parsed = new URL(url);
+    parsed.searchParams.set(key, value);
+    return parsed.toString();
+  } catch {
+    const sep = url.includes("?") ? "&" : "?";
+    return `${url}${sep}${encodeURIComponent(key)}=${encodeURIComponent(value)}`;
+  }
+}
+
 function layout(content: string, footerHtml?: string): string {
   const footer =
     footerHtml ??
     `<p style="margin-top:28px;font-size:12px;color:#666;">One Way Out Portal · This is an automated message.</p>`;
   const logoUrl = getEmailLogoUrl();
 
+  // Single-table card layout — Gmail is less likely to fold the body after the header.
   return `<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><title>One Way Out</title></head>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <title>One Way Out</title>
+</head>
 <body style="margin:0;padding:0;background:#f4f7f7;font-family:Arial,Helvetica,sans-serif;line-height:1.5;color:#1a1a1a;">
-  <div style="max-width:560px;margin:0 auto;padding:24px;">
-    <div style="background:#2f6064;border-radius:12px 12px 0 0;padding:24px;text-align:center;">
-      <img src="${logoUrl}" alt="OneWayOut" width="96" height="96" style="display:block;margin:0 auto;width:96px;height:96px;border-radius:16px;object-fit:cover;border:0;" />
-    </div>
-    <div style="background:#ffffff;border:1px solid #e5e7eb;border-top:none;border-radius:0 0 12px 12px;padding:24px;">
-      ${content}
-      ${footer}
-    </div>
-  </div>
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background:#f4f7f7;">
+    <tr>
+      <td align="center" style="padding:24px 12px;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="560" style="width:100%;max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+          <tr>
+            <td align="center" style="background:#2f6064;padding:24px 24px 20px;text-align:center;">
+              <img src="${logoUrl}" alt="OneWayOut" width="96" height="96" style="display:block;margin:0 auto;width:96px;height:96px;border-radius:16px;object-fit:cover;border:0;" />
+              <p style="margin:16px 0 0;font-size:22px;font-weight:700;color:#fae3c8;letter-spacing:-0.02em;text-align:center;">Welcome to OneWayOut</p>
+              <p style="margin:8px 0 0;font-size:13px;font-style:italic;color:#ffffff;text-align:center;line-height:1.4;">From financial crisis to Financial Freedom — the gamified way</p>
+            </td>
+          </tr>
+          <tr>
+            <td align="left" style="background:#ffffff;padding:24px;text-align:left;">
+              ${content}
+              ${footer}
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 </body>
 </html>`;
 }
@@ -95,13 +124,20 @@ export function userWelcomeEmail(params: {
   /** When true, CTA confirms the email; otherwise it opens the portal. */
   needsConfirmation?: boolean;
   unsubscribeUrl?: string;
+  /** Unique per send — stops Gmail from folding duplicate bodies in a thread. */
+  sendId?: string;
 }): { subject: string; html: string; text: string } {
   const firstName = params.name.trim().split(/\s+/)[0] || "there";
+  const sendId = params.sendId?.trim() || `${Date.now().toString(36)}`;
   const subject = `Your first mission is waiting, ${firstName}`;
   const ctaLabel = params.needsConfirmation ? "Confirm your email" : "Start my first mission";
-  const unsubscribeUrl =
+  const actionUrl = withQueryParam(params.actionUrl, "owo", sendId);
+  const unsubscribeUrl = withQueryParam(
     params.unsubscribeUrl?.trim() ||
-    getAppUrl(`/unsubscribe?email=${encodeURIComponent(params.email.trim().toLowerCase())}`);
+      getAppUrl(`/unsubscribe?email=${encodeURIComponent(params.email.trim().toLowerCase())}`),
+    "owo",
+    sendId
+  );
   const footer = welcomeEmailFooter(unsubscribeUrl);
 
   const text = `Hi ${firstName},
@@ -113,19 +149,59 @@ OneWayOut turns the road out of financial stress into a game you can actually wi
 Your first mission is ready. It takes about 10 minutes and you could unlock up to 5,000 reward points: complete your financial information and goals so we can map your way out.
 
 ${ctaLabel}:
-${params.actionUrl}
+${actionUrl}
+
+WHAT HAPPENS NEXT
+1. Complete your financial snapshot — see exactly where you stand.
+2. Get your plan/goals — missions sized to your life, not someone else's.
+3. Level up — every mission you clear unlocks rewards and moves you closer to freedom.
+
+EASY WAYS TO EARN REWARDS
+✓ Log in daily — every day counts.
+✓ Track your mood — a minute a day.
+✓ Track your expenses — small habit, big points.
+
+YOUR FREE SESSION IS ON US
+Money stress is human. Your signup includes a free one-on-one session with one of our Life Coaches / Counsellors — book it whenever you're ready.
+
+We're glad you're here. One way out — forward.
+The OneWayOut Team
+Questions? Just reply to this email — a real person reads every one.
 
 If you did not create this account, you can ignore this email.
 ${footer.text}`;
 
   const html = layout(
     `
+    <span style="font-size:0;line-height:0;color:#ffffff;">${sendId}</span>
     <h2 style="margin-top:0;color:#1a1a1a;">Hi ${firstName},</h2>
     <p>You've just taken the hardest step — deciding that things are going to change. Welcome. You're in the right place.</p>
     <p>OneWayOut turns the road out of financial stress into a game you can actually win: small missions, real rewards, and a human coach in your corner when you need one.</p>
-    <p>Your first mission is ready. It takes about 10 minutes and you could unlock up to 5,000 reward points: complete your financial information and goals so we can map your way out.</p>
-    <p><a href="${params.actionUrl}" style="display:inline-block;padding:12px 20px;background:#ffffff;color:#2f6064;border:2px solid #2f6064;text-decoration:none;border-radius:6px;font-weight:700;">${ctaLabel}</a></p>
-    <p style="font-size:14px;color:#555;">Or copy this link:<br>${params.actionUrl}</p>
+    <p><strong style="color:#2f6064;font-size:17px;font-weight:800;">Your first mission is ready.</strong> It takes about 10 minutes and you could unlock up to 5,000 reward points: complete your financial information and goals so we can map your way out.</p>
+    <p style="text-align:center;margin:24px 0;"><a href="${actionUrl}" style="display:inline-block;padding:12px 20px;background:#2f6064;color:#ffffff;border:2px solid #2f6064;text-decoration:none;border-radius:6px;font-weight:700;">${ctaLabel}</a></p>
+    <div style="margin:24px 0;padding:20px;background:#f5f2ec;border-radius:8px;">
+      <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#306164;letter-spacing:0.04em;text-transform:uppercase;">What happens next</p>
+      <ol style="margin:0;padding-left:20px;color:#1a1a1a;font-size:14px;line-height:1.7;">
+        <li style="margin-bottom:8px;">Complete your financial snapshot — see exactly where you stand.</li>
+        <li style="margin-bottom:8px;">Get your plan/goals — missions sized to your life, not someone else's.</li>
+        <li style="margin-bottom:0;">Level up — every mission you clear unlocks rewards and moves you closer to freedom.</li>
+      </ol>
+    </div>
+    <div style="margin:24px 0;padding:20px;background:#f5f2ec;border-radius:8px;">
+      <p style="margin:0 0 12px;font-size:14px;font-weight:700;color:#306164;letter-spacing:0.04em;text-transform:uppercase;">Easy ways to earn rewards</p>
+      <p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;">✓ Log in daily — every day counts.</p>
+      <p style="margin:0 0 8px;color:#1a1a1a;font-size:14px;line-height:1.7;">✓ Track your mood — a minute a day.</p>
+      <p style="margin:0;color:#1a1a1a;font-size:14px;line-height:1.7;">✓ Track your expenses — small habit, big points.</p>
+    </div>
+    <div style="margin:24px 0;padding:24px 20px;background:#2f6064;border-radius:8px;text-align:center;">
+      <p style="margin:0 0 12px;font-size:16px;font-weight:700;color:#fae3bb;text-align:center;">Your free session is on us</p>
+      <p style="margin:0;font-size:14px;line-height:1.7;color:#ffffff;text-align:center;">Money stress is human. Your signup includes a free one-on-one session with one of our Life Coaches / Counsellors — book it whenever you're ready.</p>
+    </div>
+    <div style="margin:24px 0 8px;text-align:left;">
+      <p style="margin:0 0 8px;font-size:14px;line-height:1.7;color:#1a1a1a;">We're glad you're here. One way out — forward.</p>
+      <p style="margin:0 0 8px;font-size:14px;font-weight:700;color:#306164;">The OneWayOut Team</p>
+      <p style="margin:0;font-size:14px;line-height:1.7;color:#1a1a1a;">Questions? Just reply to this email — a real person reads every one.</p>
+    </div>
     <p style="font-size:13px;color:#777;">If you did not create this account, you can ignore this email.</p>
   `,
     footer.html
