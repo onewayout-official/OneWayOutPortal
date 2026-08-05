@@ -272,15 +272,15 @@ function defaultState(): FinancialGoalsPersisted {
       estate: 0,
       cover: 0,
       assets: 0,
-      growth: 0,
-      infl: 0,
+      growth: 8,
+      infl: 5,
     },
     study: {
       rows: [],
       saved: 0,
       pm: 0,
-      infl: 0,
-      growth: 0,
+      infl: 8,
+      growth: 10,
     },
     debt: {
       rows: [],
@@ -294,8 +294,8 @@ function defaultState(): FinancialGoalsPersisted {
       debt: 0,
       adjust: 0,
       cover: 0,
-      growth: 0,
-      infl: 0,
+      growth: 8,
+      infl: 5,
     },
     ci: { med: 0, exp: 0, months: 0, debt: 0, care: 0, cover: 0 },
   };
@@ -384,7 +384,7 @@ export default function FinancialGoals() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Financial Goals</h1>
           <p className="mt-1 max-w-3xl text-sm text-gray-600 dark:text-gray-400">
-            Fill in every field on each goal tab (assumptions are optional). When all sections are complete, open
+            Fill in every field on each goal tab, including assumptions. When all sections are complete, open
             Summary for your full picture. All amounts are in South African Rand (R). Your answers are stored only
             in your browser on this device.
           </p>
@@ -461,17 +461,15 @@ export default function FinancialGoals() {
               onChange={(n) => patch("retire", (r) => ({ ...r, pm: n }))}
             />
           </div>
-          <details className="mt-6 rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-            <summary className="cursor-pointer text-sm font-semibold text-[#2f6064] dark:text-teal-300">
-              Assumptions (optional)
-            </summary>
-            <div className={`mt-4 ${formGridWideCls}`}>
+          <div className="mt-8">
+            <h3 className="mb-4 text-sm font-semibold text-[#2f6064] dark:text-teal-300">Assumptions</h3>
+            <div className={formGridWideCls}>
               <NumField label="Investment growth per year (%)" value={data.retire.growth} step={0.5} onChange={(n) => patch("retire", (r) => ({ ...r, growth: n }))} />
               <NumField label="Inflation per year (%)" value={data.retire.infl} step={0.5} onChange={(n) => patch("retire", (r) => ({ ...r, infl: n }))} />
               <NumField label="Years your money must last in retirement" value={data.retire.years} min={5} max={45} onChange={(n) => patch("retire", (r) => ({ ...r, years: n }))} />
               <NumField label="Growth after retirement (%)" value={data.retire.postGrowth} step={0.5} onChange={(n) => patch("retire", (r) => ({ ...r, postGrowth: n }))} />
             </div>
-          </details>
+          </div>
           <ResultsPanel title="Your retirement picture" rows={retireOut.rows} notes={retireOut.notes} />
         </div>
       )}
@@ -492,13 +490,13 @@ export default function FinancialGoals() {
             <NumField label="Life cover you already have" hint="Personal policies + group life at work" value={data.death.cover} min={0} onChange={(n) => patch("death", (d) => ({ ...d, cover: n }))} />
             <NumField label="Savings/investments available to your family" value={data.death.assets} min={0} onChange={(n) => patch("death", (d) => ({ ...d, assets: n }))} />
           </div>
-          <details className="mt-6 rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-            <summary className="cursor-pointer text-sm font-semibold text-[#2f6064] dark:text-teal-300">Adjust assumptions (optional)</summary>
-            <div className={`mt-4 ${formGrid2Cls}`}>
+          <div className="mt-8">
+            <h3 className="mb-4 text-sm font-semibold text-[#2f6064] dark:text-teal-300">Assumptions</h3>
+            <div className={formGrid2Cls}>
               <NumField label="Investment growth on the capital (%)" value={data.death.growth} step={0.5} onChange={(n) => patch("death", (d) => ({ ...d, growth: n }))} />
               <NumField label="Inflation per year (%)" value={data.death.infl} step={0.5} onChange={(n) => patch("death", (d) => ({ ...d, infl: n }))} />
             </div>
-          </details>
+          </div>
           <ResultsPanel title="Life cover needed" rows={deathOut.rows} notes={deathOut.notes} />
         </div>
       )}
@@ -624,13 +622,13 @@ export default function FinancialGoals() {
             <NumField label="Education savings you already have" value={data.study.saved} min={0} onChange={(n) => patch("study", (s) => ({ ...s, saved: n }))} />
             <NumField label="Amount you save for education each month" value={data.study.pm} min={0} onChange={(n) => patch("study", (s) => ({ ...s, pm: n }))} />
           </div>
-          <details className="mt-6 rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-            <summary className="cursor-pointer text-sm font-semibold text-[#2f6064] dark:text-teal-300">Adjust assumptions (optional)</summary>
-            <div className={`mt-4 ${formGrid2Cls}`}>
+          <div className="mt-8">
+            <h3 className="mb-4 text-sm font-semibold text-[#2f6064] dark:text-teal-300">Assumptions</h3>
+            <div className={formGrid2Cls}>
               <NumField label="Education inflation per year (%)" hint="Education costs rise faster than normal inflation" value={data.study.infl} step={0.5} onChange={(n) => patch("study", (s) => ({ ...s, infl: n }))} />
               <NumField label="Investment growth per year (%)" value={data.study.growth} step={0.5} onChange={(n) => patch("study", (s) => ({ ...s, growth: n }))} />
             </div>
-          </details>
+          </div>
           <ResultsPanel
             title="Education funding"
             rows={studyOut?.rows ?? []}
@@ -885,13 +883,13 @@ export default function FinancialGoals() {
             <NumField label="Once-off adjustment costs" hint="Home/vehicle modifications, medical equipment, rehab" value={data.dis.adjust} min={0} onChange={(n) => patch("dis", (d) => ({ ...d, adjust: n }))} />
             <NumField label="Disability cover you already have" hint="Lump-sum disability + capitalised income protection" value={data.dis.cover} min={0} onChange={(n) => patch("dis", (d) => ({ ...d, cover: n }))} />
           </div>
-          <details className="mt-6 rounded-lg border border-gray-100 bg-gray-50/50 p-4 dark:border-gray-700 dark:bg-gray-800/50">
-            <summary className="cursor-pointer text-sm font-semibold text-[#2f6064] dark:text-teal-300">Adjust assumptions (optional)</summary>
-            <div className={`mt-4 ${formGrid2Cls}`}>
+          <div className="mt-8">
+            <h3 className="mb-4 text-sm font-semibold text-[#2f6064] dark:text-teal-300">Assumptions</h3>
+            <div className={formGrid2Cls}>
               <NumField label="Investment growth on the capital (%)" value={data.dis.growth} step={0.5} onChange={(n) => patch("dis", (d) => ({ ...d, growth: n }))} />
               <NumField label="Inflation per year (%)" value={data.dis.infl} step={0.5} onChange={(n) => patch("dis", (d) => ({ ...d, infl: n }))} />
             </div>
-          </details>
+          </div>
           <ResultsPanel title="Disability cover needed" rows={disOut.rows} notes={disOut.notes} />
         </div>
       )}
@@ -918,9 +916,8 @@ export default function FinancialGoals() {
         <div className={cardCls}>
           <h2 className="text-lg font-semibold text-[#2f6064] dark:text-teal-300">Complete all goals first</h2>
           <p className="mb-4 text-sm text-gray-600 dark:text-gray-400">
-            Your summary is available once every required field is filled on each goal tab. Optional assumption
-            sections do not need to be completed. Use zero where an amount does not apply (e.g. no education
-            savings yet).
+            Your summary is available once every required field is filled on each goal tab, including assumptions.
+            Use zero where an amount does not apply (e.g. no education savings yet).
           </p>
           <div className="space-y-4">
             {summaryOrder.map((key) => {

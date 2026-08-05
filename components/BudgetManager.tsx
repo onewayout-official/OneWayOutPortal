@@ -267,8 +267,10 @@ export default function BudgetManager() {
   const [accountTransfers, setAccountTransfers] = useState<Map<string, number>>(new Map());
   const [selectedIncomeId, setSelectedIncomeId] = useState<string | null>(null);
   const [selectedSourceAccountId, setSelectedSourceAccountId] = useState<string | null>(null);
-  const [addingAccountType, setAddingAccountType] = useState<string | null>(null);
+  const [addAccountOpen, setAddAccountOpen] = useState(false);
+  const [newAccountType, setNewAccountType] = useState("bank");
   const [newAccountName, setNewAccountName] = useState("");
+  const [isAddingAccount, setIsAddingAccount] = useState(false);
 
   // Delete confirmation modal
   const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; name: string } | null>(null);
@@ -617,17 +619,31 @@ export default function BudgetManager() {
     }
   };
 
-  const handleAddAccount = async (accountType: string) => {
+  const openAddAccount = (accountType?: string) => {
+    setNewAccountType(accountType ?? "bank");
+    setNewAccountName("");
+    setAddAccountOpen(true);
+  };
+
+  const closeAddAccount = () => {
+    setAddAccountOpen(false);
+    setNewAccountType("bank");
+    setNewAccountName("");
+  };
+
+  const handleAddAccount = async () => {
     const name = newAccountName.trim();
-    if (!name) return;
+    if (!name || isAddingAccount) return;
+    setIsAddingAccount(true);
     invalidateBudgetLoads();
     try {
-      const id = await storage.createUserAccount(accountType, name);
-      setUserAccounts((prev) => [...prev, { id, accountType, name, sortOrder: prev.length }]);
-      setNewAccountName("");
-      setAddingAccountType(null);
+      const id = await storage.createUserAccount(newAccountType, name);
+      setUserAccounts((prev) => [...prev, { id, accountType: newAccountType, name, sortOrder: prev.length }]);
+      closeAddAccount();
     } catch (err) {
       console.error(err);
+    } finally {
+      setIsAddingAccount(false);
     }
   };
 
@@ -877,11 +893,21 @@ export default function BudgetManager() {
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-12 xl:gap-6">
         {/* Left vertical bar — accounts grouped by type */}
         <aside className="flex flex-col items-stretch space-y-4 rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 xl:col-span-3 xl:border-0 xl:bg-transparent xl:p-0 xl:py-6 2xl:col-span-2">
-          <div>
-            <div className="text-sm font-semibold text-gray-900 dark:text-white">Cash and Liquid Investments</div>
-            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 xl:hidden">
-              Add accounts here, then tap to allocate income and expenses.
-            </p>
+          <div className="space-y-3">
+            <div>
+              <div className="text-sm font-semibold text-gray-900 dark:text-white">Cash and Liquid Investments</div>
+              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Add bank, savings, investment, or cash accounts, then tap to allocate income and expenses.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => openAddAccount()}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#2f6064] px-3 py-2.5 text-xs font-semibold text-white transition-colors hover:bg-[#255055]"
+            >
+              <Plus className="h-3.5 w-3.5" />
+              Add Account
+            </button>
           </div>
 
           {ACCOUNT_TYPE_META.map(({ type, label, icon: TypeIcon, color }) => {
@@ -892,23 +918,12 @@ export default function BudgetManager() {
 
             return (
               <div key={type} className="w-full space-y-2">
-                {/* Type header with add button */}
-                <div className="flex items-center justify-between px-1">
-                  <div className="flex items-center gap-1.5">
-                    <TypeIcon className={`h-4 w-4 ${c.text}`} />
-                    <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{label}</span>
-                  </div>
-                  {!isWalletType && (
-                    <button
-                      onClick={() => {
-                        setAddingAccountType(addingAccountType === type ? null : type);
-                        setNewAccountName("");
-                      }}
-                      className={`p-0.5 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors ${c.text}`}
-                      title={`Add ${label} account`}
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </button>
+                {/* Type header */}
+                <div className="flex items-center gap-1.5 px-1">
+                  <TypeIcon className={`h-4 w-4 ${c.text}`} />
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">{label}</span>
+                  {!isWalletType && accountsOfType.length > 0 && (
+                    <span className="text-[10px] text-gray-400">({accountsOfType.length})</span>
                   )}
                 </div>
 
@@ -928,26 +943,6 @@ export default function BudgetManager() {
                   </div>
                 ) : (
                   <>
-                {/* Inline add form */}
-                {addingAccountType === type && (
-                  <div className="flex gap-1 px-1">
-                    <input
-                      autoFocus
-                      value={newAccountName}
-                      onChange={(e) => setNewAccountName(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") handleAddAccount(type); if (e.key === "Escape") setAddingAccountType(null); }}
-                      placeholder={`e.g. ${label} 1`}
-                      className="flex-1 min-w-0 text-xs px-2 py-1 rounded border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    />
-                    <button
-                      onClick={() => handleAddAccount(type)}
-                      className={`px-2 py-1 text-xs font-medium text-white rounded ${c.text.replace("text-", "bg-")} hover:opacity-90`}
-                    >
-                      Add
-                    </button>
-                  </div>
-                )}
-
                 {/* Individual accounts */}
                 {accountsOfType.map((acc) => {
                   const items = incomeItemsByAccount.get(acc.id) ?? [];
@@ -1088,16 +1083,15 @@ export default function BudgetManager() {
                   );
                 })}
 
-                {accountsOfType.length === 0 && addingAccountType !== type && (
-                  <div className="px-1">
-                    <button
-                      onClick={() => { setAddingAccountType(type); setNewAccountName(""); }}
-                      className="w-full flex items-center justify-center gap-1 py-2 border-2 border-dashed border-gray-200 dark:border-gray-700 rounded-lg text-[10px] text-gray-400 hover:border-gray-300 hover:text-gray-500 transition-colors"
-                    >
-                      <Plus className="h-3 w-3" />
-                      Add {label}
-                    </button>
-                  </div>
+                {accountsOfType.length === 0 && (
+                  <button
+                    type="button"
+                    onClick={() => openAddAccount(type)}
+                    className={`w-full flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 border-dashed ${c.border} ${c.bg} text-xs font-medium ${c.text} hover:opacity-90 transition-opacity`}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Add {label} account
+                  </button>
                 )}
                   </>
                 )}
@@ -1153,18 +1147,13 @@ export default function BudgetManager() {
               <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:items-center sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                 {allIncomeIcons.map((inc) => {
                   const allocated = incomeTransferAmounts.get(inc.id) ?? 0;
-                  const balance = (inc.amount ?? 0) - allocated;
-                  const isOverAllocated = balance < 0;
                   return (
                     <IconCard
                       key={inc.id}
                       item={inc}
                       onClick={() => handleIncomeTap(inc)}
                       selected={selectedIncomeId === inc.id}
-                      liveAmount={Math.abs(balance)}
-                      liveAmountLabel={isOverAllocated ? "Over" : "Left"}
-                      liveAmountPrefix={isOverAllocated ? "−" : undefined}
-                      liveAmountTone={isOverAllocated ? "danger" : "success"}
+                      liveAmount={allocated}
                     />
                   );
                 })}
@@ -1286,6 +1275,93 @@ export default function BudgetManager() {
               </button>
               <button
                 onClick={() => setDeleteConfirm(null)}
+                className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Add Account modal ── */}
+      {addAccountOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-sm p-6">
+            <h2 className="text-base font-bold text-gray-900 dark:text-white mb-1">
+              Add Account
+            </h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mb-5">
+              Choose a type and give your account a name.
+            </p>
+
+            <div className="mb-4">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
+                Account type
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                {ACCOUNT_TYPE_META.filter((t) => t.type !== "wallet").map(({ type, label, icon: TypeIcon, color }) => {
+                  const c = COLOR_MAP[color];
+                  const selected = newAccountType === type;
+                  return (
+                    <button
+                      key={type}
+                      type="button"
+                      onClick={() => setNewAccountType(type)}
+                      className={`flex items-center gap-2 rounded-xl border-2 px-3 py-2.5 text-left transition-all ${
+                        selected
+                          ? `${c.border} ${c.bg} ${c.ring} ring-2`
+                          : "border-gray-200 dark:border-gray-600 hover:border-gray-300 dark:hover:border-gray-500"
+                      }`}
+                    >
+                      <TypeIcon className={`h-4 w-4 shrink-0 ${c.text}`} />
+                      <span className={`text-xs font-semibold ${selected ? c.text : "text-gray-700 dark:text-gray-300"}`}>
+                        {label}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="mb-5">
+              <label className="block text-xs font-semibold text-gray-600 dark:text-gray-400 mb-1.5">
+                Account name
+              </label>
+              <input
+                autoFocus
+                type="text"
+                value={newAccountName}
+                onChange={(e) => setNewAccountName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") handleAddAccount();
+                  if (e.key === "Escape") closeAddAccount();
+                }}
+                placeholder={
+                  newAccountType === "bank"
+                    ? "e.g. FNB Cheque"
+                    : newAccountType === "savings"
+                      ? "e.g. Emergency Fund"
+                      : newAccountType === "investment"
+                        ? "e.g. Unit Trust"
+                        : "e.g. Petty Cash"
+                }
+                className="w-full px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-[#2f6064]"
+              />
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleAddAccount}
+                disabled={isAddingAccount || !newAccountName.trim()}
+                className="flex-1 py-2.5 bg-[#2f6064] hover:bg-[#255055] disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
+              >
+                {isAddingAccount ? "Adding..." : "Add Account"}
+              </button>
+              <button
+                type="button"
+                onClick={closeAddAccount}
                 className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-colors"
               >
                 Cancel

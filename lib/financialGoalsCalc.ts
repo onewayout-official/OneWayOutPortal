@@ -534,7 +534,7 @@ function nonNegative(n: number): boolean {
   return Number.isFinite(n) && n >= 0;
 }
 
-/** Required main-form fields only (assumption panels stay optional). */
+/** All form fields required for the summary, including assumptions. */
 export function validateFinancialGoalsForSummary(data: FinancialGoalsFormData): SummaryValidationResult {
   const sections: Record<ShortfallKey, SummarySectionValidation> = {
     retire: { complete: false, missing: [] },
@@ -556,6 +556,10 @@ export function validateFinancialGoalsForSummary(data: FinancialGoalsFormData): 
   if (!positive(r.pct)) retireMissing.push("% of income needed in retirement");
   if (!nonNegative(r.saved)) retireMissing.push("Retirement savings you already have");
   if (!nonNegative(r.pm)) retireMissing.push("Amount you save for retirement each month");
+  if (!positive(r.growth)) retireMissing.push("Investment growth per year (%)");
+  if (!positive(r.infl)) retireMissing.push("Inflation per year (%)");
+  if (!positive(r.years)) retireMissing.push("Years your money must last in retirement");
+  if (!positive(r.postGrowth)) retireMissing.push("Growth after retirement (%)");
   sections.retire = { complete: retireMissing.length === 0, missing: retireMissing };
 
   const d = data.death;
@@ -568,6 +572,8 @@ export function validateFinancialGoalsForSummary(data: FinancialGoalsFormData): 
   if (!nonNegative(d.estate)) deathMissing.push("Estimated value of your estate");
   if (!nonNegative(d.cover)) deathMissing.push("Life cover you already have");
   if (!nonNegative(d.assets)) deathMissing.push("Savings/investments available to your family");
+  if (!positive(d.growth)) deathMissing.push("Investment growth on the capital (%)");
+  if (!positive(d.infl)) deathMissing.push("Inflation per year (%)");
   sections.death = { complete: deathMissing.length === 0, missing: deathMissing };
 
   const st = data.study;
@@ -585,6 +591,8 @@ export function validateFinancialGoalsForSummary(data: FinancialGoalsFormData): 
   }
   if (!nonNegative(st.saved)) studyMissing.push("Education savings you already have");
   if (!nonNegative(st.pm)) studyMissing.push("Amount you save for education each month");
+  if (!positive(st.infl)) studyMissing.push("Education inflation per year (%)");
+  if (!positive(st.growth)) studyMissing.push("Investment growth per year (%)");
   sections.study = { complete: studyMissing.length === 0, missing: studyMissing };
 
   const db = data.debt;
@@ -626,6 +634,8 @@ export function validateFinancialGoalsForSummary(data: FinancialGoalsFormData): 
   if (!nonNegative(dis.debt)) disMissing.push("Debts you'd want settled");
   if (!nonNegative(dis.adjust)) disMissing.push("Once-off adjustment costs");
   if (!nonNegative(dis.cover)) disMissing.push("Disability cover you already have");
+  if (!positive(dis.growth)) disMissing.push("Investment growth on the capital (%)");
+  if (!positive(dis.infl)) disMissing.push("Inflation per year (%)");
   sections.dis = { complete: disMissing.length === 0, missing: disMissing };
 
   const ci = data.ci;
