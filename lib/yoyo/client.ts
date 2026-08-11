@@ -1,5 +1,7 @@
 import { supabase } from "@/lib/supabase";
 import type {
+  GenerateWiCodeRequest,
+  GenerateWiCodeResponse,
   GiftcardStatusItem,
   SpendGiftcardRequest,
   SpendGiftcardResponse,
@@ -89,6 +91,30 @@ export async function spendPointsForGiftcard(
       responseCode: json.responseCode,
       giftcard: json.giftcard,
       pointsBalance: json.pointsBalance,
+    };
+  }
+  return json;
+}
+
+export async function generateGiftcardWiCode(
+  giftcardId: string
+): Promise<GenerateWiCodeResponse> {
+  const headers = await authHeaders();
+  const payload: GenerateWiCodeRequest = { giftcardId };
+  const res = await fetch("/api/yoyo/giftcards/wicode", {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+  const json = (await res.json()) as GenerateWiCodeResponse;
+  if (!res.ok) {
+    return {
+      ok: false,
+      error: json.error ?? "Could not generate wiCode",
+      responseDesc: json.responseDesc,
+      responseCode: json.responseCode,
+      giftcard: json.giftcard,
+      remainingCents: json.remainingCents,
     };
   }
   return json;

@@ -232,8 +232,8 @@ export default function PointsGiftCardSpend({
         </p>
 
         <p className="text-xs text-gray-500 dark:text-gray-400">
-          Use this wiCode at the till. You can spend part of the balance now and use the same code
-          again later until it is fully used. Gift card ID: {issued.id}
+          Use this wiCode at the till. After a partial spend, return to Spend — a new wiCode for
+          the remaining balance is created automatically. Gift card ID: {issued.id}
         </p>
 
         <button

@@ -1,10 +1,12 @@
 import { isYoyoSuccess } from "@/lib/yoyo/campaignMatch";
 import { toGiftcardStatusItem } from "@/lib/yoyo/giftcardStatus";
 import type {
+  CreateUserTokenBody,
   IssueGiftcardBody,
   YoyoApiEnvelope,
   YoyoGiftcard,
   YoyoProxyResult,
+  YoyoUserToken,
 } from "@/lib/yoyo/types";
 
 export { giftcardStatusFromState, toGiftcardStatusItem } from "@/lib/yoyo/giftcardStatus";
@@ -158,6 +160,7 @@ export function normalizeGiftcard(
     wiCode: wiCode != null ? String(wiCode) : undefined,
     stateId: raw.stateId != null ? String(raw.stateId) : undefined,
     campaignId: raw.campaignId as number | string | undefined,
+    userRef: raw.userRef != null ? String(raw.userRef) : undefined,
     expiryDate: pickDateString(raw.expiryDate, raw.expiry_date),
     createDate: pickDateString(raw.createDate, raw.create_date),
     redeemedAmount: toNum(raw.redeemedAmount ?? raw.redeemed_amount),
@@ -178,6 +181,77 @@ export async function listUserGiftcards(userRef: string) {
     "GET",
     `/user/${encodeURIComponent(userRef)}/giftcards`
   );
+}
+
+/**
+ * Issue a giftcard-linked wiCode. Yoyo only allows this when no wiCode is linked yet (7112 otherwise).
+ * Prefer createUserToken for regenerating codes after partial redemption.
+ */
+export async function issueGiftcardWiCode(giftcardId: string) {
+  return yoyoRequest<YoyoApiEnvelope>(
+    "POST",
+    `/giftcards/${encodeURIComponent(giftcardId)}/wicode`,
+    { giftcardId }
+  );
+}
+
+/**
+ * Reserve a single-transaction user token against one or more gift cards.
+ * Recreate after each till use to get a fresh wiCode for remaining balance.
+ * @see POST /user/{userRef}/token — giftcardIds
+ */
+export async function createUserToken(userRef: string, body: CreateUserTokenBody) {
+  const payload: CreateUserTokenBody = {
+    giftcardIds: body.giftcardIds.map((id) => String(id)),
+    // Docs require campaignType; it does not affect gift-card-only redemption.
+    campaignType: body.campaignType ?? "COUPON",
+    ...(body.mobileNumber ? { mobileNumber: body.mobileNumber } : {}),
+  };
+  return yoyoRequest<YoyoApiEnvelope>(
+    "POST",
+    `/user/${encodeURIComponent(userRef)}/token`,
+    { body: payload }
+  );
+}
+
+/** Expire the current user token so a fresh one can be reserved. */
+export async function deleteUserToken(userRef: string) {
+  return yoyoRequest<YoyoApiEnvelope>(
+    "DELETE",
+    `/user/${encodeURIComponent(userRef)}/token`
+  );
+}
+
+/**
+ * Create (or replace) a user token for the given gift card.
+ * Deletes any existing token first — Yoyo allows one active token per userRef.
+ */
+export async function recreateUserToken(userRef: string, body: CreateUserTokenBody) {
+  await deleteUserToken(userRef);
+  return createUserToken(userRef, body);
+}
+
+export function normalizeUserToken(
+  raw: Record<string, unknown> | undefined
+): YoyoUserToken | undefined {
+  if (!raw) return undefined;
+  const wiCode = (raw.wiCode ?? raw.wicode ?? raw.wiQR) as string | undefined;
+  const giftcardIdsRaw = raw.giftcardIds ?? raw.giftcard_ids;
+  const giftcardIds = Array.isArray(giftcardIdsRaw)
+    ? giftcardIdsRaw.map((id) => (typeof id === "string" || typeof id === "number" ? id : String(id)))
+    : undefined;
+  return {
+    userRef: raw.userRef != null ? String(raw.userRef) : undefined,
+    wiCode: wiCode != null ? String(wiCode) : undefined,
+    wiQR: raw.wiQR != null ? String(raw.wiQR) : undefined,
+    giftcardIds,
+    createDate: typeof raw.createDate === "string" ? raw.createDate : undefined,
+    validTillDate: typeof raw.validTillDate === "string" ? raw.validTillDate : undefined,
+    lastModifiedDate:
+      typeof raw.lastModifiedDate === "string" ? raw.lastModifiedDate : undefined,
+    stateId: raw.stateId != null ? String(raw.stateId) : undefined,
+    mobileNumber: raw.mobileNumber != null ? String(raw.mobileNumber) : undefined,
+  };
 }
 
 export function extractGiftcards(data: YoyoApiEnvelope | Record<string, unknown>): YoyoGiftcard[] {

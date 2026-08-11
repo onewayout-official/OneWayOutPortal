@@ -1,11 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { Clock3, Coins, Copy, ShoppingCart } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Clock3, Coins, Copy, RefreshCw, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import PointsGiftCardSpend from "@/components/PointsGiftCardSpend";
 import { rewards } from "@/lib/gamification/rewards";
-import { fetchGiftcardStatuses } from "@/lib/yoyo/client";
+import { fetchGiftcardStatuses, generateGiftcardWiCode } from "@/lib/yoyo/client";
 import { notifyRewardPointsUpdated } from "@/lib/gamification/rewardPoints";
 import {
   formatCentsAsRand,
@@ -14,6 +14,57 @@ import {
 } from "@/lib/yoyo/giftcardStatus";
 import type { GiftcardStatusItem } from "@/lib/yoyo/types";
 import { RewardTransaction } from "@/types";
+
+const AUTO_WICODE_SESSION_PREFIX = "yoyo-autowicode:";
+
+type CachedAutoWiCode = {
+  wiCode: string;
+  validTillDate?: string;
+  remainingCents: number;
+};
+
+function autoWiCodeSessionKey(giftcardId: string, remainingCents: number): string {
+  return `${AUTO_WICODE_SESSION_PREFIX}${giftcardId}:${remainingCents}`;
+}
+
+function readCachedAutoWiCode(
+  giftcardId: string,
+  remainingCents: number
+): CachedAutoWiCode | null {
+  try {
+    const raw = sessionStorage.getItem(autoWiCodeSessionKey(giftcardId, remainingCents));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CachedAutoWiCode;
+    if (!parsed?.wiCode) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedAutoWiCode(
+  giftcardId: string,
+  remainingCents: number,
+  wiCode: string,
+  validTillDate?: string
+): void {
+  try {
+    const payload: CachedAutoWiCode = { wiCode, validTillDate, remainingCents };
+    sessionStorage.setItem(
+      autoWiCodeSessionKey(giftcardId, remainingCents),
+      JSON.stringify(payload)
+    );
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
+
+function needsPartialAutoWiCode(status: GiftcardStatusItem): boolean {
+  if (!status.isActive || status.remainingCents <= 0) return false;
+  if (status.isPartiallyRedeemed) return true;
+  const issued = status.issuedAmount;
+  return issued != null && Number.isFinite(issued) && status.remainingCents < issued;
+}
 
 function getMetadataString(
   metadata: Record<string, unknown> | undefined,
@@ -45,6 +96,18 @@ function formatExpiryDate(value: string): string | null {
   if (!Number.isNaN(parsed.getTime())) {
     return parsed.toLocaleDateString(undefined, {
       dateStyle: "medium",
+    });
+  }
+  return value.trim();
+}
+
+function formatValidTill(value: string): string | null {
+  if (!value.trim()) return null;
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toLocaleString(undefined, {
+      dateStyle: "medium",
+      timeStyle: "short",
     });
   }
   return value.trim();
@@ -90,27 +153,197 @@ export default function SpendTracker() {
   const [pointsBalance, setPointsBalance] = useState(0);
   const [spendingHistory, setSpendingHistory] = useState<RewardTransaction[]>([]);
   const [giftcardStatuses, setGiftcardStatuses] = useState<Record<string, GiftcardStatusItem>>({});
+  const [liveWiCodes, setLiveWiCodes] = useState<
+    Record<string, { wiCode: string; validTillDate?: string; remainingCents?: number }>
+  >({});
+  const [generatingIds, setGeneratingIds] = useState<Record<string, boolean>>({});
+  const [generateErrors, setGenerateErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const inFlightRef = useRef<Set<string>>(new Set());
 
-  const loadGiftcardStatuses = useCallback(async (history: RewardTransaction[]) => {
-    const giftcardIds = history
-      .map((transaction) =>
-        getMetadataString(transaction.metadata, ["giftcard_id", "giftcardId"])
-      )
-      .filter(Boolean);
+  const applyGeneratedWiCode = useCallback(
+    (
+      giftcardId: string,
+      result: {
+        wiCode: string;
+        validTillDate?: string;
+        remainingCents?: number;
+        giftcard?: GiftcardStatusItem | { balance?: number; redeemedAmount?: number; issuedAmount?: number; stateId?: string; expiryDate?: string };
+      }
+    ) => {
+      const remaining =
+        result.remainingCents ??
+        ("remainingCents" in (result.giftcard ?? {})
+          ? (result.giftcard as GiftcardStatusItem).remainingCents
+          : undefined) ??
+        result.giftcard?.balance;
 
-    if (giftcardIds.length === 0) {
-      setGiftcardStatuses({});
-      return;
-    }
+      setLiveWiCodes((prev) => ({
+        ...prev,
+        [giftcardId]: {
+          wiCode: result.wiCode,
+          validTillDate: result.validTillDate,
+          remainingCents: typeof remaining === "number" ? remaining : undefined,
+        },
+      }));
 
-    try {
-      const result = await fetchGiftcardStatuses(giftcardIds);
-      setGiftcardStatuses(result.statuses);
-    } catch (err) {
-      console.error("[SpendTracker] giftcard statuses:", err);
-    }
-  }, []);
+      if (typeof remaining === "number") {
+        writeCachedAutoWiCode(
+          giftcardId,
+          remaining,
+          result.wiCode,
+          result.validTillDate
+        );
+      }
+
+      if (result.remainingCents != null || result.giftcard) {
+        setGiftcardStatuses((prev) => {
+          const existing = prev[giftcardId];
+          if (!existing && !result.giftcard) return prev;
+          const nextRemaining =
+            result.remainingCents ??
+            result.giftcard?.balance ??
+            existing?.remainingCents ??
+            0;
+          return {
+            ...prev,
+            [giftcardId]: {
+              ...(existing ?? {
+                id: giftcardId,
+                statusLabel: "Partially redeemed" as const,
+                isActive: true,
+                remainingCents: nextRemaining,
+                isPartiallyRedeemed: true,
+              }),
+              remainingCents: nextRemaining,
+              balance: result.giftcard?.balance ?? existing?.balance,
+              redeemedAmount: result.giftcard?.redeemedAmount ?? existing?.redeemedAmount,
+              issuedAmount: result.giftcard?.issuedAmount ?? existing?.issuedAmount,
+              stateId: result.giftcard?.stateId ?? existing?.stateId,
+              expiryDate: result.giftcard?.expiryDate ?? existing?.expiryDate,
+              isPartiallyRedeemed: true,
+              statusLabel:
+                nextRemaining > 0
+                  ? ("Partially redeemed" as const)
+                  : existing?.statusLabel ?? ("Redeemed" as const),
+              isActive: nextRemaining > 0,
+            },
+          };
+        });
+      }
+    },
+    []
+  );
+
+  const generateWiCodeForCard = useCallback(
+    async (giftcardId: string, remainingCents: number, force = false) => {
+      if (!giftcardId) return;
+
+      if (!force) {
+        const cached = readCachedAutoWiCode(giftcardId, remainingCents);
+        if (cached?.wiCode) {
+          setLiveWiCodes((prev) => ({
+            ...prev,
+            [giftcardId]: {
+              wiCode: cached.wiCode,
+              validTillDate: cached.validTillDate,
+              remainingCents: cached.remainingCents,
+            },
+          }));
+          return;
+        }
+      }
+
+      if (inFlightRef.current.has(giftcardId)) return;
+
+      inFlightRef.current.add(giftcardId);
+      setGeneratingIds((prev) => ({ ...prev, [giftcardId]: true }));
+      setGenerateErrors((prev) => {
+        const next = { ...prev };
+        delete next[giftcardId];
+        return next;
+      });
+
+      try {
+        const result = await generateGiftcardWiCode(giftcardId);
+        if (!result.ok || !result.wiCode) {
+          setGenerateErrors((prev) => ({
+            ...prev,
+            [giftcardId]:
+              result.responseDesc ?? result.error ?? "Could not refresh wiCode after partial use.",
+          }));
+          return;
+        }
+
+        applyGeneratedWiCode(giftcardId, {
+          wiCode: result.wiCode,
+          validTillDate: result.validTillDate,
+          remainingCents: result.remainingCents ?? remainingCents,
+          giftcard: result.giftcard,
+        });
+      } catch (err) {
+        console.error("[SpendTracker] auto wiCode:", err);
+        setGenerateErrors((prev) => ({
+          ...prev,
+          [giftcardId]: "Could not refresh wiCode after partial use.",
+        }));
+      } finally {
+        inFlightRef.current.delete(giftcardId);
+        setGeneratingIds((prev) => {
+          const next = { ...prev };
+          delete next[giftcardId];
+          return next;
+        });
+      }
+    },
+    [applyGeneratedWiCode]
+  );
+
+  const autoGenerateForPartialStatuses = useCallback(
+    async (
+      statuses: Record<string, GiftcardStatusItem>,
+      history: RewardTransaction[]
+    ) => {
+      // Yoyo allows one active user token per phone/userRef.
+      // Only auto-refresh the most recent partially used card in history.
+      for (const transaction of history) {
+        const giftcardId = getMetadataString(transaction.metadata, [
+          "giftcard_id",
+          "giftcardId",
+        ]);
+        if (!giftcardId) continue;
+        const status = statuses[giftcardId];
+        if (!status || !needsPartialAutoWiCode(status)) continue;
+        await generateWiCodeForCard(status.id, status.remainingCents);
+        break;
+      }
+    },
+    [generateWiCodeForCard]
+  );
+
+  const loadGiftcardStatuses = useCallback(
+    async (history: RewardTransaction[]) => {
+      const giftcardIds = history
+        .map((transaction) =>
+          getMetadataString(transaction.metadata, ["giftcard_id", "giftcardId"])
+        )
+        .filter(Boolean);
+
+      if (giftcardIds.length === 0) {
+        setGiftcardStatuses({});
+        return;
+      }
+
+      try {
+        const result = await fetchGiftcardStatuses(giftcardIds);
+        setGiftcardStatuses(result.statuses);
+        void autoGenerateForPartialStatuses(result.statuses, history);
+      } catch (err) {
+        console.error("[SpendTracker] giftcard statuses:", err);
+      }
+    },
+    [autoGenerateForPartialStatuses]
+  );
 
   const refreshPointsBalance = useCallback(async () => {
     const totalPoints = await rewards.getRewardTotalPoints();
@@ -225,8 +458,8 @@ export default function SpendTracker() {
               Spending history
             </h2>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              Recent points spent from your rewards balance. Gift cards can be used more than once
-              until the balance is gone.
+              Recent points spent from your rewards balance. After a partial till spend, a new
+              wiCode is created automatically for the remaining balance.
             </p>
           </div>
         </div>
@@ -239,7 +472,7 @@ export default function SpendTracker() {
                 "campaign_name",
                 "campaignName",
               ]);
-              const redeemCode = getMetadataString(transaction.metadata, [
+              const metadataCode = getMetadataString(transaction.metadata, [
                 "wi_code",
                 "wiCode",
                 "wicode",
@@ -262,6 +495,14 @@ export default function SpendTracker() {
                 (fallbackStateId
                   ? fallbackStatusFromMetadata(giftcardId, fallbackStateId, amountRand)
                   : null);
+              const liveCode = giftcardId ? liveWiCodes[giftcardId] : undefined;
+              const isPartial = Boolean(status && needsPartialAutoWiCode(status));
+              // After partial use, hide the original issue wiCode until a fresh token arrives.
+              const redeemCode =
+                liveCode?.wiCode || (isPartial ? "" : metadataCode);
+              const codeValidTill = liveCode?.validTillDate
+                ? formatValidTill(liveCode.validTillDate)
+                : null;
               const expiryDateRaw =
                 liveStatus?.expiryDate ||
                 getMetadataString(transaction.metadata, ["expiry_date", "expiryDate"]);
@@ -280,6 +521,8 @@ export default function SpendTracker() {
                 status &&
                 status.statusLabel !== "Unknown" &&
                 (issuedCents != null || status.remainingCents > 0 || status.isPartiallyRedeemed);
+              const isGenerating = Boolean(giftcardId && generatingIds[giftcardId]);
+              const generateError = giftcardId ? generateErrors[giftcardId] : undefined;
 
               return (
                 <div
@@ -334,6 +577,35 @@ export default function SpendTracker() {
                             Copy code
                           </button>
                         )}
+                      </div>
+                    )}
+                    {codeValidTill && status?.isActive && liveCode && (
+                      <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                        Code valid until {codeValidTill}
+                      </p>
+                    )}
+                    {isPartial && isGenerating && (
+                      <p className="mt-2 inline-flex items-center gap-1.5 text-xs text-sky-700 dark:text-sky-300">
+                        <RefreshCw className="h-3 w-3 animate-spin" />
+                        Refreshing wiCode for remaining balance…
+                      </p>
+                    )}
+                    {isPartial && generateError && (
+                      <div className="mt-2">
+                        <p className="text-xs text-red-600 dark:text-red-400">{generateError}</p>
+                        <button
+                          type="button"
+                          className="mt-1 text-xs font-medium text-rose-600 dark:text-rose-400 hover:underline"
+                          onClick={() =>
+                            void generateWiCodeForCard(
+                              giftcardId,
+                              status?.remainingCents ?? 0,
+                              true
+                            )
+                          }
+                        >
+                          Retry
+                        </button>
                       </div>
                     )}
                   </div>

@@ -31,6 +31,8 @@ type IconItem = {
   amount?: number;
   category?: string;
   name?: string;
+  /** All expense row ids merged into this card (for allocation totals). */
+  memberIds?: string[];
 };
 
 type UserAccount = {
@@ -49,6 +51,8 @@ type TransferModal =
       accountName: string;
       incomeTotal: number;
       previousUsed: number;
+      /** Allocated on the primary income row only (used when adding to that row). */
+      primaryPreviousUsed: number;
       /** Defined income minus already allocated; negative when over-allocated. */
       remaining: number;
     }
@@ -71,14 +75,6 @@ function addToMapTotal(map: Map<string, number>, key: string, amount: number) {
   map.set(key, (map.get(key) ?? 0) + amount);
 }
 
-const ACCOUNT_TYPE_META: { type: string; label: string; icon: LucideIcon; color: string }[] = [
-  { type: "bank", label: "Bank", icon: Landmark, color: "blue" },
-  { type: "savings", label: "Savings", icon: PiggyBank, color: "emerald" },
-  { type: "investment", label: "Investment", icon: BarChart3, color: "violet" },
-  { type: "cash", label: "Cash", icon: Banknote, color: "amber" },
-  { type: "wallet", label: "Wallet", icon: Wallet, color: "teal" },
-];
-
 const INCOME_ICON_MAP: Record<string, string> = {
   Salary: "wallet",
   "Rental Income": "bank",
@@ -94,6 +90,116 @@ const INCOME_ICON_MAP: Record<string, string> = {
   "Sales of Goods": "cash",
   Other: "wallet",
 };
+
+/** One card per category: sum amounts, keep first id for allocations, prefer a non-empty name. */
+function buildExpenseIcons(expenses: RegistrationExpense[]): IconItem[] {
+  const byCategory = new Map<string, RegistrationExpense[]>();
+  for (const e of expenses) {
+    if ((Number(e.personal) || 0) <= 0) continue;
+    const list = byCategory.get(e.category);
+    if (list) list.push(e);
+    else byCategory.set(e.category, [e]);
+  }
+
+  const icons: IconItem[] = [];
+  for (const [category, rows] of byCategory) {
+    const primary = rows[0];
+    let total = 0;
+    const memberIds: string[] = [];
+    let preferredName: string | undefined;
+    for (const row of rows) {
+      total += Number(row.personal) || 0;
+      memberIds.push(row.id);
+      const trimmed = row.name?.trim();
+      if (trimmed && !preferredName) preferredName = trimmed;
+    }
+    icons.push({
+      id: primary.id,
+      key: "card",
+      label: preferredName || category,
+      amount: Math.round(total * 100) / 100,
+      category,
+      name: preferredName,
+      memberIds,
+    });
+  }
+  return icons;
+}
+
+/** One card per income category: sum amounts, keep first id for transfers, prefer a non-empty name. */
+function buildIncomeIcons(incomeList: Income[]): IconItem[] {
+  const byCategory = new Map<string, Income[]>();
+  for (const i of incomeList) {
+    if ((Number(i.personal) || 0) <= 0) continue;
+    const list = byCategory.get(i.category);
+    if (list) list.push(i);
+    else byCategory.set(i.category, [i]);
+  }
+
+  const icons: IconItem[] = [];
+  for (const [category, rows] of byCategory) {
+    const primary = rows[0];
+    let total = 0;
+    const memberIds: string[] = [];
+    let preferredName: string | undefined;
+    for (const row of rows) {
+      total += Number(row.personal) || 0;
+      memberIds.push(row.id);
+      const trimmed = row.name?.trim();
+      if (trimmed && !preferredName) preferredName = trimmed;
+    }
+    icons.push({
+      id: primary.id,
+      key: INCOME_ICON_MAP[category] ?? "wallet",
+      label: preferredName || category,
+      amount: Math.round(total * 100) / 100,
+      category,
+      name: preferredName,
+      memberIds,
+    });
+  }
+  return icons;
+}
+
+function sumMapForIcon(map: Map<string, number>, item: IconItem): number {
+  const ids = item.memberIds ?? [item.id];
+  let total = 0;
+  for (const id of ids) {
+    total += map.get(id) ?? 0;
+  }
+  return total;
+}
+
+function sumTransfersForIncomeOnAccount(
+  incomeTransferAmounts: Map<string, number>,
+  allocations: Map<string, string>,
+  inc: IconItem,
+  accountId: string
+): number {
+  const ids = inc.memberIds ?? [inc.id];
+  let total = 0;
+  for (const id of ids) {
+    if (allocations.get(id) === accountId) {
+      total += incomeTransferAmounts.get(id) ?? 0;
+    }
+  }
+  return total;
+}
+
+function sumAllocationsForExpense(
+  expenseAllocByExpense: Map<string, number>,
+  exp: IconItem
+): number {
+  return sumMapForIcon(expenseAllocByExpense, exp);
+}
+
+const ACCOUNT_TYPE_META: { type: string; label: string; icon: LucideIcon; color: string }[] = [
+  { type: "bank", label: "Bank", icon: Landmark, color: "blue" },
+  { type: "savings", label: "Savings", icon: PiggyBank, color: "emerald" },
+  { type: "investment", label: "Investment", icon: BarChart3, color: "violet" },
+  { type: "cash", label: "Cash", icon: Banknote, color: "amber" },
+  { type: "wallet", label: "Wallet", icon: Wallet, color: "teal" },
+];
 
 const INCOME_CATEGORIES = [
   "Salary",
@@ -342,18 +448,7 @@ export default function BudgetManager() {
       setUserAccounts(accounts);
 
       const incomeItems: IconItem[] =
-        incomeList.length > 0
-          ? incomeList
-              .filter((i) => (Number(i.personal) || 0) > 0)
-              .map((i) => ({
-                id: i.id,
-                key: INCOME_ICON_MAP[i.category] ?? "wallet",
-                label: i.name && i.name.trim() ? i.name : i.category,
-                amount: Number(i.personal) || 0,
-                category: i.category,
-                name: i.name && i.name.trim() ? i.name : undefined,
-              }))
-          : [];
+        incomeList.length > 0 ? buildIncomeIcons(incomeList) : [];
       setAllIncomeIcons(incomeItems);
 
       const allocMap = new Map<string, string>();
@@ -368,18 +463,7 @@ export default function BudgetManager() {
       setAllocations(allocMap);
 
       if (budgetExpensesList.length > 0) {
-        setExpenseIcons(
-          budgetExpensesList
-            .filter((e) => (Number(e.personal) || 0) > 0)
-            .map((e) => ({
-              id: e.id,
-              key: "card",
-              label: e.name && e.name.trim() ? e.name : e.category,
-              amount: Number(e.personal) || 0,
-              category: e.category,
-              name: e.name && e.name.trim() ? e.name : undefined,
-            }))
-        );
+        setExpenseIcons(buildExpenseIcons(budgetExpensesList));
       } else {
         setExpenseIcons([]);
       }
@@ -466,7 +550,8 @@ export default function BudgetManager() {
     if (!incomeItem || !targetAccount || targetAccount.accountType === "wallet") return false;
 
     const incomeTotal = incomeItem.amount ?? 0;
-    const previousUsed = incomeTransferAmounts.get(incomeId) ?? 0;
+    const previousUsed = sumMapForIcon(incomeTransferAmounts, incomeItem);
+    const primaryPreviousUsed = incomeTransferAmounts.get(incomeId) ?? 0;
     const remaining = incomeTotal - previousUsed;
 
     // Suggest remaining when under-allocated; leave blank when already at/over so the user can add more.
@@ -479,6 +564,7 @@ export default function BudgetManager() {
       accountName: targetAccount.name,
       incomeTotal,
       previousUsed,
+      primaryPreviousUsed,
       remaining,
     });
     return true;
@@ -578,20 +664,23 @@ export default function BudgetManager() {
     try {
       if (currentTransfer.mode === "income_to_account") {
         if (rawAmount === 0) {
+          const incomeItem = allIncomeIcons.find((i) => i.id === currentTransfer.incomeId);
+          const idsToClear = incomeItem?.memberIds ?? [currentTransfer.incomeId];
           setAllocations((prev) => {
             const next = new Map(prev);
-            next.delete(currentTransfer.incomeId);
+            for (const id of idsToClear) next.delete(id);
             return next;
           });
           setIncomeTransferAmounts((prev) => {
             const next = new Map(prev);
-            next.delete(currentTransfer.incomeId);
+            for (const id of idsToClear) next.delete(id);
             return next;
           });
-          await storage.removeIncomeAllocation(currentTransfer.incomeId);
+          await Promise.all(idsToClear.map((id) => storage.removeIncomeAllocation(id)));
         } else {
           // Allow allocating beyond defined income (overage shown in red on the income card).
-          const newTotal = Math.round((currentTransfer.previousUsed + rawAmount) * 100) / 100;
+          // Add onto the primary row only so member transfers are not double-counted.
+          const newTotal = Math.round((currentTransfer.primaryPreviousUsed + rawAmount) * 100) / 100;
           if (newTotal <= 0 || newTotal > MAX_MONEY_AMOUNT) return;
 
           setAllocations((prev) => new Map(prev).set(currentTransfer.incomeId, currentTransfer.accountId));
@@ -715,16 +804,7 @@ export default function BudgetManager() {
     setIsAddingIncome(true);
 
     const category = (newIncomeCategory === "Other income" ? "Other" : newIncomeCategory) as import("@/types").IncomeCategory;
-    const newItem: Income = {
-      id: crypto.randomUUID(),
-      category,
-      type: "Fixed",
-      name: newIncomeName.trim(),
-      personal: amount,
-      spouse: 0,
-      points: 0,
-      editable: true,
-    };
+    const trimmedName = newIncomeName.trim();
 
     setAddIncomeOpen(false);
     setNewIncomeCategory("Salary");
@@ -733,17 +813,33 @@ export default function BudgetManager() {
 
     invalidateBudgetLoads();
     try {
-      await storage.saveIncome([...onboardingIncome, newItem]);
-      setOnboardingIncome((prev) => [...prev, newItem]);
-      const iconItem: IconItem = {
-        id: newItem.id,
-        key: INCOME_ICON_MAP[newIncomeCategory] ?? INCOME_ICON_MAP[category] ?? "wallet",
-        label: newItem.name,
-        amount: newItem.personal,
-        category: newItem.category,
-        name: newItem.name,
-      };
-      setAllIncomeIcons((prev) => [...prev, iconItem]);
+      const existing = onboardingIncome.find((i) => i.category === category);
+      let nextList: Income[];
+
+      if (existing) {
+        const updated: Income = {
+          ...existing,
+          personal: Math.round(((Number(existing.personal) || 0) + amount) * 100) / 100,
+          name: existing.name?.trim() ? existing.name : trimmedName,
+        };
+        nextList = onboardingIncome.map((i) => (i.id === existing.id ? updated : i));
+      } else {
+        const newItem: Income = {
+          id: crypto.randomUUID(),
+          category,
+          type: "Fixed",
+          name: trimmedName,
+          personal: amount,
+          spouse: 0,
+          points: 0,
+          editable: true,
+        };
+        nextList = [...onboardingIncome, newItem];
+      }
+
+      await storage.saveIncome(nextList);
+      setOnboardingIncome(nextList);
+      setAllIncomeIcons(buildIncomeIcons(nextList));
     } catch (err) {
       console.error(err);
     } finally {
@@ -762,16 +858,7 @@ export default function BudgetManager() {
     setIsAddingExpense(true);
 
     const category = (newExpenseCategory === "Other Expense" ? "Other" : newExpenseCategory) as import("@/types").ExpenseCategory;
-    const newItem: RegistrationExpense = {
-      id: crypto.randomUUID(),
-      category,
-      type: "Fixed",
-      name: newExpenseName.trim(),
-      personal: amount,
-      spouse: 0,
-      points: 0,
-      editable: true,
-    };
+    const trimmedName = newExpenseName.trim();
 
     setAddExpenseOpen(false);
     setNewExpenseCategory("Groceries");
@@ -780,17 +867,33 @@ export default function BudgetManager() {
 
     invalidateBudgetLoads();
     try {
-      await storage.saveBudgetExpenses([...onboardingExpenses, newItem]);
-      setOnboardingExpenses((prev) => [...prev, newItem]);
-      const iconItem: IconItem = {
-        id: newItem.id,
-        key: "card",
-        label: newItem.name,
-        amount: newItem.personal,
-        category: newItem.category,
-        name: newItem.name,
-      };
-      setExpenseIcons((prev) => [...prev, iconItem]);
+      const existing = onboardingExpenses.find((e) => e.category === category);
+      let nextList: RegistrationExpense[];
+
+      if (existing) {
+        const updated: RegistrationExpense = {
+          ...existing,
+          personal: Math.round(((Number(existing.personal) || 0) + amount) * 100) / 100,
+          name: existing.name?.trim() ? existing.name : trimmedName,
+        };
+        nextList = onboardingExpenses.map((e) => (e.id === existing.id ? updated : e));
+      } else {
+        const newItem: RegistrationExpense = {
+          id: crypto.randomUUID(),
+          category,
+          type: "Fixed",
+          name: trimmedName,
+          personal: amount,
+          spouse: 0,
+          points: 0,
+          editable: true,
+        };
+        nextList = [...onboardingExpenses, newItem];
+      }
+
+      await storage.saveBudgetExpenses(nextList);
+      setOnboardingExpenses(nextList);
+      setExpenseIcons(buildExpenseIcons(nextList));
       // Counts as a budget activity → earns the daily "Log Today's Expenses" task.
       await storage.logBudgetActivity();
     } catch (err) {
@@ -827,16 +930,24 @@ export default function BudgetManager() {
   const incomeAmountByAccount = new Map<string, number>();
   let actualIncomeLeft = 0;
   for (const inc of allIncomeIcons) {
-    const allocated = incomeTransferAmounts.get(inc.id) ?? 0;
+    const allocated = sumMapForIcon(incomeTransferAmounts, inc);
     const defined = inc.amount ?? 0;
     actualIncomeLeft += Math.max(0, defined - allocated);
 
-    const accountId = allocations.get(inc.id);
-    if (!accountId || allocated <= 0) continue;
-    const list = incomeItemsByAccount.get(accountId);
-    if (list) list.push(inc);
-    else incomeItemsByAccount.set(accountId, [inc]);
-    addToMapTotal(incomeAmountByAccount, accountId, allocated);
+    const memberIds = inc.memberIds ?? [inc.id];
+    const accountsWithAlloc = new Set<string>();
+    for (const memberId of memberIds) {
+      const accountId = allocations.get(memberId);
+      const memberAllocated = incomeTransferAmounts.get(memberId) ?? 0;
+      if (!accountId || memberAllocated <= 0) continue;
+      accountsWithAlloc.add(accountId);
+      addToMapTotal(incomeAmountByAccount, accountId, memberAllocated);
+    }
+    for (const accountId of accountsWithAlloc) {
+      const list = incomeItemsByAccount.get(accountId);
+      if (list) list.push(inc);
+      else incomeItemsByAccount.set(accountId, [inc]);
+    }
   }
 
   const expenseAllocByAccount = new Map<string, number>();
@@ -861,7 +972,7 @@ export default function BudgetManager() {
 
   let totalExpenses = 0;
   for (const exp of expenseIcons) {
-    totalExpenses += expenseAllocByExpense.get(exp.id) ?? 0;
+    totalExpenses += sumAllocationsForExpense(expenseAllocByExpense, exp);
   }
   const monthlyBalance = actualIncomeLeft - totalExpenses;
   const isOverBudget = monthlyBalance < 0;
@@ -1039,7 +1150,12 @@ export default function BudgetManager() {
                       ) : items.length > 0 ? (
                         <div className="flex flex-col items-stretch gap-1.5 w-full">
                           {items.map((inc) => {
-                            const allocatedAmount = incomeTransferAmounts.get(inc.id) ?? 0;
+                            const allocatedAmount = sumTransfersForIncomeOnAccount(
+                              incomeTransferAmounts,
+                              allocations,
+                              inc,
+                              acc.id
+                            );
                             return (
                               <div
                                 key={inc.id}
@@ -1146,7 +1262,7 @@ export default function BudgetManager() {
             {allIncomeIcons.length > 0 ? (
               <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:items-center sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                 {allIncomeIcons.map((inc) => {
-                  const allocated = incomeTransferAmounts.get(inc.id) ?? 0;
+                  const allocated = sumMapForIcon(incomeTransferAmounts, inc);
                   return (
                     <IconCard
                       key={inc.id}
@@ -1193,7 +1309,7 @@ export default function BudgetManager() {
             {expenseIcons.length > 0 ? (
               <div className="-mx-4 mt-2 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:items-start sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                 {expenseIcons.map((exp) => {
-                  const allocated = expenseAllocByExpense.get(exp.id) ?? 0;
+                  const allocated = sumAllocationsForExpense(expenseAllocByExpense, exp);
                   return (
                     <div
                       key={exp.id}

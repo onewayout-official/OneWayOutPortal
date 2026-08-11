@@ -32,6 +32,18 @@ export interface YoyoGiftcard {
   expiredAmount?: number;
 }
 
+export interface YoyoUserToken {
+  userRef?: string;
+  wiCode?: string;
+  wiQR?: string;
+  giftcardIds?: Array<string | number>;
+  createDate?: string;
+  validTillDate?: string;
+  lastModifiedDate?: string;
+  stateId?: string;
+  mobileNumber?: string;
+}
+
 export interface YoyoApiEnvelope {
   responseCode?: string;
   responseDesc?: string;
@@ -39,6 +51,14 @@ export interface YoyoApiEnvelope {
   campaigns?: YoyoGiftcardCampaign[];
   giftcard?: YoyoGiftcard;
   giftcards?: YoyoGiftcard[];
+  token?: YoyoUserToken;
+}
+
+export interface CreateUserTokenBody {
+  giftcardIds: Array<string | number>;
+  mobileNumber?: string;
+  /** Required by some CVS environments; ignored for gift-card-only tokens. */
+  campaignType?: "COUPON" | "VOUCHER" | "COUPONVOUCHER";
 }
 
 export type GiftcardStatusLabel =
@@ -96,4 +116,19 @@ export interface SpendGiftcardResponse {
   pointsBalance?: number;
   pointsRedeemed?: number;
   campaignName?: string;
+}
+
+export interface GenerateWiCodeRequest {
+  giftcardId: string;
+}
+
+export interface GenerateWiCodeResponse {
+  ok: boolean;
+  error?: string;
+  responseDesc?: string;
+  responseCode?: string;
+  wiCode?: string;
+  validTillDate?: string;
+  remainingCents?: number;
+  giftcard?: YoyoGiftcard;
 }
