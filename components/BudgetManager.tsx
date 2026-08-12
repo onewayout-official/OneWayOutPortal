@@ -186,6 +186,20 @@ function sumTransfersForIncomeOnAccount(
   return total;
 }
 
+/** Sum account→expense allocations across all merged expense row ids for one card. */
+function sumExpenseAllocForAccount(
+  expenseAllocations: Map<string, number>,
+  accountId: string,
+  exp: IconItem
+): number {
+  const ids = exp.memberIds ?? [exp.id];
+  let total = 0;
+  for (const id of ids) {
+    total += expenseAllocations.get(`${accountId}::${id}`) ?? 0;
+  }
+  return total;
+}
+
 function sumAllocationsForExpense(
   expenseAllocByExpense: Map<string, number>,
   exp: IconItem
@@ -388,6 +402,10 @@ export default function BudgetManager() {
     expenseId: string;
     expenseLabel: string;
     existing: number;
+    /** All expense row ids merged into this card (cleared on save so totals stay correct). */
+    memberIds: string[];
+    /** Planned budget for this expense category (overflow allowed). */
+    expenseBudget: number;
   } | null>(null);
   const [allocAmount, setAllocAmount] = useState("");
   const [transferModal, setTransferModal] = useState<TransferModal | null>(null);
@@ -532,7 +550,9 @@ export default function BudgetManager() {
     const acc = userAccounts.find((a) => a.id === accountId);
     if (!acc) return false;
 
-    const existing = expenseAllocations.get(`${acc.id}::${expItem.id}`) ?? 0;
+    const memberIds = expItem.memberIds ?? [expItem.id];
+    // Sum across merged category rows — display uses the same total.
+    const existing = sumExpenseAllocForAccount(expenseAllocations, acc.id, expItem);
     setAllocAmount(existing > 0 ? String(existing) : "");
     setAllocModal({
       accountId: acc.id,
@@ -540,6 +560,8 @@ export default function BudgetManager() {
       expenseId: expItem.id,
       expenseLabel: expItem.name ?? expItem.category ?? expItem.label,
       existing,
+      memberIds,
+      expenseBudget: expItem.amount ?? 0,
     });
     return true;
   };
@@ -623,22 +645,42 @@ export default function BudgetManager() {
     if (amount === null) return;
     invalidateBudgetLoads();
     const currentModal = allocModal;
+    const memberIds = currentModal.memberIds.length > 0
+      ? currentModal.memberIds
+      : [currentModal.expenseId];
+    const primaryId = currentModal.expenseId;
     // Close immediately for smoother UX; persist in background.
     setAllocModal(null);
     setAllocAmount("");
     try {
+      // Merged expense cards can have allocations on multiple row ids. Collapse onto the
+      // primary id so the amount the user entered matches what the card and account show.
+      const staleMemberIds = memberIds.filter((id) => id !== primaryId);
+      await Promise.all(
+        staleMemberIds.map((id) =>
+          storage.deleteAccountExpenseAllocation(currentModal.accountId, id)
+        )
+      );
+
       if (amount === 0) {
-        await storage.deleteAccountExpenseAllocation(currentModal.accountId, currentModal.expenseId);
+        await storage.deleteAccountExpenseAllocation(currentModal.accountId, primaryId);
         setExpenseAllocations((prev) => {
           const next = new Map(prev);
-          next.delete(`${currentModal.accountId}::${currentModal.expenseId}`);
+          for (const id of memberIds) {
+            next.delete(`${currentModal.accountId}::${id}`);
+          }
           return next;
         });
       } else {
-        await storage.saveAccountExpenseAllocation(currentModal.accountId, currentModal.expenseId, amount);
-        setExpenseAllocations((prev) =>
-          new Map(prev).set(`${currentModal.accountId}::${currentModal.expenseId}`, amount)
-        );
+        await storage.saveAccountExpenseAllocation(currentModal.accountId, primaryId, amount);
+        setExpenseAllocations((prev) => {
+          const next = new Map(prev);
+          for (const id of staleMemberIds) {
+            next.delete(`${currentModal.accountId}::${id}`);
+          }
+          next.set(`${currentModal.accountId}::${primaryId}`, amount);
+          return next;
+        });
       }
       storage.logBudgetActivity();
     } catch (err) {
@@ -813,7 +855,10 @@ export default function BudgetManager() {
 
     invalidateBudgetLoads();
     try {
-      const existing = onboardingIncome.find((i) => i.category === category);
+      // Prefer the same primary row buildIncomeIcons would use (first with personal > 0).
+      const existing =
+        onboardingIncome.find((i) => i.category === category && (Number(i.personal) || 0) > 0) ??
+        onboardingIncome.find((i) => i.category === category);
       let nextList: Income[];
 
       if (existing) {
@@ -867,7 +912,10 @@ export default function BudgetManager() {
 
     invalidateBudgetLoads();
     try {
-      const existing = onboardingExpenses.find((e) => e.category === category);
+      // Prefer the same primary row buildExpenseIcons would use (first with personal > 0).
+      const existing =
+        onboardingExpenses.find((e) => e.category === category && (Number(e.personal) || 0) > 0) ??
+        onboardingExpenses.find((e) => e.category === category);
       let nextList: RegistrationExpense[];
 
       if (existing) {
@@ -1112,7 +1160,9 @@ export default function BudgetManager() {
                           )}
                           {(accountIncome > 0 || transferIn > 0 || accountAllocated > 0 || accountExpenses > 0 || transferOut > 0) && !hideIncomeItems && (
                             <span className={`text-[10px] font-bold border-t border-gray-200 dark:border-gray-600 pt-0.5 mt-0.5 ${total < 0 ? "text-red-600" : "text-gray-700 dark:text-gray-200"}`}>
-                              R {total.toLocaleString(undefined, { maximumFractionDigits: 0 })} left
+                              {total < 0
+                                ? `−R ${Math.abs(total).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                                : `R ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                             </span>
                           )}
                         </div>
@@ -1144,7 +1194,9 @@ export default function BudgetManager() {
                                   : c.text
                             }`}
                           >
-                            Left: R {total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            {total < 0
+                              ? `−R ${Math.abs(total).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                              : `R ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                           </span>
                         </div>
                       ) : items.length > 0 ? (
@@ -1184,7 +1236,9 @@ export default function BudgetManager() {
                                     : c.text
                               }`}
                             >
-                              Left: R {total.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                              {total < 0
+                                ? `−R ${Math.abs(total).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                                : `R ${total.toLocaleString(undefined, { maximumFractionDigits: 0 })}`}
                             </span>
                           </div>
                         </div>
@@ -1263,13 +1317,16 @@ export default function BudgetManager() {
               <div className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:items-center sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                 {allIncomeIcons.map((inc) => {
                   const allocated = sumMapForIcon(incomeTransferAmounts, inc);
+                  const defined = inc.amount ?? 0;
+                  const isOver = allocated > defined;
                   return (
                     <IconCard
                       key={inc.id}
                       item={inc}
                       onClick={() => handleIncomeTap(inc)}
                       selected={selectedIncomeId === inc.id}
-                      liveAmount={allocated}
+                      liveAmount={allocated > 0 ? allocated : undefined}
+                      liveAmountTone={isOver ? "danger" : allocated > 0 ? "success" : undefined}
                     />
                   );
                 })}
@@ -1310,6 +1367,8 @@ export default function BudgetManager() {
               <div className="-mx-4 mt-2 flex snap-x gap-3 overflow-x-auto px-4 pb-2 sm:mx-0 sm:flex-wrap sm:items-start sm:gap-4 sm:overflow-visible sm:px-0 sm:pb-0">
                 {expenseIcons.map((exp) => {
                   const allocated = sumAllocationsForExpense(expenseAllocByExpense, exp);
+                  const budgeted = exp.amount ?? 0;
+                  const isOver = allocated > budgeted;
                   return (
                     <div
                       key={exp.id}
@@ -1329,7 +1388,8 @@ export default function BudgetManager() {
                         item={exp}
                         colorClass="text-orange-600"
                         bgClass="bg-orange-50 dark:bg-orange-900/10 border-orange-100 dark:border-orange-800"
-                        liveAmount={allocated}
+                        liveAmount={allocated > 0 ? allocated : undefined}
+                        liveAmountTone={isOver ? "danger" : allocated > 0 ? "success" : undefined}
                       />
                     </div>
                   );
@@ -1516,11 +1576,52 @@ export default function BudgetManager() {
               />
             </div>
 
-            {allocModal.existing > 0 && (
-              <p className="text-xs text-gray-400 mb-4">
-                Currently budgeted: R {allocModal.existing.toLocaleString(undefined, { minimumFractionDigits: 2 })}. Enter 0 to remove.
-              </p>
-            )}
+            {(() => {
+              const typed = parseMoneyInput(allocAmount);
+              const preview = typed ?? allocModal.existing;
+              const overBy =
+                allocModal.expenseBudget > 0 && preview > allocModal.expenseBudget
+                  ? Math.round((preview - allocModal.expenseBudget) * 100) / 100
+                  : 0;
+              return (
+                <p
+                  className={`text-xs mb-4 ${
+                    overBy > 0 ? "text-red-600 dark:text-red-400" : "text-gray-400"
+                  }`}
+                >
+                  Planned expense: R{" "}
+                  {allocModal.expenseBudget.toLocaleString(undefined, {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                  .
+                  {allocModal.existing > 0 && (
+                    <>
+                      {" "}
+                      Currently allocated from this account: R{" "}
+                      {allocModal.existing.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                      .
+                    </>
+                  )}
+                  {overBy > 0 ? (
+                    <>
+                      {" "}
+                      Over by: R{" "}
+                      {overBy.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                      . Overflow is allowed and will show in red on the expense card.
+                    </>
+                  ) : (
+                    <> Enter 0 to remove.</>
+                  )}
+                </p>
+              );
+            })()}
 
             <div className="flex gap-3">
               <button
