@@ -1,9 +1,14 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { UserProfile, Income, RegistrationExpense } from "@/types";
+import { UserProfile, Income, RegistrationExpense, BudgetTransaction, Expense } from "@/types";
 import { storage } from "@/lib/storage";
 import { computePooledIncome, computePooledExpenses } from "@/lib/budgetTotals";
+import { maxExpenseAllocationFromAccount, type BudgetAccountBalanceInput } from "@/lib/budgetAccountBalances";
+import BudgetTransactionHistoryModal, {
+  getExpenseHistoryRows,
+  getIncomeHistoryRows,
+} from "@/components/BudgetTransactionHistory";
 import {
   Wallet,
   AlertCircle,
@@ -18,6 +23,7 @@ import {
   Banknote,
   Plus,
   X,
+  History,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -379,6 +385,8 @@ export default function BudgetManager() {
   const [allocations, setAllocations] = useState<Map<string, string>>(new Map());
   const [expenseIcons, setExpenseIcons] = useState<IconItem[]>([]);
   const [monthlyExpensesByAccount, setMonthlyExpensesByAccount] = useState<Map<string, number>>(new Map());
+  const [monthExpenses, setMonthExpenses] = useState<Expense[]>([]);
+  const [budgetTransactions, setBudgetTransactions] = useState<BudgetTransaction[]>([]);
   // account → expense allocations: key = `${accountId}::${expenseId}`
   const [expenseAllocations, setExpenseAllocations] = useState<Map<string, number>>(new Map());
   // income transfer amount per income item id
@@ -404,10 +412,13 @@ export default function BudgetManager() {
     existing: number;
     /** All expense row ids merged into this card (cleared on save so totals stay correct). */
     memberIds: string[];
-    /** Planned budget for this expense category (overflow allowed). */
+    /** Planned budget for this expense category (may allocate above this if account has funds). */
     expenseBudget: number;
+    /** Max assignable from this account (income + transfers − spend − other expense budgets). */
+    accountAvailableMax: number;
   } | null>(null);
   const [allocAmount, setAllocAmount] = useState("");
+  const [allocSaveError, setAllocSaveError] = useState("");
   const [transferModal, setTransferModal] = useState<TransferModal | null>(null);
   const [transferAmount, setTransferAmount] = useState("");
 
@@ -419,6 +430,8 @@ export default function BudgetManager() {
 
   // Add Expense modal state
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
+  const [incomeHistoryOpen, setIncomeHistoryOpen] = useState(false);
+  const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false);
   const [newExpenseCategory, setNewExpenseCategory] = useState("Groceries");
   const [newExpenseName, setNewExpenseName] = useState("");
   const [newExpenseAmount, setNewExpenseAmount] = useState("");
@@ -433,6 +446,56 @@ export default function BudgetManager() {
     loadGeneration.current += 1;
     storage.clearBudgetManagerCache();
   };
+
+  const pushBudgetTx = (tx: BudgetTransaction | null | undefined) => {
+    if (!tx) return;
+    setBudgetTransactions((prev) => [tx, ...prev.filter((t) => t.id !== tx.id)].slice(0, 100));
+  };
+
+  const buildAccountBalanceInput = (): BudgetAccountBalanceInput => {
+    const incomeAllocationRows: BudgetAccountBalanceInput["incomeAllocations"] = [];
+    for (const [incomeId, amount] of incomeTransferAmounts) {
+      if (amount <= 0) continue;
+      const accountId = allocations.get(incomeId);
+      if (!accountId) continue;
+      incomeAllocationRows.push({ incomeId, accountId, amount });
+    }
+
+    const expenseAllocationRows: BudgetAccountBalanceInput["accountExpenseAllocations"] = [];
+    for (const [key, amount] of expenseAllocations) {
+      const sep = key.indexOf("::");
+      if (sep < 0) continue;
+      expenseAllocationRows.push({
+        accountId: key.slice(0, sep),
+        expenseId: key.slice(sep + 2),
+        amount,
+      });
+    }
+
+    const transferRows: BudgetAccountBalanceInput["accountTransfers"] = [];
+    for (const [key, amount] of accountTransfers) {
+      const sep = key.indexOf("::");
+      if (sep < 0) continue;
+      transferRows.push({
+        fromAccountId: key.slice(0, sep),
+        toAccountId: key.slice(sep + 2),
+        amount,
+      });
+    }
+
+    return {
+      userAccounts,
+      income: onboardingIncome,
+      incomeAllocations: incomeAllocationRows,
+      accountExpenseAllocations: expenseAllocationRows,
+      accountTransfers: transferRows,
+      expenses: monthExpenses,
+      walletBalance: availableWalletBalance,
+    };
+  };
+
+  const getAccountExpenseAllocationCap = (accountId: string, existingForExpense: number): number =>
+    maxExpenseAllocationFromAccount(accountId, existingForExpense, buildAccountBalanceInput());
 
   async function loadData(options?: { bypassCache?: boolean; showLoading?: boolean }): Promise<boolean> {
     const generation = ++loadGeneration.current;
@@ -456,6 +519,7 @@ export default function BudgetManager() {
         incomeAllocations,
         accountExpenseAllocations,
         accountTransfers,
+        budgetTransactions: loadedBudgetTransactions,
         availableWalletBalance: walletBalance,
       } = budgetData;
       const userProfile = loadedProfile ?? await storage.getProfile();
@@ -464,6 +528,8 @@ export default function BudgetManager() {
       setOnboardingIncome(incomeList);
       setOnboardingExpenses(budgetExpensesList);
       setUserAccounts(accounts);
+      setMonthExpenses(expenses);
+      setBudgetTransactions(loadedBudgetTransactions ?? []);
 
       const incomeItems: IconItem[] =
         incomeList.length > 0 ? buildIncomeIcons(incomeList) : [];
@@ -553,6 +619,8 @@ export default function BudgetManager() {
     const memberIds = expItem.memberIds ?? [expItem.id];
     // Sum across merged category rows — display uses the same total.
     const existing = sumExpenseAllocForAccount(expenseAllocations, acc.id, expItem);
+    const accountAvailableMax = getAccountExpenseAllocationCap(acc.id, existing);
+    setAllocSaveError("");
     setAllocAmount(existing > 0 ? String(existing) : "");
     setAllocModal({
       accountId: acc.id,
@@ -562,6 +630,7 @@ export default function BudgetManager() {
       existing,
       memberIds,
       expenseBudget: expItem.amount ?? 0,
+      accountAvailableMax,
     });
     return true;
   };
@@ -643,6 +712,19 @@ export default function BudgetManager() {
     if (!allocModal) return;
     const amount = parseMoneyInput(allocAmount);
     if (amount === null) return;
+
+    const accountCap = getAccountExpenseAllocationCap(allocModal.accountId, allocModal.existing);
+    if (amount > 0 && amount > accountCap) {
+      setAllocSaveError(
+        `Only R ${accountCap.toLocaleString(undefined, {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })} is available in ${allocModal.accountName}.`
+      );
+      return;
+    }
+
+    setAllocSaveError("");
     invalidateBudgetLoads();
     const currentModal = allocModal;
     const memberIds = currentModal.memberIds.length > 0
@@ -671,6 +753,23 @@ export default function BudgetManager() {
           }
           return next;
         });
+        if (currentModal.existing > 0) {
+          pushBudgetTx(
+            await storage.logBudgetTransaction({
+              kind: "expense_allocation_cleared",
+              amount: currentModal.existing,
+              title: `${currentModal.expenseLabel} ← ${currentModal.accountName}`,
+              category: currentModal.expenseLabel,
+              fromAccountId: currentModal.accountId,
+              expenseId: primaryId,
+              metadata: {
+                account_name: currentModal.accountName,
+                expense_label: currentModal.expenseLabel,
+                previous_amount: currentModal.existing,
+              },
+            })
+          );
+        }
       } else {
         await storage.saveAccountExpenseAllocation(currentModal.accountId, primaryId, amount);
         setExpenseAllocations((prev) => {
@@ -681,6 +780,22 @@ export default function BudgetManager() {
           next.set(`${currentModal.accountId}::${primaryId}`, amount);
           return next;
         });
+        pushBudgetTx(
+          await storage.logBudgetTransaction({
+            kind: "account_to_expense",
+            amount,
+            title: `${currentModal.expenseLabel} ← ${currentModal.accountName}`,
+            category: currentModal.expenseLabel,
+            fromAccountId: currentModal.accountId,
+            expenseId: primaryId,
+            metadata: {
+              account_name: currentModal.accountName,
+              expense_label: currentModal.expenseLabel,
+              previous_amount: currentModal.existing,
+              expense_budget: currentModal.expenseBudget,
+            },
+          })
+        );
       }
       storage.logBudgetActivity();
     } catch (err) {
@@ -719,6 +834,23 @@ export default function BudgetManager() {
             return next;
           });
           await Promise.all(idsToClear.map((id) => storage.removeIncomeAllocation(id)));
+          if (currentTransfer.previousUsed > 0) {
+            pushBudgetTx(
+              await storage.logBudgetTransaction({
+                kind: "income_allocation_cleared",
+                amount: currentTransfer.previousUsed,
+                title: `${currentTransfer.incomeLabel} → ${currentTransfer.accountName}`,
+                category: currentTransfer.incomeLabel,
+                incomeId: currentTransfer.incomeId,
+                toAccountId: currentTransfer.accountId,
+                metadata: {
+                  income_label: currentTransfer.incomeLabel,
+                  account_name: currentTransfer.accountName,
+                  previous_amount: currentTransfer.previousUsed,
+                },
+              })
+            );
+          }
         } else {
           // Allow allocating beyond defined income (overage shown in red on the income card).
           // Add onto the primary row only so member transfers are not double-counted.
@@ -728,6 +860,22 @@ export default function BudgetManager() {
           setAllocations((prev) => new Map(prev).set(currentTransfer.incomeId, currentTransfer.accountId));
           setIncomeTransferAmounts((prev) => new Map(prev).set(currentTransfer.incomeId, newTotal));
           await storage.saveIncomeAllocation(currentTransfer.incomeId, currentTransfer.accountId, newTotal);
+          pushBudgetTx(
+            await storage.logBudgetTransaction({
+              kind: "income_to_account",
+              amount: rawAmount,
+              title: `${currentTransfer.incomeLabel} → ${currentTransfer.accountName}`,
+              category: currentTransfer.incomeLabel,
+              incomeId: currentTransfer.incomeId,
+              toAccountId: currentTransfer.accountId,
+              metadata: {
+                income_label: currentTransfer.incomeLabel,
+                account_name: currentTransfer.accountName,
+                previous_amount: currentTransfer.previousUsed,
+                new_total: newTotal,
+              },
+            })
+          );
         }
       } else if (currentTransfer.mode === "account_to_account") {
         const amount = rawAmount;
@@ -740,8 +888,38 @@ export default function BudgetManager() {
         });
         if (amount === 0) {
           await storage.removeAccountTransferAmount(currentTransfer.fromAccountId, currentTransfer.toAccountId);
+          if (currentTransfer.existing > 0) {
+            pushBudgetTx(
+              await storage.logBudgetTransaction({
+                kind: "account_transfer_cleared",
+                amount: currentTransfer.existing,
+                title: `${currentTransfer.fromAccountName} → ${currentTransfer.toAccountName}`,
+                fromAccountId: currentTransfer.fromAccountId,
+                toAccountId: currentTransfer.toAccountId,
+                metadata: {
+                  from_account_name: currentTransfer.fromAccountName,
+                  to_account_name: currentTransfer.toAccountName,
+                  previous_amount: currentTransfer.existing,
+                },
+              })
+            );
+          }
         } else {
           await storage.saveAccountTransferAmount(currentTransfer.fromAccountId, currentTransfer.toAccountId, amount);
+          pushBudgetTx(
+            await storage.logBudgetTransaction({
+              kind: "account_to_account",
+              amount,
+              title: `${currentTransfer.fromAccountName} → ${currentTransfer.toAccountName}`,
+              fromAccountId: currentTransfer.fromAccountId,
+              toAccountId: currentTransfer.toAccountId,
+              metadata: {
+                from_account_name: currentTransfer.fromAccountName,
+                to_account_name: currentTransfer.toAccountName,
+                previous_amount: currentTransfer.existing,
+              },
+            })
+          );
         }
       }
       storage.logBudgetActivity();
@@ -885,6 +1063,19 @@ export default function BudgetManager() {
       await storage.saveIncome(nextList);
       setOnboardingIncome(nextList);
       setAllIncomeIcons(buildIncomeIcons(nextList));
+      pushBudgetTx(
+        await storage.logBudgetTransaction({
+          kind: "income_defined",
+          amount,
+          title: trimmedName || category,
+          category,
+          incomeId: existing?.id ?? nextList[nextList.length - 1]?.id,
+          metadata: {
+            name: trimmedName,
+            merged: Boolean(existing),
+          },
+        })
+      );
     } catch (err) {
       console.error(err);
     } finally {
@@ -942,6 +1133,19 @@ export default function BudgetManager() {
       await storage.saveBudgetExpenses(nextList);
       setOnboardingExpenses(nextList);
       setExpenseIcons(buildExpenseIcons(nextList));
+      pushBudgetTx(
+        await storage.logBudgetTransaction({
+          kind: "expense_defined",
+          amount,
+          title: trimmedName || category,
+          category,
+          expenseId: existing?.id ?? nextList[nextList.length - 1]?.id,
+          metadata: {
+            name: trimmedName,
+            merged: Boolean(existing),
+          },
+        })
+      );
       // Counts as a budget activity → earns the daily "Log Today's Expenses" task.
       await storage.logBudgetActivity();
     } catch (err) {
@@ -1029,6 +1233,8 @@ export default function BudgetManager() {
     ? userAccounts.find((account) => account.id === selectedSourceAccountId)
     : null;
   const monthLabel = new Date().toLocaleString(undefined, { month: "long", year: "numeric" });
+  const incomeHistoryCount = getIncomeHistoryRows(budgetTransactions).length;
+  const expenseHistoryCount = getExpenseHistoryRows(budgetTransactions, monthExpenses).length;
 
   return (
     <div className="space-y-5">
@@ -1293,13 +1499,27 @@ export default function BudgetManager() {
                   tap, then select an account
                 </span>
               </h3>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
                 {pooledIncome > 0 && (
-                  <span className="text-sm font-semibold text-[#2f6064]">
+                  <span className="text-sm font-semibold text-[#2f6064] sm:mr-1">
                     Total: R {pooledIncome.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 )}
                 <button
+                  type="button"
+                  onClick={() => setIncomeHistoryOpen(true)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-[#2f6064]/30 bg-white px-3 py-2 text-xs font-semibold text-[#2f6064] transition-colors hover:bg-[#2f6064]/5 dark:border-[#7bb9bd]/30 dark:bg-gray-800 dark:text-[#7bb9bd] dark:hover:bg-[#2f6064]/10 sm:w-auto sm:py-1.5"
+                >
+                  <History className="h-3.5 w-3.5" />
+                  History
+                  {incomeHistoryCount > 0 && (
+                    <span className="rounded-full bg-[#2f6064]/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums">
+                      {incomeHistoryCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setAddIncomeOpen(true)}
                   className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-[#2f6064] px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-[#255055] sm:w-auto sm:py-1.5"
                 >
@@ -1343,13 +1563,27 @@ export default function BudgetManager() {
                 <Receipt className="h-5 w-5 text-orange-600" />
                 Expenses
               </h3>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
                 {pooledExpenses > 0 && (
-                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+                  <span className="text-sm font-semibold text-gray-700 dark:text-gray-300 sm:mr-1">
                     Total: R {pooledExpenses.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </span>
                 )}
                 <button
+                  type="button"
+                  onClick={() => setExpenseHistoryOpen(true)}
+                  className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-600 transition-colors hover:bg-orange-50 dark:border-orange-700 dark:bg-gray-800 dark:text-orange-400 dark:hover:bg-orange-900/20 sm:w-auto sm:py-1.5"
+                >
+                  <History className="h-3.5 w-3.5" />
+                  History
+                  {expenseHistoryCount > 0 && (
+                    <span className="rounded-full bg-orange-100 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-orange-700 dark:bg-orange-900/40 dark:text-orange-300">
+                      {expenseHistoryCount}
+                    </span>
+                  )}
+                </button>
+                <button
+                  type="button"
                   onClick={() => setAddExpenseOpen(true)}
                   className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-orange-500 px-3 py-2 text-xs font-semibold text-white transition-colors hover:bg-orange-600 sm:w-auto sm:py-1.5"
                 >
@@ -1429,6 +1663,20 @@ export default function BudgetManager() {
           </div>
         </main>
       </div>
+
+      <BudgetTransactionHistoryModal
+        open={incomeHistoryOpen}
+        onClose={() => setIncomeHistoryOpen(false)}
+        variant="income"
+        transactions={budgetTransactions}
+      />
+      <BudgetTransactionHistoryModal
+        open={expenseHistoryOpen}
+        onClose={() => setExpenseHistoryOpen(false)}
+        variant="expense"
+        transactions={budgetTransactions}
+        expenses={monthExpenses}
+      />
 
       {/* ── Delete confirmation modal ── */}
       {deleteConfirm && (
@@ -1569,7 +1817,10 @@ export default function BudgetManager() {
                 min="0"
                 step="0.01"
                 value={allocAmount}
-                onChange={(e) => setAllocAmount(e.target.value)}
+                onChange={(e) => {
+                  setAllocAmount(e.target.value);
+                  setAllocSaveError("");
+                }}
                 onKeyDown={(e) => { if (e.key === "Enter") handleSaveAllocation(); if (e.key === "Escape") { setAllocModal(null); setAllocAmount(""); } }}
                 placeholder="0.00"
                 className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-lg font-semibold focus:outline-none focus:ring-2 focus:ring-orange-400"
@@ -1579,59 +1830,88 @@ export default function BudgetManager() {
             {(() => {
               const typed = parseMoneyInput(allocAmount);
               const preview = typed ?? allocModal.existing;
-              const overBy =
+              const accountCap = getAccountExpenseAllocationCap(allocModal.accountId, allocModal.existing);
+              const overAccount =
+                preview > 0 && preview > accountCap
+                  ? Math.round((preview - accountCap) * 100) / 100
+                  : 0;
+              const overExpenseBudget =
                 allocModal.expenseBudget > 0 && preview > allocModal.expenseBudget
                   ? Math.round((preview - allocModal.expenseBudget) * 100) / 100
                   : 0;
               return (
-                <p
-                  className={`text-xs mb-4 ${
-                    overBy > 0 ? "text-red-600 dark:text-red-400" : "text-gray-400"
-                  }`}
-                >
-                  Planned expense: R{" "}
-                  {allocModal.expenseBudget.toLocaleString(undefined, {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                  .
-                  {allocModal.existing > 0 && (
-                    <>
-                      {" "}
-                      Currently allocated from this account: R{" "}
-                      {allocModal.existing.toLocaleString(undefined, {
+                <div className="mb-4 space-y-2 text-xs">
+                  <p className="text-gray-400">
+                    Available in {allocModal.accountName}: R{" "}
+                    {accountCap.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                    . Planned expense: R{" "}
+                    {allocModal.expenseBudget.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                    .
+                    {allocModal.existing > 0 && (
+                      <>
+                        {" "}
+                        Currently allocated from this account: R{" "}
+                        {allocModal.existing.toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                        .
+                      </>
+                    )}
+                  </p>
+                  {overAccount > 0 && (
+                    <p className="text-red-600 dark:text-red-400">
+                      Exceeds account balance by R{" "}
+                      {overAccount.toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
-                      .
-                    </>
+                      . Reduce the amount or move funds into this account first.
+                    </p>
                   )}
-                  {overBy > 0 ? (
-                    <>
-                      {" "}
-                      Over by: R{" "}
-                      {overBy.toLocaleString(undefined, {
+                  {overAccount <= 0 && overExpenseBudget > 0 && (
+                    <p className="text-red-600 dark:text-red-400">
+                      Above planned expense by R{" "}
+                      {overExpenseBudget.toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
-                      . Overflow is allowed and will show in red on the expense card.
-                    </>
-                  ) : (
-                    <> Enter 0 to remove.</>
+                      . Allowed when this account has enough — shown in red on the expense card.
+                    </p>
                   )}
-                </p>
+                  {overAccount <= 0 && overExpenseBudget <= 0 && (
+                    <p className="text-gray-400">Enter 0 to remove.</p>
+                  )}
+                  {allocSaveError && (
+                    <p className="text-red-600 dark:text-red-400">{allocSaveError}</p>
+                  )}
+                </div>
               );
             })()}
 
             <div className="flex gap-3">
               <button
                 onClick={handleSaveAllocation}
-                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors"
+                disabled={
+                  (() => {
+                    const typed = parseMoneyInput(allocAmount);
+                    if (typed === null || typed === 0) return false;
+                    const cap = getAccountExpenseAllocationCap(allocModal.accountId, allocModal.existing);
+                    return typed > cap;
+                  })()
+                }
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
               >
                 Save
               </button>
               <button
-                onClick={() => { setAllocModal(null); setAllocAmount(""); }}
+                onClick={() => { setAllocModal(null); setAllocAmount(""); setAllocSaveError(""); }}
                 className="flex-1 py-2.5 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-300 font-semibold rounded-xl transition-colors"
               >
                 Cancel

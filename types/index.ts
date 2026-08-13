@@ -377,3 +377,28 @@ export type ExpenseCategory =
   | "Transport"
   | "Send to others"
   | "Other";
+
+export type BudgetTransactionKind =
+  | "income_defined"
+  | "expense_defined"
+  | "income_to_account"
+  | "account_to_expense"
+  | "account_to_account"
+  | "income_allocation_cleared"
+  | "expense_allocation_cleared"
+  | "account_transfer_cleared"
+  | "spend_logged";
+
+export interface BudgetTransaction {
+  id: string;
+  kind: BudgetTransactionKind;
+  amount: number;
+  title: string;
+  category?: string;
+  fromAccountId?: string;
+  toAccountId?: string;
+  incomeId?: string;
+  expenseId?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
+}

@@ -9,6 +9,8 @@ import {
   RegistrationExpense,
   Liability,
   SpendCategory,
+  BudgetTransaction,
+  BudgetTransactionKind,
 } from "@/types";
 import { supabase } from "@/lib/supabase";
 import { SIGNUP_PHONE_TAKEN_ERROR } from "@/lib/authIdentity";
@@ -121,13 +123,45 @@ type BudgetManagerData = {
   incomeAllocations: { incomeId: string; accountId: string; amount: number }[];
   accountExpenseAllocations: { accountId: string; expenseId: string; amount: number }[];
   accountTransfers: { fromAccountId: string; toAccountId: string; amount: number }[];
+  budgetTransactions: BudgetTransaction[];
   availableWalletBalance: number;
   accountTypeBalances: { type: string; total: number }[];
   fromCache?: boolean;
 };
 
 const BUDGET_MANAGER_CACHE_TTL_MS = 2 * 60 * 1000;
-const BUDGET_MANAGER_CACHE_PREFIX = "onewayout:budget-manager:v2:";
+const BUDGET_MANAGER_CACHE_PREFIX = "onewayout:budget-manager:v3:";
+
+export type BudgetTransactionInput = {
+  kind: BudgetTransactionKind;
+  amount: number;
+  title: string;
+  category?: string;
+  fromAccountId?: string;
+  toAccountId?: string;
+  incomeId?: string;
+  expenseId?: string;
+  metadata?: Record<string, unknown>;
+};
+
+function mapRowToBudgetTransaction(r: Record<string, unknown>): BudgetTransaction {
+  return {
+    id: String(r.id),
+    kind: r.kind as BudgetTransactionKind,
+    amount: Number(r.amount) || 0,
+    title: String(r.title ?? ""),
+    category: r.category != null ? String(r.category) : undefined,
+    fromAccountId: r.from_account_id != null ? String(r.from_account_id) : undefined,
+    toAccountId: r.to_account_id != null ? String(r.to_account_id) : undefined,
+    incomeId: r.income_id != null ? String(r.income_id) : undefined,
+    expenseId: r.expense_id != null ? String(r.expense_id) : undefined,
+    metadata:
+      r.metadata && typeof r.metadata === "object" && !Array.isArray(r.metadata)
+        ? (r.metadata as Record<string, unknown>)
+        : undefined,
+    createdAt: String(r.created_at ?? new Date().toISOString()),
+  };
+}
 
 function getBudgetManagerCacheKey(userId: string): string {
   return `${BUDGET_MANAGER_CACHE_PREFIX}${userId}`;
@@ -355,7 +389,7 @@ export const storage = {
   addExpense: async (expense: Expense): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) return;
-    await supabase.from("expenses").insert({
+    const { error } = await supabase.from("expenses").insert({
       id: expense.id,
       user_id: userId,
       title: expense.title,
@@ -364,6 +398,22 @@ export const storage = {
       date: expense.date,
       description: expense.description ?? null,
       account_id: expense.accountId ?? null,
+    });
+    if (error) {
+      console.error("[storage] addExpense error:", error.message);
+      return;
+    }
+    void storage.logBudgetTransaction({
+      kind: "spend_logged",
+      amount: Number(expense.amount) || 0,
+      title: expense.title?.trim() || String(expense.category) || "Expense",
+      category: String(expense.category),
+      expenseId: expense.id,
+      fromAccountId: expense.accountId,
+      metadata: {
+        date: expense.date,
+        description: expense.description ?? null,
+      },
     });
   },
 
@@ -1014,6 +1064,55 @@ export const storage = {
     await tryAwardTask("expense-log");
   },
 
+  /** Append-only budget money-event ledger (mirrors reward_transactions). */
+  logBudgetTransaction: async (entry: BudgetTransactionInput): Promise<BudgetTransaction | null> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return null;
+    const amount = Math.round((Number(entry.amount) || 0) * 100) / 100;
+    if (!Number.isFinite(amount) || amount < 0) return null;
+
+    const { data, error } = await supabase
+      .from("budget_transactions")
+      .insert({
+        user_id: userId,
+        kind: entry.kind,
+        amount,
+        title: entry.title?.trim() || entry.kind,
+        category: entry.category ?? null,
+        from_account_id: entry.fromAccountId ?? null,
+        to_account_id: entry.toAccountId ?? null,
+        income_id: entry.incomeId ?? null,
+        expense_id: entry.expenseId ?? null,
+        metadata: entry.metadata ?? {},
+      })
+      .select("*")
+      .maybeSingle();
+
+    if (error) {
+      console.error("[storage] logBudgetTransaction error:", error.message);
+      return null;
+    }
+    if (!data) return null;
+    return mapRowToBudgetTransaction(data as Record<string, unknown>);
+  },
+
+  getBudgetTransactions: async (limit = 100): Promise<BudgetTransaction[]> => {
+    const userId = await getCurrentUserId();
+    if (!userId) return [];
+    const safeLimit = Math.min(Math.max(1, Math.floor(limit)), 500);
+    const { data, error } = await supabase
+      .from("budget_transactions")
+      .select("*")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false })
+      .limit(safeLimit);
+    if (error) {
+      console.error("[storage] getBudgetTransactions error:", error.message);
+      return [];
+    }
+    return (data ?? []).map((r) => mapRowToBudgetTransaction(r as Record<string, unknown>));
+  },
+
   /**
    * Record that the user completed an earn task today.
    * Upserts into `earn_activities (user_id, date)` — one row per day.
@@ -1059,6 +1158,7 @@ export const storage = {
       accountExpenseAllocationsData,
       accountTransfersData,
       rewardTransactionsData,
+      budgetTransactionsData,
       budgetActivityWrite,
     ] = await Promise.all([
       supabase.from("profiles").select("*").eq("id", userId).maybeSingle(),
@@ -1076,6 +1176,12 @@ export const storage = {
       supabase.from("account_expense_allocations").select("account_id, expense_id, amount").eq("user_id", userId),
       supabase.from("account_transfers").select("from_account_id, to_account_id, amount").eq("user_id", userId),
       supabase.from("reward_transactions").select("points_delta").eq("user_id", userId).gt("points_delta", 0),
+      supabase
+        .from("budget_transactions")
+        .select("*")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(100),
       supabase.from("budget_activities").upsert({ user_id: userId, date: today }, { onConflict: "user_id,date" }),
     ]);
 
@@ -1088,6 +1194,7 @@ export const storage = {
     if (accountExpenseAllocationsData.error) console.error("[storage] getBudgetManagerData expense allocations error:", accountExpenseAllocationsData.error.message);
     if (accountTransfersData.error) console.error("[storage] getBudgetManagerData account transfers error:", accountTransfersData.error.message);
     if (rewardTransactionsData.error) console.error("[storage] getBudgetManagerData wallet balance error:", rewardTransactionsData.error.message);
+    if (budgetTransactionsData.error) console.error("[storage] getBudgetManagerData budget transactions error:", budgetTransactionsData.error.message);
 
     const profile =
       profileRow.data && !profileRow.error
@@ -1132,6 +1239,9 @@ export const storage = {
       incomeAllocations,
       accountExpenseAllocations,
       accountTransfers,
+      budgetTransactions: (budgetTransactionsData.data ?? []).map((r) =>
+        mapRowToBudgetTransaction(r as Record<string, unknown>)
+      ),
       availableWalletBalance,
       accountTypeBalances: computeAccountTypeBalances({
         userAccounts,

@@ -69,6 +69,16 @@ export function computeAccountBalancesById(input: BudgetAccountBalanceInput): Ma
   return balances;
 }
 
+/** Max amount assignable from an account to one expense (may exceed planned expense budget). */
+export function maxExpenseAllocationFromAccount(
+  accountId: string,
+  existingAllocationForExpense: number,
+  input: BudgetAccountBalanceInput
+): number {
+  const left = computeAccountBalancesById(input).get(accountId) ?? 0;
+  return Math.round(Math.max(0, left + existingAllocationForExpense) * 100) / 100;
+}
+
 /** Sum per-account balances by type; wallet uses rewards available balance (not user_accounts). */
 export function computeAccountTypeBalances(
   input: BudgetAccountBalanceInput
