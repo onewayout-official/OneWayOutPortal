@@ -1,7 +1,10 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { Suspense } from "react";
 import "./globals.css";
 import { AuthProvider } from "@/contexts/AuthContext";
+import GoogleTagManager from "@/components/GoogleTagManager";
+import GtmRouteTracker from "@/components/GtmRouteTracker";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -28,6 +31,10 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
+        <GoogleTagManager />
+        <Suspense fallback={null}>
+          <GtmRouteTracker />
+        </Suspense>
         <AuthProvider>
           {children}
         </AuthProvider>
