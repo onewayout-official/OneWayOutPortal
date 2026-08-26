@@ -4,10 +4,11 @@ import { useState, useEffect, useRef } from "react";
 import { UserProfile, Income, RegistrationExpense, BudgetTransaction, Expense } from "@/types";
 import { storage } from "@/lib/storage";
 import { computePooledIncome, computePooledExpenses } from "@/lib/budgetTotals";
-import { maxExpenseAllocationFromAccount, type BudgetAccountBalanceInput } from "@/lib/budgetAccountBalances";
+import { fundsCoveringExpenseFromAccount, type BudgetAccountBalanceInput } from "@/lib/budgetAccountBalances";
 import BudgetTransactionHistoryModal, {
   getExpenseHistoryRows,
   getIncomeHistoryRows,
+  type ExpenseHistoryScope,
 } from "@/components/BudgetTransactionHistory";
 import {
   Wallet,
@@ -414,8 +415,8 @@ export default function BudgetManager() {
     memberIds: string[];
     /** Planned budget for this expense category (may allocate above this if account has funds). */
     expenseBudget: number;
-    /** Max assignable from this account (income + transfers − spend − other expense budgets). */
-    accountAvailableMax: number;
+    /** Leftover in this account plus this expense's current allocation (may be negative). */
+    accountAvailable: number;
   } | null>(null);
   const [allocAmount, setAllocAmount] = useState("");
   const [allocSaveError, setAllocSaveError] = useState("");
@@ -432,6 +433,7 @@ export default function BudgetManager() {
   const [addExpenseOpen, setAddExpenseOpen] = useState(false);
   const [incomeHistoryOpen, setIncomeHistoryOpen] = useState(false);
   const [expenseHistoryOpen, setExpenseHistoryOpen] = useState(false);
+  const [expenseHistoryScope, setExpenseHistoryScope] = useState<ExpenseHistoryScope | null>(null);
   const [newExpenseCategory, setNewExpenseCategory] = useState("Groceries");
   const [newExpenseName, setNewExpenseName] = useState("");
   const [newExpenseAmount, setNewExpenseAmount] = useState("");
@@ -494,8 +496,8 @@ export default function BudgetManager() {
     };
   };
 
-  const getAccountExpenseAllocationCap = (accountId: string, existingForExpense: number): number =>
-    maxExpenseAllocationFromAccount(accountId, existingForExpense, buildAccountBalanceInput());
+  const getAccountFundsForExpense = (accountId: string, existingForExpense: number): number =>
+    fundsCoveringExpenseFromAccount(accountId, existingForExpense, buildAccountBalanceInput());
 
   async function loadData(options?: { bypassCache?: boolean; showLoading?: boolean }): Promise<boolean> {
     const generation = ++loadGeneration.current;
@@ -619,7 +621,7 @@ export default function BudgetManager() {
     const memberIds = expItem.memberIds ?? [expItem.id];
     // Sum across merged category rows — display uses the same total.
     const existing = sumExpenseAllocForAccount(expenseAllocations, acc.id, expItem);
-    const accountAvailableMax = getAccountExpenseAllocationCap(acc.id, existing);
+    const accountAvailable = getAccountFundsForExpense(acc.id, existing);
     setAllocSaveError("");
     setAllocAmount(existing > 0 ? String(existing) : "");
     setAllocModal({
@@ -630,7 +632,7 @@ export default function BudgetManager() {
       existing,
       memberIds,
       expenseBudget: expItem.amount ?? 0,
-      accountAvailableMax,
+      accountAvailable,
     });
     return true;
   };
@@ -704,25 +706,31 @@ export default function BudgetManager() {
   };
 
   const handleExpenseTap = (expItem: IconItem) => {
-    if (!selectedSourceAccountId) return;
-    if (openExpenseAllocationModal(selectedSourceAccountId, expItem)) clearTapSelection();
+    if (selectedSourceAccountId) {
+      if (openExpenseAllocationModal(selectedSourceAccountId, expItem)) clearTapSelection();
+      return;
+    }
+
+    const expenseIds = (expItem.memberIds ?? [expItem.id]).filter(
+      (id) => typeof id === "string" && id.length > 0
+    );
+    setExpenseHistoryScope({
+      expenseIds,
+      category: expItem.category,
+      label: expItem.name ?? expItem.category ?? expItem.label,
+    });
+    setExpenseHistoryOpen(true);
+  };
+
+  const closeExpenseHistory = () => {
+    setExpenseHistoryOpen(false);
+    setExpenseHistoryScope(null);
   };
 
   const handleSaveAllocation = async () => {
     if (!allocModal) return;
     const amount = parseMoneyInput(allocAmount);
     if (amount === null) return;
-
-    const accountCap = getAccountExpenseAllocationCap(allocModal.accountId, allocModal.existing);
-    if (amount > 0 && amount > accountCap) {
-      setAllocSaveError(
-        `Only R ${accountCap.toLocaleString(undefined, {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        })} is available in ${allocModal.accountName}.`
-      );
-      return;
-    }
 
     setAllocSaveError("");
     invalidateBudgetLoads();
@@ -1559,9 +1567,12 @@ export default function BudgetManager() {
           {/* Row 3: Planned expenses */}
           <div className="rounded-lg border border-gray-200 bg-white p-4 dark:border-gray-700 dark:bg-gray-800 sm:p-6">
             <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <h3 className="text-md flex items-center gap-2 font-semibold">
+              <h3 className="text-md flex flex-wrap items-center gap-2 font-semibold">
                 <Receipt className="h-5 w-5 text-orange-600" />
                 Expenses
+                <span className="hidden text-[10px] font-normal text-gray-400 sm:inline">
+                  tap a card for history
+                </span>
               </h3>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-2">
                 {pooledExpenses > 0 && (
@@ -1571,7 +1582,10 @@ export default function BudgetManager() {
                 )}
                 <button
                   type="button"
-                  onClick={() => setExpenseHistoryOpen(true)}
+                  onClick={() => {
+                    setExpenseHistoryScope(null);
+                    setExpenseHistoryOpen(true);
+                  }}
                   className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-orange-300 bg-white px-3 py-2 text-xs font-semibold text-orange-600 transition-colors hover:bg-orange-50 dark:border-orange-700 dark:bg-gray-800 dark:text-orange-400 dark:hover:bg-orange-900/20 sm:w-auto sm:py-1.5"
                 >
                   <History className="h-3.5 w-3.5" />
@@ -1606,12 +1620,17 @@ export default function BudgetManager() {
                   return (
                     <div
                       key={exp.id}
-                      className={`relative flex w-[104px] flex-none snap-start flex-col items-center gap-1 rounded-xl border-2 transition-all duration-150 sm:w-auto ${
+                      className={`relative flex w-[104px] flex-none snap-start flex-col items-center gap-1 rounded-xl border-2 transition-all duration-150 sm:w-auto cursor-pointer ${
                         selectedSourceAccountId
-                          ? "border-dashed border-orange-300 dark:border-orange-600 bg-orange-50/50 dark:bg-orange-900/10 cursor-pointer p-3 min-w-[96px] min-h-[100px] justify-center"
-                          : "border-transparent p-2"
+                          ? "border-dashed border-orange-300 dark:border-orange-600 bg-orange-50/50 dark:bg-orange-900/10 p-3 min-w-[96px] min-h-[100px] justify-center"
+                          : "border-transparent p-2 hover:bg-orange-50/70 dark:hover:bg-orange-900/10"
                       }`}
-                      onClick={selectedSourceAccountId ? () => handleExpenseTap(exp) : undefined}
+                      onClick={() => handleExpenseTap(exp)}
+                      title={
+                        selectedSourceAccountId
+                          ? `Budget ${exp.label} from the selected account`
+                          : `View history for ${exp.label}`
+                      }
                     >
                       {selectedSourceAccountId && (
                         <span className="absolute top-1 right-1.5 text-[9px] font-semibold text-orange-400">
@@ -1672,10 +1691,11 @@ export default function BudgetManager() {
       />
       <BudgetTransactionHistoryModal
         open={expenseHistoryOpen}
-        onClose={() => setExpenseHistoryOpen(false)}
+        onClose={closeExpenseHistory}
         variant="expense"
         transactions={budgetTransactions}
         expenses={monthExpenses}
+        expenseScope={expenseHistoryScope}
       />
 
       {/* ── Delete confirmation modal ── */}
@@ -1830,23 +1850,29 @@ export default function BudgetManager() {
             {(() => {
               const typed = parseMoneyInput(allocAmount);
               const preview = typed ?? allocModal.existing;
-              const accountCap = getAccountExpenseAllocationCap(allocModal.accountId, allocModal.existing);
-              const overAccount =
-                preview > 0 && preview > accountCap
-                  ? Math.round((preview - accountCap) * 100) / 100
-                  : 0;
+              const available = allocModal.accountAvailable;
+              const leftoverAfter = Math.round((available - preview) * 100) / 100;
               const overExpenseBudget =
                 allocModal.expenseBudget > 0 && preview > allocModal.expenseBudget
                   ? Math.round((preview - allocModal.expenseBudget) * 100) / 100
                   : 0;
+              const availableLabel =
+                available < 0
+                  ? `−R ${Math.abs(available).toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}`
+                  : `R ${available.toLocaleString(undefined, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}`;
               return (
                 <div className="mb-4 space-y-2 text-xs">
                   <p className="text-gray-400">
-                    Available in {allocModal.accountName}: R{" "}
-                    {accountCap.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                    Available in {allocModal.accountName}:{" "}
+                    <span className={available < 0 ? "font-semibold text-red-600 dark:text-red-400" : undefined}>
+                      {availableLabel}
+                    </span>
                     . Planned expense: R{" "}
                     {allocModal.expenseBudget.toLocaleString(undefined, {
                       minimumFractionDigits: 2,
@@ -1865,28 +1891,28 @@ export default function BudgetManager() {
                       </>
                     )}
                   </p>
-                  {overAccount > 0 && (
+                  {leftoverAfter < 0 && (
                     <p className="text-red-600 dark:text-red-400">
-                      Exceeds account balance by R{" "}
-                      {overAccount.toLocaleString(undefined, {
+                      {allocModal.accountName} leftover will be −R{" "}
+                      {Math.abs(leftoverAfter).toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
-                      . Reduce the amount or move funds into this account first.
+                      . You can still save — the account balance will show in red.
                     </p>
                   )}
-                  {overAccount <= 0 && overExpenseBudget > 0 && (
+                  {overExpenseBudget > 0 && (
                     <p className="text-red-600 dark:text-red-400">
                       Above planned expense by R{" "}
                       {overExpenseBudget.toLocaleString(undefined, {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2,
                       })}
-                      . Allowed when this account has enough — shown in red on the expense card.
+                      . Allowed — shown in red on the expense card.
                     </p>
                   )}
-                  {overAccount <= 0 && overExpenseBudget <= 0 && (
-                    <p className="text-gray-400">Enter 0 to remove.</p>
+                  {leftoverAfter >= 0 && overExpenseBudget <= 0 && (
+                    <p className="text-gray-400">Enter 0 to remove. Allocating more than available will overdraw this account.</p>
                   )}
                   {allocSaveError && (
                     <p className="text-red-600 dark:text-red-400">{allocSaveError}</p>
@@ -1898,15 +1924,7 @@ export default function BudgetManager() {
             <div className="flex gap-3">
               <button
                 onClick={handleSaveAllocation}
-                disabled={
-                  (() => {
-                    const typed = parseMoneyInput(allocAmount);
-                    if (typed === null || typed === 0) return false;
-                    const cap = getAccountExpenseAllocationCap(allocModal.accountId, allocModal.existing);
-                    return typed > cap;
-                  })()
-                }
-                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 disabled:opacity-50 disabled:cursor-not-allowed text-white font-semibold rounded-xl transition-colors"
+                className="flex-1 py-2.5 bg-orange-500 hover:bg-orange-600 text-white font-semibold rounded-xl transition-colors"
               >
                 Save
               </button>

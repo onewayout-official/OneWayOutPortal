@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Clock3, Coins, Copy, RefreshCw, ShoppingCart } from "lucide-react";
 import Link from "next/link";
 import PointsGiftCardSpend from "@/components/PointsGiftCardSpend";
+import NamibiaEssentialsSpend from "@/components/NamibiaEssentialsSpend";
+import SpendCountrySelect from "@/components/SpendCountrySelect";
 import { rewards } from "@/lib/gamification/rewards";
 import { fetchGiftcardStatuses, generateGiftcardWiCode } from "@/lib/yoyo/client";
 import { notifyRewardPointsUpdated } from "@/lib/gamification/rewardPoints";
@@ -13,6 +15,11 @@ import {
   giftcardStatusFromState,
 } from "@/lib/yoyo/giftcardStatus";
 import type { GiftcardStatusItem } from "@/lib/yoyo/types";
+import {
+  persistSpendCountry,
+  readStoredSpendCountry,
+  type SpendCountry,
+} from "@/lib/spend/countries";
 import { RewardTransaction } from "@/types";
 
 const AUTO_WICODE_SESSION_PREFIX = "yoyo-autowicode:";
@@ -159,6 +166,7 @@ export default function SpendTracker() {
   const [generatingIds, setGeneratingIds] = useState<Record<string, boolean>>({});
   const [generateErrors, setGenerateErrors] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
+  const [country, setCountry] = useState<SpendCountry>(() => readStoredSpendCountry());
   const inFlightRef = useRef<Set<string>>(new Set());
 
   const applyGeneratedWiCode = useCallback(
@@ -399,6 +407,11 @@ export default function SpendTracker() {
     }
   };
 
+  const handleCountryChange = (nextCountry: SpendCountry) => {
+    setCountry(nextCountry);
+    persistSpendCountry(nextCountry);
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -412,13 +425,18 @@ export default function SpendTracker() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <div className="p-3 rounded-full bg-rose-100 dark:bg-rose-900/30">
-          <ShoppingCart className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+      <div className="space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="p-3 rounded-full bg-rose-100 dark:bg-rose-900/30">
+            <ShoppingCart className="h-6 w-6 text-rose-600 dark:text-rose-400" />
+          </div>
+          <div className="min-w-0">
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Spend</h1>
+            <p className="text-sm text-gray-600 dark:text-gray-400">Redeem your earned points</p>
+          </div>
         </div>
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Spend</h1>
-          <p className="text-sm text-gray-600 dark:text-gray-400">Redeem your earned points</p>
+        <div className="flex justify-center">
+          <SpendCountrySelect value={country} onChange={handleCountryChange} />
         </div>
       </div>
 
@@ -443,12 +461,15 @@ export default function SpendTracker() {
       </div>
 
       <PointsGiftCardSpend
+        country={country}
         pointsBalance={pointsBalance}
         onPointsChange={() => {
           void refreshPointsBalance();
         }}
         onSpendComplete={refreshSpendData}
       />
+
+      {country === "NA" && <NamibiaEssentialsSpend />}
 
       <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl p-5">
         <div className="flex items-center justify-between gap-3 mb-4">

@@ -884,8 +884,18 @@ export const storage = {
   saveAccountExpenseAllocation: async (accountId: string, expenseId: string, amount: number): Promise<void> => {
     const userId = await getCurrentUserId();
     if (!userId) throw new Error("You must be signed in.");
+    if (typeof accountId !== "string" || !accountId.trim()) throw new Error("Invalid account.");
+    if (typeof expenseId !== "string" || !expenseId.trim()) throw new Error("Invalid expense.");
+    if (!Number.isFinite(amount) || amount < 0) throw new Error("Invalid amount.");
+    const safeAmount = Math.round(amount * 100) / 100;
+    if (safeAmount > 1_000_000_000) throw new Error("Amount exceeds allowed limit.");
     const { error } = await supabase.from("account_expense_allocations").upsert(
-      { user_id: userId, account_id: accountId, expense_id: expenseId, amount },
+      {
+        user_id: userId,
+        account_id: accountId.trim(),
+        expense_id: expenseId.trim(),
+        amount: safeAmount,
+      },
       { onConflict: "user_id,account_id,expense_id" }
     );
     if (error) {

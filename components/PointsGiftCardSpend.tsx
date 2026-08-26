@@ -20,18 +20,26 @@ import {
   type RetailStore,
 } from "@/lib/yoyo/retailFootprint";
 import { formatYoyoMobileNumber, isValidYoyoMobileNumber } from "@/lib/yoyo/phone";
+import {
+  getSpendCategoryLabel,
+  getSpendTabId,
+  getStoresForCountry,
+  type SpendCountry,
+} from "@/lib/spend/countries";
 import { storage } from "@/lib/storage";
 import type { YoyoGiftcard, YoyoGiftcardCampaign } from "@/lib/yoyo/types";
 
 type Step = "browse" | "confirm" | "success";
 
 interface PointsGiftCardSpendProps {
+  country: SpendCountry;
   pointsBalance: number;
   onPointsChange: (balance: number) => void;
   onSpendComplete?: () => void | Promise<void>;
 }
 
 export default function PointsGiftCardSpend({
+  country,
   pointsBalance,
   onPointsChange,
   onSpendComplete,
@@ -52,12 +60,19 @@ export default function PointsGiftCardSpend({
   const [profilePhone, setProfilePhone] = useState<string | null>(null);
 
   const activeTab = RETAIL_FOOTPRINT_TABS.find((t) => t.id === activeTabId) ?? RETAIL_FOOTPRINT_TABS[0];
+  const isNamibia = country === "NA";
+  const browseStores = useMemo(
+    () => getStoresForCountry(country, activeTabId),
+    [country, activeTabId]
+  );
+  const spendTabId = getSpendTabId(country, activeTabId);
+  const categoryLabel = getSpendCategoryLabel(country, activeTab.label);
 
   const filteredStores = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return activeTab.stores;
-    return activeTab.stores.filter((s) => s.name.toLowerCase().includes(q));
-  }, [activeTab.stores, search]);
+    if (!q) return browseStores;
+    return browseStores.filter((s) => s.name.toLowerCase().includes(q));
+  }, [browseStores, search]);
 
   const amountNum = parseFloat(amountRand) || 0;
   const pointsCost = randToPoints(amountNum);
@@ -97,13 +112,23 @@ export default function PointsGiftCardSpend({
     });
   }, []);
 
+  useEffect(() => {
+    setActiveTabId(RETAIL_FOOTPRINT_TABS[0].id);
+    setSelectedStore(null);
+    setSearch("");
+    setAmountRand("");
+    setStep("browse");
+    setIssued(null);
+    setError(null);
+  }, [country]);
+
   const validMobile = formatYoyoMobileNumber(mobileInput);
 
   const canProceed =
     selectedStore &&
     amountNum > 0 &&
     pointsCost <= pointsBalance &&
-    activeTab.id !== "coming-soon" &&
+    (isNamibia || activeTab.id !== "coming-soon") &&
     !selectedStore.apiOnly;
 
   const openConfirm = () => {
@@ -120,7 +145,7 @@ export default function PointsGiftCardSpend({
     const result = await spendPointsForGiftcard({
       storeId: selectedStore.id,
       storeName: selectedStore.name,
-      tabId: activeTabId,
+      tabId: spendTabId,
       amountRand: amountNum,
       campaignId: matchedCampaign?.id,
       ...(validMobile ? { mobileNumber: validMobile } : {}),
@@ -268,7 +293,7 @@ export default function PointsGiftCardSpend({
           <div className="flex justify-between gap-4">
             <dt className="text-gray-500 dark:text-gray-400">Category</dt>
             <dd className="font-medium text-gray-900 dark:text-white text-right">
-              {activeTab.label}
+              {categoryLabel}
             </dd>
           </div>
           <div className="flex justify-between gap-4">
@@ -380,8 +405,9 @@ export default function PointsGiftCardSpend({
             Spend points — Yoyo retail network
           </h2>
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
-            Choose a store from our April 2026 footprint, enter an amount, then confirm to
-            receive one gift card (wiCode).
+            {isNamibia
+              ? "Choose a Namibia retailer, enter an amount, then confirm to receive one gift card (wiCode)."
+              : "Choose a store from our April 2026 footprint, enter an amount, then confirm to receive one gift card (wiCode)."}
           </p>
         </div>
       </div>
@@ -399,39 +425,41 @@ export default function PointsGiftCardSpend({
         </p>
       )}
 
-      {/* Tabs */}
-      <div
-        className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin"
-        role="tablist"
-      >
-        {RETAIL_FOOTPRINT_TABS.map((tab) => (
-          <button
-            key={tab.id}
-            type="button"
-            role="tab"
-            aria-selected={tab.id === activeTabId}
-            onClick={() => {
-              setActiveTabId(tab.id);
-              setSelectedStore(null);
-              setSearch("");
-            }}
-            className={`shrink-0 px-3 py-2 rounded-full text-xs font-medium transition-colors ${
-              tab.id === activeTabId
-                ? "bg-amber-600 text-white"
-                : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      {/* Tabs — South Africa only */}
+      {!isNamibia && (
+        <div
+          className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin"
+          role="tablist"
+        >
+          {RETAIL_FOOTPRINT_TABS.map((tab) => (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={tab.id === activeTabId}
+              onClick={() => {
+                setActiveTabId(tab.id);
+                setSelectedStore(null);
+                setSearch("");
+              }}
+              className={`shrink-0 px-3 py-2 rounded-full text-xs font-medium transition-colors ${
+                tab.id === activeTabId
+                  ? "bg-amber-600 text-white"
+                  : "bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-600"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       <p className="text-xs text-gray-500 dark:text-gray-400">
         Product-specific vouchers · QR at till where supported ·{" "}
         {POINTS_PER_RAND} points = R1
       </p>
 
-      {activeTab.id === "coming-soon" ? (
+      {!isNamibia && activeTab.id === "coming-soon" ? (
         <div className="rounded-lg border border-dashed border-gray-300 dark:border-gray-600 p-8 text-center text-gray-500">
           More retailers coming soon.
         </div>
@@ -443,7 +471,7 @@ export default function PointsGiftCardSpend({
               type="search"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search stores in this category…"
+              placeholder={isNamibia ? "Search Namibia retailers…" : "Search stores in this category…"}
               className="w-full pl-9 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
             />
           </div>

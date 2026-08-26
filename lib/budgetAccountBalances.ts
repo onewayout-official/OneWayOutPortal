@@ -69,14 +69,18 @@ export function computeAccountBalancesById(input: BudgetAccountBalanceInput): Ma
   return balances;
 }
 
-/** Max amount assignable from an account to one expense (may exceed planned expense budget). */
-export function maxExpenseAllocationFromAccount(
+/**
+ * Funds currently covering this expense: leftover after other budget items, plus this
+ * expense's existing allocation. Negative when the account is already overdrawn.
+ * Informational only — allocations may exceed this so the account can go negative.
+ */
+export function fundsCoveringExpenseFromAccount(
   accountId: string,
   existingAllocationForExpense: number,
   input: BudgetAccountBalanceInput
 ): number {
   const left = computeAccountBalancesById(input).get(accountId) ?? 0;
-  return Math.round(Math.max(0, left + existingAllocationForExpense) * 100) / 100;
+  return Math.round((left + existingAllocationForExpense) * 100) / 100;
 }
 
 /** Sum per-account balances by type; wallet uses rewards available balance (not user_accounts). */

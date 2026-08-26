@@ -6,6 +6,13 @@ import type { BudgetTransaction, BudgetTransactionKind, Expense } from "@/types"
 
 export type HistoryVariant = "income" | "expense";
 
+/** Limits expense history to one budget card (merged category rows). */
+export type ExpenseHistoryScope = {
+  expenseIds: readonly string[];
+  category?: string;
+  label?: string;
+};
+
 const INCOME_KINDS = new Set<BudgetTransactionKind>([
   "income_defined",
   "income_to_account",
@@ -74,6 +81,28 @@ function mergeExpenseHistoryRows(
 function metaString(tx: BudgetTransaction, key: string): string | undefined {
   const v = tx.metadata?.[key];
   return typeof v === "string" && v.trim() ? v.trim() : undefined;
+}
+
+function normalizeHistoryKey(value: string | undefined | null): string {
+  return (value ?? "").trim().toLowerCase();
+}
+
+function txMatchesExpenseScope(
+  tx: BudgetTransaction,
+  idSet: Set<string>,
+  needles: Set<string>
+): boolean {
+  if (tx.expenseId && idSet.has(tx.expenseId)) return true;
+  if (needles.size === 0) return false;
+
+  const category = normalizeHistoryKey(tx.category);
+  if (category && needles.has(category)) return true;
+
+  const expenseLabel = normalizeHistoryKey(metaString(tx, "expense_label"));
+  if (expenseLabel && needles.has(expenseLabel)) return true;
+
+  const parsedTo = normalizeHistoryKey(parseExpenseAccountFlow(tx.title)?.to);
+  return Boolean(parsedTo && needles.has(parsedTo));
 }
 
 /** Parse legacy titles like "Groceries ← FNB" into account → expense. */
@@ -199,9 +228,19 @@ export function getIncomeHistoryRows(transactions: BudgetTransaction[]): BudgetT
 
 export function getExpenseHistoryRows(
   transactions: BudgetTransaction[],
-  expenses: Expense[]
+  expenses: Expense[],
+  scope?: ExpenseHistoryScope | null
 ): BudgetTransaction[] {
-  return mergeExpenseHistoryRows(transactions, expenses);
+  const merged = mergeExpenseHistoryRows(transactions, expenses);
+  if (!scope) return merged;
+
+  const idSet = new Set(scope.expenseIds.filter((id) => typeof id === "string" && id.length > 0));
+  const needles = new Set(
+    [scope.category, scope.label]
+      .map((value) => normalizeHistoryKey(value))
+      .filter(Boolean)
+  );
+  return merged.filter((tx) => txMatchesExpenseScope(tx, idSet, needles));
 }
 
 export default function BudgetTransactionHistoryModal({
@@ -210,23 +249,33 @@ export default function BudgetTransactionHistoryModal({
   variant,
   transactions,
   expenses = [],
+  expenseScope = null,
 }: {
   open: boolean;
   onClose: () => void;
   variant: HistoryVariant;
   transactions: BudgetTransaction[];
   expenses?: Expense[];
+  expenseScope?: ExpenseHistoryScope | null;
 }) {
   const rows = useMemo(() => {
+    if (!open) return [];
     if (variant === "income") return getIncomeHistoryRows(transactions);
-    return getExpenseHistoryRows(transactions, expenses);
-  }, [variant, transactions, expenses]);
+    return getExpenseHistoryRows(transactions, expenses, expenseScope);
+  }, [open, variant, transactions, expenses, expenseScope]);
 
   const isIncome = variant === "income";
-  const title = isIncome ? "Income history" : "Expense history";
+  const scopedLabel = expenseScope?.label?.trim();
+  const title = isIncome
+    ? "Income history"
+    : scopedLabel
+      ? `${scopedLabel} history`
+      : "Expense history";
   const emptyMessage = isIncome
     ? "No income activity yet. Adding income or transferring to accounts will appear here."
-    : "No expense activity yet. Budget allocations and logged spend will appear here.";
+    : scopedLabel
+      ? `No activity for ${scopedLabel} yet. Allocations and spend for this expense will appear here.`
+      : "No expense activity yet. Budget allocations and logged spend will appear here.";
 
   useEffect(() => {
     if (!open) return;

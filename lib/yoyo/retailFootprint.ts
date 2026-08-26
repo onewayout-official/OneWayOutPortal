@@ -22,7 +22,7 @@ export interface RetailTab {
   stores: RetailStore[];
 }
 
-function store(name: string, count?: number, opts?: Partial<RetailStore>): RetailStore {
+export function store(name: string, count?: number, opts?: Partial<RetailStore>): RetailStore {
   const id = name
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
