@@ -188,6 +188,40 @@ export async function enrichUsersWithRewardPoints(
   return summaries;
 }
 
+const EXPORT_PROFILE_SELECT =
+  "id, name, email, phone, role, status, monthly_income, onboarding_completed, user_points, created_at";
+
+export async function fetchAllPlatformUsers(
+  adminClient: SupabaseClient,
+  options: { sortBy: UserSortField; sortOrder: SortOrder }
+): Promise<PlatformUserSummary[]> {
+  const { sortBy, sortOrder } = options;
+
+  let query = adminClient
+    .from("profiles")
+    .select(EXPORT_PROFILE_SELECT)
+    .neq("role", "counselor");
+
+  if (isComputedSortField(sortBy)) {
+    const { data, error } = await query;
+    if (error) throw new Error(error.message);
+
+    const enriched = await enrichUsersWithRewardPoints(
+      adminClient,
+      (data ?? []) as ProfileRowForQuery[]
+    );
+    return sortPlatformUsers(enriched, sortBy, sortOrder);
+  }
+
+  const dbColumn = sortBy === "createdAt" ? "created_at" : sortBy;
+  query = query.order(dbColumn, { ascending: sortOrder === "asc" });
+
+  const { data, error } = await query;
+  if (error) throw new Error(error.message);
+
+  return enrichUsersWithRewardPoints(adminClient, (data ?? []) as ProfileRowForQuery[]);
+}
+
 export async function setUserSuspension(
   adminClient: SupabaseClient,
   userId: string,

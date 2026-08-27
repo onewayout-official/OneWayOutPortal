@@ -14,10 +14,13 @@ import {
   UserX,
   UserCheck,
   UserPlus,
+  FileSpreadsheet,
+  FileText,
 } from "lucide-react";
 import { getAuthHeader } from "@/lib/authHeader";
 import type { PlatformUserSummary, SortOrder, UserSortField } from "@/lib/usersAdminApi";
 import type { ProfileStatus } from "@/lib/profileStatus";
+import { downloadUsersCsv, downloadUsersPdf } from "@/lib/usersExport";
 
 interface UsersResponse {
   users?: PlatformUserSummary[];
@@ -103,6 +106,7 @@ export default function UsersPanel() {
   const [users, setUsers] = useState<PlatformUserSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isExporting, setIsExporting] = useState<"csv" | "pdf" | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isForbidden, setIsForbidden] = useState(false);
@@ -208,6 +212,50 @@ export default function UsersPanel() {
     }
   };
 
+  const fetchAllUsersForExport = async (): Promise<PlatformUserSummary[]> => {
+    const headers = await getAuthHeader();
+    const query = new URLSearchParams({
+      sortBy,
+      sortOrder,
+    });
+    const response = await fetch(`/api/users-admin/users/export?${query.toString()}`, {
+      method: "GET",
+      headers,
+    });
+    const json = (await response.json()) as { users?: PlatformUserSummary[]; error?: string };
+    if (response.status === 403) {
+      setIsForbidden(true);
+      throw new Error("You do not have permission to export users.");
+    }
+    if (!response.ok) throw new Error(json.error ?? "Failed to fetch users for export.");
+    return json.users ?? [];
+  };
+
+  const handleExport = async (format: "csv" | "pdf") => {
+    setError(null);
+    setSuccess(null);
+    setIsExporting(format);
+    try {
+      const allUsers = await fetchAllUsersForExport();
+      if (allUsers.length === 0) {
+        setError("No users available to export.");
+        return;
+      }
+      if (format === "csv") {
+        downloadUsersCsv(allUsers);
+      } else {
+        await downloadUsersPdf(allUsers);
+      }
+      setSuccess(
+        `Exported ${allUsers.length} user${allUsers.length === 1 ? "" : "s"} as ${format.toUpperCase()}.`
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to export users.");
+    } finally {
+      setIsExporting(null);
+    }
+  };
+
   if (isForbidden) {
     return (
       <div className="rounded-xl border border-amber-200 bg-amber-50 p-6 shadow-sm dark:border-amber-900/40 dark:bg-amber-900/20">
@@ -261,9 +309,31 @@ export default function UsersPanel() {
       )}
 
       <section className="rounded-xl border border-gray-200 bg-white p-5 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-        <div className="mb-4 flex items-center justify-between gap-3">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">All Users</h2>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Total: {totalUsers}</p>
+        <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">All Users</h2>
+            <p className="text-sm text-gray-500 dark:text-gray-400">Total: {totalUsers}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              disabled={Boolean(isExporting)}
+              onClick={() => handleExport("csv")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {isExporting === "csv" ? "Exporting..." : "Export CSV"}
+            </button>
+            <button
+              type="button"
+              disabled={Boolean(isExporting)}
+              onClick={() => handleExport("pdf")}
+              className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60 dark:border-gray-600 dark:text-gray-200 dark:hover:bg-gray-700"
+            >
+              <FileText className="h-4 w-4" />
+              {isExporting === "pdf" ? "Exporting..." : "Export PDF"}
+            </button>
+          </div>
         </div>
 
         <form onSubmit={applySearch} className="mb-4">

@@ -17,6 +17,8 @@
     "@supabase/supabase-js": "^2.110.8",
     "chart.js": "^4.5.1",
     "date-fns": "^4.1.0",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
     "lucide-react": "^0.562.0",
     "next": "16.1.1",
     "nodemailer": "^9.0.3",
