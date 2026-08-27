@@ -359,7 +359,7 @@ export default function UsersPanel() {
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
+            <table className="w-full min-w-[1100px] text-left text-sm">
               <thead>
                 <tr className="border-b border-gray-200 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:border-gray-700 dark:text-gray-400">
                   <SortableHeader
@@ -399,6 +399,13 @@ export default function UsersPanel() {
                     onSort={handleSort}
                   />
                   <SortableHeader
+                    label="Amount Spent"
+                    field="amountSpent"
+                    sortBy={sortBy}
+                    sortOrder={sortOrder}
+                    onSort={handleSort}
+                  />
+                  <SortableHeader
                     label="Joined"
                     field="createdAt"
                     sortBy={sortBy}
@@ -429,6 +436,9 @@ export default function UsersPanel() {
                     </td>
                     <td className="px-3 py-3 text-gray-900 dark:text-white">
                       {user.totalPoints.toLocaleString()}
+                    </td>
+                    <td className="px-3 py-3 text-gray-900 dark:text-white">
+                      R {formatCurrency(user.amountSpent)}
                     </td>
                     <td className="px-3 py-3 text-gray-600 dark:text-gray-300">
                       {formatDate(user.createdAt)}

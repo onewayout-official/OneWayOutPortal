@@ -7,6 +7,7 @@ export const USER_EXPORT_COLUMNS = [
   "Status",
   "Wallet Balance",
   "Total Points",
+  "Amount Spent",
   "Joined",
 ] as const;
 
@@ -33,6 +34,7 @@ export function userToExportRow(user: PlatformUserSummary): string[] {
     user.status === "suspended" ? "Suspended" : "Active",
     formatWalletBalance(user.walletBalance),
     user.totalPoints.toLocaleString(),
+    formatWalletBalance(user.amountSpent),
     formatExportDate(user.createdAt),
   ];
 }

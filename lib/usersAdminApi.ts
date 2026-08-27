@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { isUsersAdminEmail } from "@/lib/usersAdmin";
-import { fetchRewardTotalPoints } from "@/lib/gamification/rewardPoints";
+import { fetchRewardPointsSummary } from "@/lib/gamification/rewardPoints";
 import { normalizeProfileStatus, type ProfileStatus } from "@/lib/profileStatus";
 import { formatE164, isValidPhone, PHONE_VALIDATION_HINT } from "@/lib/phone";
 
@@ -22,6 +22,8 @@ export interface PlatformUserSummary {
   userPoints: number;
   totalPoints: number;
   walletBalance: number;
+  totalSpentPoints: number;
+  amountSpent: number;
   createdAt: string;
 }
 
@@ -31,6 +33,7 @@ export type UserSortField =
   | "phone"
   | "walletBalance"
   | "totalPoints"
+  | "amountSpent"
   | "createdAt";
 
 export type SortOrder = "asc" | "desc";
@@ -41,6 +44,7 @@ const USER_SORT_FIELDS: UserSortField[] = [
   "phone",
   "walletBalance",
   "totalPoints",
+  "amountSpent",
   "createdAt",
 ];
 
@@ -83,6 +87,9 @@ export function sortPlatformUsers(
       case "totalPoints":
         comparison = a.totalPoints - b.totalPoints;
         break;
+      case "amountSpent":
+        comparison = a.amountSpent - b.amountSpent;
+        break;
       case "createdAt":
         comparison = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
         break;
@@ -93,7 +100,7 @@ export function sortPlatformUsers(
 }
 
 function isComputedSortField(sortBy: UserSortField): boolean {
-  return sortBy === "walletBalance" || sortBy === "totalPoints";
+  return sortBy === "walletBalance" || sortBy === "totalPoints" || sortBy === "amountSpent";
 }
 
 export async function getUsersAdminContext(
@@ -155,7 +162,7 @@ export interface ProfileRowForQuery {
 
 export function toPlatformUserSummary(
   row: ProfileRowForQuery,
-  totalPoints: number
+  rewards: { totalPoints: number; totalSpentPoints: number }
 ): PlatformUserSummary {
   const normalizedRole = row.role === "admin" ? "admin" : "user";
 
@@ -169,8 +176,10 @@ export function toPlatformUserSummary(
     monthlyIncome: Number(row.monthly_income ?? 0),
     onboardingCompleted: Boolean(row.onboarding_completed),
     userPoints: Number(row.user_points ?? 0),
-    totalPoints,
-    walletBalance: totalPoints / 100,
+    totalPoints: rewards.totalPoints,
+    walletBalance: rewards.totalPoints / 100,
+    totalSpentPoints: rewards.totalSpentPoints,
+    amountSpent: rewards.totalSpentPoints / 100,
     createdAt: row.created_at ?? new Date().toISOString(),
   };
 }
@@ -181,8 +190,8 @@ export async function enrichUsersWithRewardPoints(
 ): Promise<PlatformUserSummary[]> {
   const summaries = await Promise.all(
     rows.map(async (row) => {
-      const totalPoints = await fetchRewardTotalPoints(adminClient, row.id);
-      return toPlatformUserSummary(row, totalPoints);
+      const rewards = await fetchRewardPointsSummary(adminClient, row.id);
+      return toPlatformUserSummary(row, rewards);
     })
   );
   return summaries;

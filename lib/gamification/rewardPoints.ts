@@ -74,6 +74,36 @@ async function fetchEarnedAndRedeemed(
   return { earned, redeemed, ok: true };
 }
 
+export interface RewardPointsSummary {
+  totalPoints: number;
+  totalSpentPoints: number;
+}
+
+/** Lifetime earned/spent reward points for a user (admin queries). */
+export async function fetchRewardPointsSummary(
+  client: SupabaseClient,
+  userId: string
+): Promise<RewardPointsSummary> {
+  const { earned, redeemed, ok } = await fetchEarnedAndRedeemed(client, userId);
+
+  if (ok) {
+    return {
+      totalPoints: Math.max(0, earned - redeemed),
+      totalSpentPoints: redeemed,
+    };
+  }
+
+  const { data: rpcBalance, error: rpcError } = await client.rpc("get_reward_balance");
+  if (!rpcError && rpcBalance != null && Number.isFinite(Number(rpcBalance))) {
+    return {
+      totalPoints: Math.max(0, Number(rpcBalance)),
+      totalSpentPoints: 0,
+    };
+  }
+
+  return { totalPoints: 0, totalSpentPoints: 0 };
+}
+
 /**
  * Current rewards balance: lifetime earned minus gift-card / spend redemptions
  * (legacy test redemptions before the cutoff are excluded).
