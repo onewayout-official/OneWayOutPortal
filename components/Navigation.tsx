@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Home, User, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, CalendarCheck, ClipboardList, UserCog, Eye, Menu, X } from "lucide-react";
+import { Home, User, Users, DollarSign, TrendingUp, TrendingDown, FileText, BarChart3, LogOut, Smile, Wallet, HelpCircle, ShoppingCart, Shield, CalendarCheck, ClipboardList, UserCog, Eye, Menu, X } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { rewards } from "@/lib/gamification/rewards";
 import { REWARD_POINTS_UPDATED_EVENT } from "@/lib/gamification/rewardPoints";
@@ -174,7 +174,7 @@ function NavLink({
 
 export default function Navigation() {
   const pathname = usePathname();
-  const { logout, isAdmin, isCoachesAdmin, user: authUser, isCounselor } = useAuth();
+  const { logout, isAdmin, isCoachesAdmin, isUsersAdmin, user: authUser, isCounselor } = useAuth();
   const cachedFinancialData = getCachedMobileFinancialData(authUser?.userId);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [financialData, setFinancialData] = useState<MobileFinancialData>(
@@ -188,6 +188,9 @@ export default function Navigation() {
     if (section.label !== "Account") return section;
     const items = [...section.items];
     if (isAdmin) items.push({ href: "/admin", label: "Admin", icon: Shield });
+    if (isUsersAdmin) {
+      items.push({ href: "/users", label: "Users", icon: Users });
+    }
     if (isCoachesAdmin) {
       items.push({ href: "/admin/coaches", label: "Manage Coaches", icon: UserCog });
       items.push({ href: "/coach/demo", label: "Coach Demo", icon: Eye });

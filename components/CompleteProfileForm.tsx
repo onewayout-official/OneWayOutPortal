@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { storage } from "@/lib/storage";
 import { getPostAuthDestination } from "@/lib/authRouting";
-import { formatE164, isValidPhone, PHONE_INPUT_PLACEHOLDER, PHONE_VALIDATION_HINT } from "@/lib/phone";
+import { formatE164, isValidPhone, PHONE_INPUT_PLACEHOLDER, PHONE_VALIDATION_HINT, profileHasPhone } from "@/lib/phone";
 import PhoneOTPForm from "@/components/PhoneOTPForm";
 import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
+import { supabase } from "@/lib/supabase";
 
 function PhoneIcon() {
   return (
@@ -30,6 +31,45 @@ export default function CompleteProfileForm() {
   const [phone, setPhone] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [skipWhatsAppVerification, setSkipWhatsAppVerification] = useState(false);
+  const [isCheckingProfile, setIsCheckingProfile] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function loadProfileState() {
+      try {
+        const [profile, authResult] = await Promise.all([
+          storage.getProfile(),
+          supabase.auth.getUser(),
+        ]);
+
+        if (cancelled) return;
+
+        const metadata = authResult.data.user?.user_metadata as Record<string, unknown> | undefined;
+        const phoneAlreadyVerified =
+          metadata?.phone_verified === true || metadata?.admin_provisioned === true;
+
+        if (profileHasPhone(profile?.phone) || phoneAlreadyVerified) {
+          router.replace(getPostAuthDestination(profile));
+          return;
+        }
+
+        setSkipWhatsAppVerification(phoneAlreadyVerified);
+        if (profile?.phone?.trim()) {
+          setPhone(profile.phone);
+        }
+      } finally {
+        if (!cancelled) setIsCheckingProfile(false);
+      }
+    }
+
+    void loadProfileState();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -69,7 +109,11 @@ export default function CompleteProfileForm() {
     }
   };
 
-  if (WHATSAPP_OTP_ENABLED) {
+  if (isCheckingProfile) {
+    return <p className="terms-note">Loading...</p>;
+  }
+
+  if (WHATSAPP_OTP_ENABLED && !skipWhatsAppVerification) {
     return (
       <PhoneOTPForm
         mode="link"

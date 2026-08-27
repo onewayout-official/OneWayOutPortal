@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { storage } from "@/lib/storage";
 import { getPostAuthDestination } from "@/lib/authRouting";
+import { isProfileSuspended, PROFILE_SUSPENDED_MESSAGE } from "@/lib/profileStatus";
 
 export default function AuthCallbackPage() {
   const router = useRouter();
@@ -54,6 +55,12 @@ export default function AuthCallbackPage() {
 
         const profile = await storage.getProfile();
         if (!isMounted) return;
+
+        if (isProfileSuspended(profile?.status)) {
+          await supabase.auth.signOut();
+          setError(PROFILE_SUSPENDED_MESSAGE);
+          return;
+        }
 
         router.replace(getPostAuthDestination(profile));
       } catch (err) {

@@ -86,6 +86,8 @@ export interface UserProfile {
   /** Onboarding v2 answers */
   onboardingMood?: OnboardingMood;
   role?: "admin" | "user" | "counselor";
+  /** Portal access status; suspended users cannot sign in */
+  status?: "active" | "suspended";
   debtStatus?: DebtStatus;
   savingsStatus?: SavingsStatus;
   investmentStatus?: InvestmentStatus;

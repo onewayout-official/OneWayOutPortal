@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { storage } from "@/lib/storage";
+import { PROFILE_SUSPENDED_MESSAGE } from "@/lib/profileStatus";
 // WhatsApp OTP login — re-enable later
 // import PhoneOTPForm from "@/components/PhoneOTPForm";
 // import { WHATSAPP_OTP_ENABLED } from "@/lib/features";
@@ -114,7 +115,14 @@ export default function LoginForm() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { login, loginWithGoogle } = useAuth();
+
+  useEffect(() => {
+    if (searchParams.get("error") === "suspended") {
+      setError(PROFILE_SUSPENDED_MESSAGE);
+    }
+  }, [searchParams]);
 
   const redirectAfterAuth = async () => {
     const profile = await storage.getProfile();

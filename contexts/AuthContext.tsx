@@ -6,6 +6,8 @@ import { supabase, isSupabaseConfigured } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import { storage } from "@/lib/storage";
 import { isCoachesAdminEmail } from "@/lib/coachesAdmin";
+import { isUsersAdminEmail } from "@/lib/usersAdmin";
+import { isProfileSuspended, PROFILE_SUSPENDED_MESSAGE } from "@/lib/profileStatus";
 import { getAppUrl } from "@/lib/siteUrl";
 
 export interface RegisterPayload {
@@ -44,6 +46,7 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isCoachesAdmin: boolean;
+  isUsersAdmin: boolean;
   isCounselor: boolean;
 }
 
@@ -79,6 +82,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isCoachesAdmin, setIsCoachesAdmin] = useState(false);
+  const [isUsersAdmin, setIsUsersAdmin] = useState(false);
   const [isCounselor, setIsCounselor] = useState(false);
   const router = useRouter();
 
@@ -86,23 +90,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const profile = await storage.getProfile();
     setIsAdmin(profile?.role === "admin");
     setIsCounselor(profile?.role === "counselor");
-    setIsCoachesAdmin(isCoachesAdminEmail(email ?? profile?.email));
+    const resolvedEmail = email ?? profile?.email;
+    setIsCoachesAdmin(isCoachesAdminEmail(resolvedEmail));
+    setIsUsersAdmin(isUsersAdminEmail(resolvedEmail));
+  };
+
+  const rejectSuspendedSession = async (): Promise<boolean> => {
+    const profile = await storage.getProfile();
+    if (!isProfileSuspended(profile?.status)) {
+      return false;
+    }
+
+    await supabase.auth.signOut();
+    setUser(null);
+    setIsAdmin(false);
+    setIsCoachesAdmin(false);
+    setIsUsersAdmin(false);
+    setIsCounselor(false);
+    return true;
   };
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setUser(toAuthSession(session));
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
+      if (session) {
+        setUser(toAuthSession(session));
+        const suspended = await rejectSuspendedSession();
+        if (suspended) {
+          router.push("/login?error=suspended");
+          setIsLoading(false);
+          return;
+        }
+        await refreshAdminStatus(session.user.email);
+      } else {
+        setUser(null);
+      }
       setIsLoading(false);
-      if (session) refreshAdminStatus(session.user.email);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(toAuthSession(session));
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session) {
-        refreshAdminStatus(session.user.email);
+        setUser(toAuthSession(session));
+        const suspended = await rejectSuspendedSession();
+        if (suspended) {
+          router.push("/login?error=suspended");
+          return;
+        }
+        await refreshAdminStatus(session.user.email);
       } else {
+        setUser(null);
         setIsAdmin(false);
         setIsCoachesAdmin(false);
+        setIsUsersAdmin(false);
         setIsCounselor(false);
       }
     });
@@ -118,6 +156,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (error) {
         return { success: false, error: error.message === "Invalid login credentials" ? "Invalid email or password." : error.message };
+      }
+      const suspended = await rejectSuspendedSession();
+      if (suspended) {
+        return { success: false, error: PROFILE_SUSPENDED_MESSAGE };
       }
       setUser(toAuthSession(data.session));
       return { success: true };
@@ -329,6 +371,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return { success: false, error: error.message };
         }
         if (sessionData.session) {
+          const suspended = await rejectSuspendedSession();
+          if (suspended) {
+            return { success: false, error: PROFILE_SUSPENDED_MESSAGE };
+          }
           setUser(toAuthSession(sessionData.session));
         }
         return { success: true, session: sessionData.session };
@@ -422,6 +468,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: !!user,
         isAdmin,
         isCoachesAdmin,
+        isUsersAdmin,
         isCounselor,
       }}
     >
